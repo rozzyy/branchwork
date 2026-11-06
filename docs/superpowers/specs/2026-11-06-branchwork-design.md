@@ -4,7 +4,7 @@
 - **Status:** Approved design, ready for implementation planning
 - **Product name:** "Branchwork" is a working name; it can be renamed without affecting the design.
 - **Default UI language:** English. All user-facing strings are written in English and live in a single string catalog (`src/i18n/en.ts`). Other locales are out of scope for v1.
-- **Visual reference:** `docs/design/prototype.html`. This is an interactive, self-contained HTML prototype; open it in a browser. Its copy is in Indonesian because it was written during brainstorming. The product UI is English. When the prototype and this spec disagree, this spec wins.
+- **Visual reference:** `docs/design/prototype.html`; Terminal screen: `docs/design/terminal-mockup.html`. This is an interactive, self-contained HTML prototype; open it in a browser. Its copy is in Indonesian because it was written during brainstorming. The product UI is English. When the prototype and this spec disagree, this spec wins.
 
 ---
 
@@ -183,7 +183,7 @@ Commit, Ref, FileChange { path, status: M|A|D|R|U, hunks[], stagedHunks[] }, Pul
 
 #### 6.1.3 Sidebar
 
-- **Navigation:** Launchpad, Graph, Files & editor, Changes (count), Agents, Pull requests, Repository, Inbox.
+- **Navigation:** Launchpad, Graph, Files & editor, Changes (count), Agents, Terminal, Pull requests, Repository, Inbox.
 - **Worktrees** shows only **pinned worktrees plus the active one**, with an `n/total` header.
   - ☰ opens a searchable picker with checkboxes.
   - Hover a row for ❯_ (open terminal) and × (unpin).
@@ -227,7 +227,8 @@ Commit, Ref, FileChange { path, status: M|A|D|R|U, hunks[], stagedHunks[] }, Pul
 | New worktree | ⌘⇧N |
 | Split right / bottom (toggle) | ⌘\\ / ⌘⇧\\ |
 | Go to Changes | ⌃⇧G |
-| Screens 1–9 | Launchpad, Graph, Files, Changes, Agents, PRs, Repository, Inbox, Conflicts |
+| Screens 1–9 | Launchpad, Graph, Files, Changes, Agents, Terminal, PRs, Repository, Inbox |
+| Terminal screen | ⌘D split right · ⌘⇧D split down · ⌘⌥←↑→↓ focus · ⌘⇧↵ maximize · ⌘⌥I broadcast · ⌘W close pane · ⌘T new tab |
 
 #### 6.1.7 Toasts and undo
 
@@ -358,6 +359,34 @@ Every step can be skipped.
   - Conflict and Repository toolbars
   - the palette
 - Typing an agent command (`claude`, `codex`, …) in a shell tab is detected, and the tab becomes an agent session with the default profile.
+
+### 6.5a Terminal screen (iTerm-style split panes)
+
+A full-screen terminal workspace in the sidebar navigation ("Terminal", icon ❯_). It is separate from the terminal dock (§6.5). The dock is for quick commands next to another screen; the Terminal screen is for long-running work with many panes. Both use the same PTY sessions and the same `CliPane` component.
+
+- **Tabs:** each tab holds one pane layout. ＋ (⌘T) opens a new tab with a shell in the focused pane's worktree. Tabs can be closed (×), and a tab shows its pane count.
+- **Recursive split panes (iTerm2 model).** The layout is a tree: a split node has a direction (`h` or `v`), N children, and N sizes.
+  - **⌘D** splits the focused pane to the right. **⌘⇧D** splits it down.
+  - Splitting in the same direction as the parent adds a sibling and halves the space. Splitting in the other direction nests a new split.
+  - Any pane can be split again.
+- **Resize:** drag the thin gutters. Each pane keeps at least 8% of its parent. Double-click a gutter to equalize its siblings.
+- **Focus:** click a pane, or use ⌘⌥←↑→↓ to move to the nearest pane in that direction.
+  - The focused pane has an accent outline. Unfocused panes are dimmed slightly (iTerm "dim inactive panes").
+  - The status bar shows the focused pane's worktree, cwd, shell, position ("pane 2/4"), and size in columns × rows.
+- **Pane header:** worktree color dot, a **worktree selector** (switching runs `cd` into that worktree's path), title (shell · cwd), and hover actions: split right, split down, maximize, close.
+- **Maximize (⌘⇧↵):** temporarily shows only the focused pane. Pressing it again restores the layout.
+- **Broadcast input (⌘⌥I):** typed input goes to every pane in the tab. All panes get an orange outline, and the status bar shows "broadcasting to N panes".
+- **Close:** ⌘W closes the focused pane; its space goes to its siblings, and a split with one child collapses. Closing the last pane closes the tab. If a process is still running, closing asks for confirmation through `ask()`.
+- **Pane context menu:** Split right, Split down, Maximize pane, Broadcast input, Clear, Run Claude Code here (turns the pane into an agent session, §6.6), Move pane to new tab, Close pane.
+- **Persistence:** tab names, layout tree, sizes, and each pane's worktree and cwd are saved in `settings` and restored on relaunch. Restore starts fresh shells; scrollback is not restored in v1.
+- **Integration:**
+  - "Open terminal here" actions (§6.5) offer *Open in Terminal screen* as an alternative to the dock.
+  - A pane can be moved to the dock and back.
+  - The Terminal screen works inside split view (§6.1.4) like any other screen.
+- **Implementation:**
+  - Frontend: a pure layout-tree reducer (`split`, `close`, `resize`, `moveFocus`, `maximize`) with unit tests, plus one xterm.js instance per pane.
+  - Backend: each pane is a `pty_spawn` session.
+  - Resizing a pane sends `pty_resize` with the new cols/rows, debounced to 50 ms.
 
 ### 6.6 Agents (CLI-native)
 
@@ -609,10 +638,10 @@ Each milestone gets its own implementation plan (`writing-plans`) and ships inde
 
 | # | Sub-project | Scope | Depends on |
 |---|---|---|---|
-| M0 | **Shell & design system** | Tauri scaffold, window vibrancy, tokens/theme, sidebar, router, **split view**, palette, dialogs (`ask`), toasts, i18n catalog (en), settings store | — |
+| M0 | **Shell & design system** | Tauri scaffold, window vibrancy, tokens/theme, sidebar (incl. **Terminal** placeholder), router, **split view**, palette, dialogs (`ask`), toasts, i18n catalog (en), settings store | — |
 | M1 | **Repos, groups, worktrees, graph** | Open/clone, groups & projects popover, worktree list/create/remove/pin, Graph + inspector + context menu, file watcher | M0 |
 | M2 | **Changes, files, editor** | Source control (staging hunks/lines, commit variants, stashes), shared diff renderer, file manager, CodeMirror editor, blame & history, oplog undo | M1 |
-| M3 | **Terminal & agents** | PTY manager, dock modes/tabs/split, CliPane, CLI registry, sessions grid + layouts + close, profiles/accounts, switch + resume, limit handling, status detection + notify binary, handover, race, new agent | M1 |
+| M3 | **Terminal & agents** | PTY manager, **Terminal screen (iTerm-style split panes, §6.5a)**, dock modes/tabs/split, CliPane, CLI registry, sessions grid + layouts + close, profiles/accounts, switch + resume, limit handling, status detection + notify binary, handover, race, new agent | M1 |
 | M4 | **GitHub** | Device-flow auth, PRs (list/detail/review/suggestions/merge), Repository view, issues → worktree, Actions, Inbox, Launchpad | M1 (M2 for PR diff, M3 for "Terminal in worktree") |
 | M5 | **Advanced Git** | Conflict resolver, interactive rebase (backup refs), Compare worktrees | M2 |
 | M6 | **AI assists** | Claude headless/API backend and every ✦ action, with the privacy guard | M2, M3, M4 |

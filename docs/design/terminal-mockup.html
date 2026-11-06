@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Branchwork Terminal Mockup</title>
+<style>
+:root{--ah:250;--bh:265;
+  --glass:oklch(.22 .014 var(--bh)/.42);--glass2:oklch(.30 .016 var(--bh)/.62);--surf:oklch(.155 .009 var(--bh)/.94);
+  --s2:oklch(.21 .011 var(--bh));--s3:oklch(.27 .013 var(--bh));--s4:oklch(.33 .015 var(--bh));
+  --line:oklch(1 0 0/.07);--line2:oklch(1 0 0/.13);--spec:inset 0 1px 0 oklch(1 0 0/.14),inset 0 -1px 0 oklch(0 0 0/.25);
+  --fg:oklch(.97 .004 var(--bh));--fg2:oklch(.72 .012 var(--bh));--fg3:oklch(.68 .014 var(--bh));
+  --acc:oklch(.68 .19 var(--ah));--accs:oklch(.68 .19 var(--ah)/.16);
+  --grn:oklch(.77 .16 155);--red:oklch(.68 .2 22);--yel:oklch(.83 .15 85);--blu:oklch(.72 .14 245);--pur:oklch(.71 .17 300);--org:oklch(.75 .16 55);
+  --term:oklch(.12 .008 var(--bh));--spring:cubic-bezier(.34,1.56,.64,1)}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{color:var(--fg);font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;overflow:hidden;user-select:none;
+  background:radial-gradient(60% 60% at 20% 10%,oklch(.45 .15 280),transparent 70%),radial-gradient(50% 60% at 90% 90%,oklch(.5 .12 200),transparent 70%),oklch(.2 .03 270)}
+button{font:inherit;color:inherit}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.app{height:100vh;display:grid;grid-template-rows:46px minmax(0,1fr)}
+.titlebar{display:flex;align-items:center;gap:12px;padding:0 14px 0 0}
+.traffic{width:78px;display:flex;gap:8px;padding-left:16px}.traffic i{width:12px;height:12px;border-radius:50%}
+.app-name{font-weight:650;color:var(--fg2)}
+.search{margin:0 auto;display:flex;align-items:center;gap:8px;width:min(440px,36vw);padding:6px 12px;border-radius:999px;background:var(--glass);box-shadow:var(--spec);color:var(--fg3)}
+.search kbd{margin-left:auto}
+kbd{font:500 10.5px "SF Mono",monospace;min-width:18px;text-align:center;padding:1px 5px;border-radius:5px;background:var(--s3);color:var(--fg2);box-shadow:inset 0 -1px 0 oklch(0 0 0/.35),0 0 0 .5px var(--line2)}
+.body{display:grid;grid-template-columns:232px minmax(0,1fr);gap:8px;min-height:0;padding:0 8px 8px}
+.sidebar{display:flex;flex-direction:column;border-radius:16px;background:var(--glass);box-shadow:var(--spec);overflow:hidden;backdrop-filter:blur(30px)}
+.side-scroll{flex:1;overflow:auto;padding:6px 8px;display:flex;flex-direction:column;gap:1px}
+.side-h{padding:14px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3);text-transform:uppercase;letter-spacing:.03em}
+.nav{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border:0;border-radius:9px;background:none;color:var(--fg2);font-weight:500;text-align:left}
+.nav.on{background:var(--accs);color:var(--fg)}.nav.on .ic{color:var(--acc)}
+.nav .ic{width:18px;text-align:center;color:var(--fg3)}
+.nav .new{margin-left:auto;font-size:10px;font-weight:700;padding:0 6px;border-radius:999px;background:var(--acc);color:#fff}
+.side-foot{border-top:1px solid var(--line);padding:6px 8px}
+.pane{display:grid;grid-template-rows:52px 36px minmax(0,1fr) 26px;min-width:0;min-height:0;border-radius:16px;background:var(--surf);box-shadow:var(--spec),0 0 0 .5px var(--line2);overflow:hidden}
+.tool{display:flex;align-items:center;gap:8px;padding:0 12px 0 16px;border-bottom:1px solid var(--line)}
+.tool h1{margin:0;font-size:15px;font-weight:650}
+.tool .sub{color:var(--fg3);font-weight:400;font-size:12.5px}
+.tool .acts{margin-left:auto;display:flex;gap:6px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border:0;border-radius:999px;background:var(--s2);box-shadow:var(--spec),0 0 0 .5px var(--line2);cursor:pointer;font-size:12.5px}
+.btn:hover{background:var(--s3)}.btn.on{background:var(--acc);color:#fff}
+.btn.p{background:var(--acc);color:#fff}
+.tabs{display:flex;align-items:center;gap:2px;padding:0 8px;border-bottom:1px solid var(--line);background:var(--s2)}
+.tab{display:flex;align-items:center;gap:7px;padding:5px 10px;border:0;border-radius:7px;background:none;color:var(--fg3);font-size:12px;cursor:pointer}
+.tab.on{background:var(--s4);color:var(--fg);box-shadow:var(--spec)}
+.tab .cnt{font-size:10px;color:var(--fg3)}
+.tab .x{opacity:0}.tab:hover .x{opacity:.7}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none;background:var(--c)}
+.root{position:relative;min-height:0;background:var(--term);padding:4px}
+.split{display:flex;width:100%;height:100%;min-width:0;min-height:0}
+.split.v{flex-direction:column}
+.split>.child{position:relative;min-width:0;min-height:0;display:flex}
+.gut{flex:none;background:transparent;position:relative;z-index:2}
+.split.h>.gut{width:5px;cursor:col-resize}.split.v>.gut{height:5px;cursor:row-resize}
+.gut::after{content:"";position:absolute;inset:0;margin:auto;background:var(--line2);border-radius:2px}
+.split.h>.gut::after{width:1px}.split.v>.gut::after{height:1px}
+.gut:hover::after,.gut.drag::after{background:var(--acc)}.split.h>.gut:hover::after{width:3px}.split.v>.gut:hover::after{height:3px}
+.tp{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px oklch(1 0 0/.05);transition:box-shadow .15s,opacity .15s}
+.tp.dim{opacity:.62}
+.tp.focus{box-shadow:0 0 0 1.5px color-mix(in oklch,var(--acc) 80%,transparent)}
+.tp.bcast{box-shadow:0 0 0 1.5px color-mix(in oklch,var(--org) 80%,transparent)}
+.th{display:flex;align-items:center;gap:6px;height:24px;padding:0 6px 0 8px;font-size:11px;color:oklch(.65 .01 var(--bh));background:oklch(1 0 0/.035);border-bottom:1px solid oklch(1 0 0/.05)}
+.th .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.th .sp{flex:1}
+.th button{border:0;background:none;color:inherit;width:20px;height:18px;border-radius:4px;cursor:pointer;font-size:11px;opacity:0}
+.tp:hover .th button,.tp.focus .th button{opacity:.75}.th button:hover{background:oklch(1 0 0/.1);opacity:1}
+.th select{background:oklch(1 0 0/.06);border:0;color:inherit;border-radius:4px;font-size:11px;padding:0 3px}
+.tb{flex:1;overflow:auto;padding:6px 10px;font:12px/1.55 "SF Mono",ui-monospace,Menlo,monospace;color:oklch(.88 .005 var(--bh));user-select:text}
+.tb .ln{white-space:pre-wrap;word-break:break-word}
+.g{color:var(--grn)}.r{color:var(--red)}.y{color:var(--yel)}.b{color:var(--blu)}.p{color:var(--pur)}.m{color:oklch(.58 .01 var(--bh))}
+.prompt{display:flex;gap:6px;align-items:baseline}
+.prompt input{flex:1;border:0;background:none;outline:none;color:inherit;font:inherit;caret-color:var(--acc)}
+.status{display:flex;align-items:center;gap:14px;padding:0 12px;border-top:1px solid var(--line);font:11px "SF Mono",monospace;color:var(--fg3)}
+.status .r2{margin-left:auto;display:flex;gap:12px}
+.menu{position:fixed;z-index:50;min-width:240px;padding:5px;border-radius:12px;background:var(--glass2);backdrop-filter:blur(40px);box-shadow:0 20px 50px -10px oklch(0 0 0/.6),var(--spec),0 0 0 .5px var(--line2)}
+.menu button{display:flex;width:100%;align-items:center;gap:10px;padding:6px 10px;border:0;border-radius:7px;background:none;text-align:left;cursor:pointer}
+.menu button:hover{background:var(--acc);color:#fff}
+.menu button kbd{margin-left:auto}
+.menu hr{border:0;border-top:1px solid var(--line2);margin:4px 6px}
+.help{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:14px;padding:7px 14px;border-radius:999px;background:var(--glass2);backdrop-filter:blur(30px);box-shadow:var(--spec),0 0 0 .5px var(--line2);font-size:11.5px;color:var(--fg2);z-index:40}
+.note{position:fixed;right:18px;top:58px;width:300px;padding:12px 14px;border-radius:14px;background:var(--glass2);backdrop-filter:blur(30px);box-shadow:var(--spec),0 0 0 .5px var(--line2);font-size:12px;color:var(--fg2);z-index:40}
+.note b{color:var(--fg)}.note ul{margin:6px 0 0;padding-left:16px}.note li{margin:2px 0}
+.note .x{float:right;border:0;background:none;color:var(--fg3);cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="titlebar">
+    <div class="traffic"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+    <span class="app-name">Branchwork</span>
+    <div class="search">⌕ <span>Search, jump, or ask Claude…</span><kbd>⌘K</kbd></div>
+    <div style="width:78px"></div>
+  </header>
+  <div class="body">
+    <aside class="sidebar">
+      <nav class="side-scroll">
+        <button class="nav"><span class="ic">⌂</span>Launchpad</button>
+        <button class="nav"><span class="ic">⎇</span>Graph</button>
+        <button class="nav"><span class="ic">▤</span>Files &amp; editor</button>
+        <button class="nav"><span class="ic">±</span>Changes</button>
+        <button class="nav"><span class="ic">✦</span>Agents</button>
+        <button class="nav on"><span class="ic">❯_</span>Terminal<span class="new">NEW</span></button>
+        <button class="nav"><span class="ic">⇄</span>Pull requests</button>
+        <button class="nav"><span class="ic">◫</span>Repository</button>
+        <button class="nav"><span class="ic">◉</span>Inbox</button>
+        <div class="side-h">Worktrees</div>
+        <button class="nav"><span class="dot" style="--c:var(--grn)"></span><span class="mono" style="font-size:12px">feat/auth-oauth</span></button>
+        <button class="nav"><span class="dot" style="--c:var(--blu)"></span><span class="mono" style="font-size:12px">main</span></button>
+        <button class="nav"><span class="dot" style="--c:var(--pur)"></span><span class="mono" style="font-size:12px">exp/redis-cache</span></button>
+        <div class="side-h">Tools</div>
+        <button class="nav"><span class="ic">⚠</span>Resolve conflicts</button>
+        <button class="nav"><span class="ic">↕</span>Interactive rebase</button>
+      </nav>
+      <div class="side-foot"><button class="nav"><span class="ic">⚙</span>Settings</button></div>
+    </aside>
+    <section class="pane">
+      <div class="tool">
+        <h1>Terminal <span class="sub" id="sub"></span></h1>
+        <div class="acts">
+          <button class="btn" title="Split right (⌘D)" onclick="split('h')">◨ Split right</button>
+          <button class="btn" title="Split down (⌘⇧D)" onclick="split('v')">⬓ Split down</button>
+          <button class="btn" id="bc" title="Broadcast input to all panes (⌘⌥I)" onclick="toggleBcast()">⇶ Broadcast</button>
+          <button class="btn" id="mx" title="Maximize pane (⌘⇧↵)" onclick="toggleMax()">⤢ Maximize</button>
+        </div>
+      </div>
+      <div class="tabs" id="tabs"></div>
+      <div class="root" id="root"></div>
+      <div class="status" id="status"></div>
+    </section>
+  </div>
+</div>
+<div class="help"><span><kbd>⌘D</kbd> split right</span><span><kbd>⌘⇧D</kbd> split down</span><span><kbd>⌘⌥←↑→↓</kbd> move focus</span><span><kbd>⌘⇧↵</kbd> maximize</span><span><kbd>⌘W</kbd> close pane</span><span><kbd>⌘T</kbd> new tab</span><span>right-click a pane for more</span></div>
+<div class="note" id="note"><button class="x" onclick="this.parentNode.remove()">✕</button><b>Terminal: mockup</b><br>Split panes like iTerm2. Try it:
+<ul><li>Click a pane, then <kbd>⌘D</kbd> / <kbd>⌘⇧D</kbd> to split it again (nested)</li>
+<li>Drag the thin lines to resize</li><li>Type <span class="mono">git status</span>, <span class="mono">ls</span>, <span class="mono">claude</span>, or <span class="mono">help</span></li>
+<li>Each pane has its own worktree (header dropdown)</li><li>Broadcast types into every pane at once</li></ul></div>
+<script>
+const $=s=>document.querySelector(s);
+const WT={"feat/auth-oauth":"var(--grn)","main":"var(--blu)","exp/redis-cache":"var(--pur)","fix/cart-total":"var(--red)"};
+let PID=0;
+const leaf=(wt,lines)=>({t:"leaf",id:++PID,wt,lines:lines||[`<span class="m">Last login: ${new Date().toTimeString().slice(0,5)} on ttys00${PID}</span>`],hist:[]});
+const P=(c,t)=>`<div class="ln"><span class="g">❯</span> <span class="b">${c}</span></div>`;
+let tabs=[
+ {name:"auth-oauth",tree:{t:"split",dir:"h",sizes:[.55,.45],kids:[
+   leaf("feat/auth-oauth",[P("pnpm dev"),'<div class="ln m">  ▲ Next.js 16.2 (Turbopack)\n  - Local: http://localhost:3000\n  ✓ Ready in 812ms</div>','<div class="ln">GET /auth/callback <span class="g">200</span> in 41ms</div>']),
+   {t:"split",dir:"v",sizes:[.5,.5],kids:[
+     leaf("feat/auth-oauth",[P("pnpm test --watch auth"),'<div class="ln"><span class="g"> ✓</span> oauth.spec.ts (12)\n<span class="g"> ✓</span> callback.spec.ts (12)\n\n<span class="g"> Tests  24 passed</span> <span class="m">· watching for changes</span></div>']),
+     leaf("feat/auth-oauth",[P("git status -sb"),'<div class="ln"><span class="m">## feat/auth-oauth...origin/feat/auth-oauth [ahead 2]</span>\n<span class="y"> M</span> src/auth/callback.ts\n<span class="g">??</span> src/ui/LoginButton.tsx</div>'])]}]}},
+ {name:"main",tree:leaf("main")},
+ {name:"servers",tree:{t:"split",dir:"v",sizes:[.5,.5],kids:[leaf("main",[P("docker compose up db redis")]),leaf("exp/redis-cache",[P("redis-cli monitor")])]}}];
+let ti=0,focus=3,maxId=null,bcast=false;
+const tree=()=>tabs[ti].tree;
+function leaves(n,a=[]){n.t==="leaf"?a.push(n):n.kids.forEach(k=>leaves(k,a));return a}
+function findParent(n,id,p=null,i=-1){if(n.t==="leaf")return n.id===id?{p,i}:null;for(let k=0;k<n.kids.length;k++){const r=findParent(n.kids[k],id,n,k);if(r)return r}return null}
+function byId(id){return leaves(tree()).find(l=>l.id===id)}
+function render(){
+  $("#tabs").innerHTML=tabs.map((t,i)=>`<button class="tab ${i===ti?"on":""}" onclick="ti=${i};focus=leaves(tabs[${i}].tree)[0].id;maxId=null;render()"><span class="dot" style="--c:${WT[leaves(t.tree)[0].wt]}"></span>${t.name}<span class="cnt">${leaves(t.tree).length>1?leaves(t.tree).length+" panes":""}</span><span class="x" onclick="event.stopPropagation();closeTab(${i})">×</span></button>`).join("")+`<button class="tab" title="New tab (⌘T)" onclick="newTab()">＋</button>`;
+  const r=$("#root");r.innerHTML="";
+  if(maxId&&byId(maxId))r.append(paneEl(byId(maxId)));else{maxId=null;r.append(nodeEl(tree()))}
+  const n=leaves(tree()).length,f=byId(focus);
+  $("#sub").textContent=`· ${n} pane${n>1?"s":""}`;
+  $("#mx").classList.toggle("on",!!maxId);$("#bc").classList.toggle("on",bcast);
+  $("#status").innerHTML=`<span><span class="dot" style="--c:${WT[f?.wt]}"></span> ${f?.wt}</span><span>~/wt/${f?.wt.split("/").pop()}</span><span>zsh</span>${bcast?'<span style="color:var(--org)">⇶ broadcasting to '+n+' panes</span>':""}<span class="r2"><span>pane ${leaves(tree()).indexOf(f)+1}/${n}</span><span>80×24</span></span>`;
+  setTimeout(()=>{const i=document.querySelector(`.tp[data-id="${focus}"] input`);i&&i.focus({preventScroll:true});document.querySelectorAll(".tb").forEach(b=>b.scrollTop=1e9)},0);
+}
+function nodeEl(n){
+  if(n.t==="leaf")return paneEl(n);
+  const d=document.createElement("div");d.className="split "+n.dir;
+  n.kids.forEach((k,i)=>{
+    if(i){const g=document.createElement("div");g.className="gut";g.onmousedown=e=>gutDrag(e,n,i,d);g.ondblclick=()=>{n.sizes=n.kids.map(()=>1/n.kids.length);render()};d.append(g)}
+    const c=document.createElement("div");c.className="child";c.style.flex=`${n.sizes[i]} 1 0`;c.append(nodeEl(k));d.append(c)});
+  return d}
+function paneEl(l){
+  const el=document.createElement("div");el.className="tp"+(l.id===focus?(bcast?" bcast":" focus"):(bcast?" bcast":" dim"));el.dataset.id=l.id;
+  el.innerHTML=`<div class="th"><span class="dot" style="--c:${WT[l.wt]}"></span><select title="Worktree for this pane" onchange="setWt(${l.id},this.value)">${Object.keys(WT).map(w=>`<option ${w===l.wt?"selected":""}>${w}</option>`).join("")}</select><span class="t">zsh · ~/wt/${l.wt.split("/").pop()}</span><span class="sp"></span><button title="Split right (⌘D)" onclick="focus=${l.id};split('h')">◨</button><button title="Split down (⌘⇧D)" onclick="focus=${l.id};split('v')">⬓</button><button title="Maximize (⌘⇧↵)" onclick="focus=${l.id};toggleMax()">⤢</button><button title="Close pane (⌘W)" onclick="closePane(${l.id})">✕</button></div>
+  <div class="tb">${l.lines.join("")}<div class="prompt"><span class="g">❯</span><span class="b">${l.wt.split("/").pop()}</span><input spellcheck="false" placeholder=""></div></div>`;
+  el.onmousedown=e=>{if(focus!==l.id){focus=l.id;if(!e.target.closest("select,button"))setTimeout(render,0)}};
+  el.oncontextmenu=e=>{e.preventDefault();focus=l.id;ctx(e,l)};
+  const inp=el.querySelector("input");inp.onkeydown=e=>{if(e.key==="Enter"){const v=inp.value.trim();(bcast?leaves(tree()):[l]).forEach(t=>run(t,v));render()}};
+  return el}
+function run(l,c){
+  const out={"git status":'<span class="m">## '+l.wt+'</span>\n<span class="y"> M</span> src/auth/callback.ts',"ls":"README.md  package.json  src  src-tauri  tsconfig.json","pwd":"/Users/you/wt/"+l.wt.split("/").pop(),"git log --oneline":'<span class="y">3c4d8e1</span> feat: add GitHub OAuth provider\n<span class="y">a91f3c2</span> Merge PR #477',"claude":'<span style="color:oklch(.74 .14 45)">✻</span> Welcome to <b>Claude Code</b>!  <span class="m">cwd: ~/wt/'+l.wt.split("/").pop()+'</span>',"help":"mockup: git status · git log --oneline · ls · pwd · claude · clear"}[c];
+  if(c==="clear"){l.lines=[];return}
+  l.lines.push(P(c||"&nbsp;"));if(c)l.lines.push(`<div class="ln">${out??'<span class="r">zsh: command not found: '+c.split(" ")[0]+'</span>'}</div>`)}
+function split(dir){
+  const l=byId(focus);if(!l)return;maxId=null;const nl=leaf(l.wt);const pr=findParent(tree(),focus);
+  if(pr.p&&pr.p.dir===dir){pr.p.kids.splice(pr.i+1,0,nl);const s=pr.p.sizes[pr.i]/2;pr.p.sizes.splice(pr.i,1,s,s)}
+  else{const node={t:"split",dir,sizes:[.5,.5],kids:[l,nl]};if(!pr.p)tabs[ti].tree=node;else pr.p.kids[pr.i]=node}
+  focus=nl.id;render()}
+function closePane(id){
+  const pr=findParent(tree(),id);
+  if(!pr.p){closeTab(ti);return}
+  pr.p.kids.splice(pr.i,1);const s=pr.p.sizes.splice(pr.i,1)[0];pr.p.sizes=pr.p.sizes.map(x=>x+s/pr.p.sizes.length);
+  if(pr.p.kids.length===1){const only=pr.p.kids[0];const gp=findParentNode(tree(),pr.p);if(!gp)tabs[ti].tree=only;else gp.p.kids[gp.i]=only}
+  if(maxId===id)maxId=null;focus=leaves(tree())[0].id;render()}
+function findParentNode(n,target,p=null,i=-1){if(n===target)return p?{p,i}:null;if(n.t!=="split")return null;for(let k=0;k<n.kids.length;k++){if(n.kids[k]===target)return{p:n,i:k};const r=findParentNode(n.kids[k],target);if(r)return r}return null}
+function closeTab(i){tabs.splice(i,1);if(!tabs.length)tabs.push({name:"main",tree:leaf("main")});ti=Math.min(ti,tabs.length-1);focus=leaves(tree())[0].id;maxId=null;render()}
+function newTab(){const l=leaf(byId(focus)?.wt||"main");tabs.push({name:l.wt.split("/").pop(),tree:l});ti=tabs.length-1;focus=l.id;maxId=null;render()}
+function setWt(id,wt){const l=byId(id);l.wt=wt;l.lines.push(P("cd ~/wt/"+wt.split("/").pop()));render()}
+function toggleMax(){maxId=maxId?null:focus;render()}
+function toggleBcast(){bcast=!bcast;render()}
+function gutDrag(e,n,i,el){e.preventDefault();const g=e.currentTarget;g.classList.add("drag");const r=el.getBoundingClientRect(),h=n.dir==="h",tot=n.sizes[i-1]+n.sizes[i];
+  const before=n.sizes.slice(0,i-1).reduce((a,b)=>a+b,0);
+  const mv=ev=>{const pos=h?(ev.clientX-r.left)/r.width:(ev.clientY-r.top)/r.height;let a=Math.min(tot-.08,Math.max(.08,pos-before));n.sizes[i-1]=a;n.sizes[i]=tot-a;
+    const kids=[...el.children].filter(c=>c.classList.contains("child"));kids[i-1].style.flex=`${n.sizes[i-1]} 1 0`;kids[i].style.flex=`${n.sizes[i]} 1 0`};
+  const up=()=>{g.classList.remove("drag");removeEventListener("mousemove",mv);removeEventListener("mouseup",up)};addEventListener("mousemove",mv);addEventListener("mouseup",up)}
+function moveFocus(dx,dy){const cur=document.querySelector(`.tp[data-id="${focus}"]`);if(!cur)return;const a=cur.getBoundingClientRect(),cx=a.x+a.width/2,cy=a.y+a.height/2;let best=null,bd=1e9;
+  document.querySelectorAll(".tp").forEach(p=>{if(p===cur)return;const b=p.getBoundingClientRect(),px=b.x+b.width/2,py=b.y+b.height/2,vx=px-cx,vy=py-cy;if((dx&&Math.sign(vx)!==dx)||(dy&&Math.sign(vy)!==dy))return;if(dx&&Math.abs(vx)<10||dy&&Math.abs(vy)<10)return;const d=Math.abs(vx)+Math.abs(vy)*(dx?3:1)+Math.abs(vx)*(dy?3:0);if(d<bd){bd=d;best=p}});
+  if(best){focus=+best.dataset.id;render()}}
+function ctx(e,l){document.querySelector(".menu")?.remove();const m=document.createElement("div");m.className="menu";m.style.left=e.clientX+"px";m.style.top=e.clientY+"px";
+  const it=(lab,k,f)=>`<button onclick="this.parentNode.remove();${f}">${lab}${k?`<kbd>${k}</kbd>`:""}</button>`;
+  m.innerHTML=it("◨ Split right","⌘D","split('h')")+it("⬓ Split down","⌘⇧D","split('v')")+"<hr>"+it("⤢ Maximize pane","⌘⇧↵","toggleMax()")+it("⇶ "+(bcast?"Stop broadcast":"Broadcast input"),"⌘⌥I","toggleBcast()")+it("⌫ Clear","⌘K","byId(focus).lines=[];render()")+"<hr>"+it("✦ Run Claude Code here","","run(byId(focus),'claude');render()")+it("↗ Move pane to new tab","","movetab()")+"<hr>"+it("✕ Close pane","⌘W",`closePane(${l.id})`);
+  document.body.append(m);setTimeout(()=>addEventListener("mousedown",ev=>{if(!m.contains(ev.target))m.remove()},{once:true}))}
+function movetab(){const l=byId(focus);if(leaves(tree()).length<2)return;closePane(l.id);tabs.push({name:l.wt.split("/").pop(),tree:l});ti=tabs.length-1;focus=l.id;render()}
+addEventListener("keydown",e=>{if(!e.metaKey)return;const k=e.key.toLowerCase();
+  if(k==="d"){e.preventDefault();split(e.shiftKey?"v":"h")}
+  else if(k==="w"){e.preventDefault();closePane(focus)}
+  else if(k==="t"){e.preventDefault();newTab()}
+  else if(e.key==="Enter"&&e.shiftKey){e.preventDefault();toggleMax()}
+  else if(k==="i"&&e.altKey){e.preventDefault();toggleBcast()}
+  else if(e.altKey&&e.key.startsWith("Arrow")){e.preventDefault();moveFocus(e.key==="ArrowLeft"?-1:e.key==="ArrowRight"?1:0,e.key==="ArrowUp"?-1:e.key==="ArrowDown"?1:0)}});
+render();
+</script>
+</body>
+</html>
