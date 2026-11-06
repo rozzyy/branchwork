@@ -1,0 +1,10 @@
+.stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; position: relative; }
+.pane { display: grid; grid-template-rows: 52px minmax(0, 1fr); min-width: 0; min-height: 0; border-radius: 16px; background: var(--surf); box-shadow: var(--spec), 0 0 0 .5px var(--line2); overflow: hidden; container-type: inline-size; transition: box-shadow .2s; }
+.pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); }
+.pane-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
+.pane-view { min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
+@keyframes pane-in { from { opacity: 0; transform: translateY(6px); } }
+.placeholder { height: 100%; display: grid; place-content: center; text-align: center; color: var(--fg3); gap: 6px; }
+.placeholder-icon { font-size: 34px; color: var(--acc); }
+.placeholder h2 { margin: 0; color: var(--fg); font-size: 18px; }
+.placeholder p { margin: 0; }

@@ -81,12 +81,12 @@ src/
 
 # STAGE 1: Native window, theme tokens, shell, placeholder screens
 
-## Task 1: Scaffold the Tauri + React app
+## Task 1: Scaffold the Tauri + React app ✅
 
 **Files:**
 - Create: whole scaffold at repo root (`package.json`, `src/`, `src-tauri/`, `index.html`, `vite.config.ts`, `tsconfig*.json`)
 
-- [ ] **Step 1: Scaffold into a temp dir, then move it to the repo root.** The repo root already has `docs/`, so we scaffold elsewhere and move.
+- [x] **Step 1: Scaffold into a temp dir, then move it to the repo root.** The repo root already has `docs/`, so we scaffold elsewhere and move.
 
 ```bash
 cd /Users/apple/orca/projects/git-version-control
@@ -96,7 +96,7 @@ rsync -a .scaffold/ ./ && rm -rf .scaffold
 
 Expected: `package.json`, `src/`, `src-tauri/`, and `index.html` now exist at the repo root.
 
-- [ ] **Step 2: Install dependencies**
+- [x] **Step 2: Install dependencies**
 
 ```bash
 pnpm install
@@ -104,7 +104,7 @@ pnpm add zustand
 pnpm add -D vitest jsdom @testing-library/react @testing-library/user-event @testing-library/jest-dom
 ```
 
-- [ ] **Step 3: Rename the product in `package.json`**
+- [x] **Step 3: Rename the product in `package.json`**
 
 Set `"name": "branchwork"` and add these entries to `"scripts"` (keep the scaffolded `dev`, `build`, `preview`, `tauri` scripts):
 
@@ -114,7 +114,7 @@ Set `"name": "branchwork"` and add these entries to `"scripts"` (keep the scaffo
 "typecheck": "tsc --noEmit"
 ```
 
-- [ ] **Step 4: Replace `vite.config.ts`**
+- [x] **Step 4: Replace `vite.config.ts`**
 
 ```ts
 /// <reference types="vitest/config" />
@@ -142,25 +142,25 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: Add test types to `tsconfig.json`.** Inside `"compilerOptions"` add:
+- [x] **Step 5: Add test types to `tsconfig.json`.** Inside `"compilerOptions"` add:
 
 ```json
 "types": ["vitest/globals", "@testing-library/jest-dom"]
 ```
 
-- [ ] **Step 6: Create `src/test/setup.ts`**
+- [x] **Step 6: Create `src/test/setup.ts`**
 
 ```ts
 import "@testing-library/jest-dom/vitest";
 ```
 
-- [ ] **Step 7: Delete scaffold demo files we won't use**
+- [x] **Step 7: Delete scaffold demo files we won't use**
 
 ```bash
 rm -f src/App.css src/assets/react.svg public/tauri.svg public/vite.svg
 ```
 
-- [ ] **Step 8: Verify the toolchain runs**
+- [x] **Step 8: Verify the toolchain runs**
 
 Run: `pnpm typecheck`
 Expected: errors only about the missing `App.css`/`react.svg` imports in `src/App.tsx`, which is replaced in Task 4. If there are other errors, fix them before continuing.
@@ -168,21 +168,21 @@ Expected: errors only about the missing `App.css`/`react.svg` imports in `src/Ap
 Run: `pnpm test`
 Expected: `No test files found` (exit code 1 is fine at this point).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add -A
 git commit -m "chore: scaffold Tauri 2 + React + TS app with vitest"
 ```
 
-## Task 2: Native macOS window (transparent, overlay title bar, vibrancy, CSP)
+## Task 2: Native macOS window (transparent, overlay title bar, vibrancy, CSP) ✅
 
 **Files:**
 - Modify: `src-tauri/tauri.conf.json`
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/capabilities/default.json`
 
-- [ ] **Step 1: Replace `src-tauri/tauri.conf.json`**
+- [x] **Step 1: Replace `src-tauri/tauri.conf.json`**
 
 ```json
 {
@@ -224,27 +224,27 @@ git commit -m "chore: scaffold Tauri 2 + React + TS app with vitest"
 }
 ```
 
-- [ ] **Step 2: Enable the private-API feature (required for transparent windows on macOS).** In `src-tauri/Cargo.toml`, change the `tauri` dependency line to include the feature, keeping the version the scaffold chose:
+- [x] **Step 2: Enable the private-API feature (required for transparent windows on macOS).** In `src-tauri/Cargo.toml`, change the `tauri` dependency line to include the feature, keeping the version the scaffold chose:
 
 ```toml
 tauri = { version = "2", features = ["macos-private-api"] }
 ```
 
-- [ ] **Step 3: Allow dragging the window from our custom title bar.** In `src-tauri/capabilities/default.json`, add `"core:window:allow-start-dragging"` to the `"permissions"` array. Keep the existing entries.
+- [x] **Step 3: Allow dragging the window from our custom title bar.** In `src-tauri/capabilities/default.json`, add `"core:window:allow-start-dragging"` to the `"permissions"` array. Keep the existing entries.
 
-- [ ] **Step 4: Verify that the Rust side compiles**
+- [x] **Step 4: Verify that the Rust side compiles**
 
 Run: `cd src-tauri && cargo check && cd ..`
 Expected: `Finished` with no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add src-tauri
 git commit -m "feat(window): transparent overlay window with sidebar vibrancy and CSP"
 ```
 
-## Task 3: Theme tokens, `applyTheme`, and the English string catalog
+## Task 3: Theme tokens, `applyTheme`, and the English string catalog ✅
 
 **Files:**
 - Create: `src/theme/tokens.css`
@@ -254,7 +254,7 @@ git commit -m "feat(window): transparent overlay window with sidebar vibrancy an
 - Create: `src/i18n/t.ts`
 - Test: `src/i18n/t.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/i18n/t.test.ts`:
 
@@ -299,12 +299,12 @@ describe("applyTheme", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm test`
 Expected: FAIL, because `./t` and `./theme` cannot be resolved.
 
-- [ ] **Step 3: Create `src/i18n/en.ts`** (the full M0 catalog; later stages only use keys defined here)
+- [x] **Step 3: Create `src/i18n/en.ts`** (the full M0 catalog; later stages only use keys defined here)
 
 ```ts
 export const en = {
@@ -401,7 +401,7 @@ export const en = {
 export type MsgKey = keyof typeof en;
 ```
 
-- [ ] **Step 4: Create `src/i18n/t.ts`**
+- [x] **Step 4: Create `src/i18n/t.ts`**
 
 ```ts
 import { en, type MsgKey } from "./en";
@@ -413,7 +413,7 @@ export function t(key: MsgKey, vars?: Record<string, string | number>): string {
 }
 ```
 
-- [ ] **Step 5: Create `src/theme/theme.ts`**
+- [x] **Step 5: Create `src/theme/theme.ts`**
 
 ```ts
 export type ThemeMode = "system" | "light" | "dark";
@@ -456,12 +456,12 @@ export function applyTheme(s: ThemeSettings, root: HTMLElement = document.docume
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `pnpm test`
 Expected: PASS (5 tests).
 
-- [ ] **Step 7: Create `src/theme/tokens.css`** (CSS, not unit-tested; verified at the checkpoint)
+- [x] **Step 7: Create `src/theme/tokens.css`** (CSS, not unit-tested; verified at the checkpoint)
 
 ```css
 :root { --ah: 250; --bh: 265; --k: 1; color-scheme: dark; }
@@ -537,14 +537,14 @@ input, textarea { user-select: text; }
 }
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add src/theme src/i18n
 git commit -m "feat(theme): OKLCH tokens, applyTheme and English string catalog"
 ```
 
-## Task 4: Screen registry, stage store (single pane), shell layout, placeholder screens
+## Task 4: Screen registry, stage store (single pane), shell layout, placeholder screens ✅
 
 **Files:**
 - Create: `src/screens/registry.ts`
@@ -556,7 +556,7 @@ git commit -m "feat(theme): OKLCH tokens, applyTheme and English string catalog"
 - Create: `src/shell/TitleBar.tsx`, `src/shell/Sidebar.tsx`, `src/shell/shell.css`
 - Replace: `src/App.tsx`, `src/main.tsx`
 
-- [ ] **Step 1: Create `src/screens/registry.ts`**
+- [x] **Step 1: Create `src/screens/registry.ts`**
 
 ```ts
 import type { MsgKey } from "../i18n/en";
@@ -596,7 +596,7 @@ export const screenById = (id: ScreenId): ScreenDef => SCREENS.find((s) => s.id 
 export const NUMBER_KEYS: ScreenId[] = ["launchpad", "graph", "files", "changes", "agents", "prs", "repo", "inbox", "conflicts"];
 ```
 
-- [ ] **Step 2: Write the failing reducer test** `src/stage/stageModel.test.ts`
+- [x] **Step 2: Write the failing reducer test** `src/stage/stageModel.test.ts`
 
 ```ts
 import { initialStage, navigate, setFocus, type StageState } from "./stageModel";
@@ -622,12 +622,12 @@ describe("setFocus", () => {
 });
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [x] **Step 3: Run it to verify it fails**
 
 Run: `pnpm test src/stage`
 Expected: FAIL, because `./stageModel` cannot be resolved.
 
-- [ ] **Step 4: Create `src/stage/stageModel.ts`** (Stage 3 extends this file)
+- [x] **Step 4: Create `src/stage/stageModel.ts`** (Stage 3 extends this file)
 
 ```ts
 import type { ScreenId } from "../screens/registry";
@@ -657,12 +657,12 @@ export function setFocus(s: StageState, i: number): StageState {
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `pnpm test src/stage`
 Expected: PASS (3 tests).
 
-- [ ] **Step 6: Create `src/state/stage.ts`** (single-pane version; replaced in Task 11)
+- [x] **Step 6: Create `src/state/stage.ts`** (single-pane version; replaced in Task 11)
 
 ```ts
 import { create } from "zustand";
@@ -683,7 +683,7 @@ export const useStage = create<StageStore>((set, get) => ({
 }));
 ```
 
-- [ ] **Step 7: Create `src/screens/views.tsx`**
+- [x] **Step 7: Create `src/screens/views.tsx`**
 
 ```tsx
 import type { FC } from "react";
@@ -712,7 +712,7 @@ function placeholder(id: ScreenId): ScreenView {
 export const VIEWS = Object.fromEntries(SCREENS.map((s) => [s.id, placeholder(s.id)])) as Record<ScreenId, ScreenView>;
 ```
 
-- [ ] **Step 8: Create `src/stage/Pane.tsx`**
+- [x] **Step 8: Create `src/stage/Pane.tsx`**
 
 ```tsx
 import { useStage } from "../state/stage";
@@ -736,7 +736,7 @@ export function Pane({ index }: { index: number }) {
 }
 ```
 
-- [ ] **Step 9: Create `src/stage/Stage.tsx`** (single pane; replaced in Task 12)
+- [x] **Step 9: Create `src/stage/Stage.tsx`** (single pane; replaced in Task 12)
 
 ```tsx
 import { Pane } from "./Pane";
@@ -750,7 +750,7 @@ export function Stage() {
 }
 ```
 
-- [ ] **Step 10: Create `src/stage/stage.css`**
+- [x] **Step 10: Create `src/stage/stage.css`**
 
 ```css
 .stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; position: relative; }
@@ -765,7 +765,7 @@ export function Stage() {
 .placeholder p { margin: 0; }
 ```
 
-- [ ] **Step 11: Create `src/shell/TitleBar.tsx`**
+- [x] **Step 11: Create `src/shell/TitleBar.tsx`**
 
 ```tsx
 import { t } from "../i18n/t";
@@ -786,7 +786,7 @@ export function TitleBar() {
 }
 ```
 
-- [ ] **Step 12: Create `src/shell/Sidebar.tsx`** (Stage 3 replaces it with a split-aware version)
+- [x] **Step 12: Create `src/shell/Sidebar.tsx`** (Stage 3 replaces it with a split-aware version)
 
 ```tsx
 import { SCREENS, screenById, type ScreenDef } from "../screens/registry";
@@ -822,7 +822,7 @@ export function Sidebar() {
 }
 ```
 
-- [ ] **Step 13: Create `src/shell/shell.css`**
+- [x] **Step 13: Create `src/shell/shell.css`**
 
 ```css
 .app { height: 100vh; display: grid; grid-template-rows: 46px minmax(0, 1fr); }
@@ -850,7 +850,7 @@ export function Sidebar() {
 .nav-split { font-size: 11px; color: var(--acc); }
 ```
 
-- [ ] **Step 14: Replace `src/App.tsx`**
+- [x] **Step 14: Replace `src/App.tsx`**
 
 ```tsx
 import { useEffect } from "react";
@@ -873,7 +873,7 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 15: Replace `src/main.tsx`**
+- [x] **Step 15: Replace `src/main.tsx`**
 
 ```tsx
 import React from "react";
@@ -892,7 +892,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 ```
 
-- [ ] **Step 16: Add a smoke test** `src/App.test.tsx`
+- [x] **Step 16: Add a smoke test** `src/App.test.tsx`
 
 ```tsx
 import { render, screen } from "@testing-library/react";
@@ -907,12 +907,12 @@ it("navigates between placeholder screens from the sidebar", async () => {
 });
 ```
 
-- [ ] **Step 17: Run the full gate**
+- [x] **Step 17: Run the full gate**
 
 Run: `pnpm typecheck && pnpm test`
 Expected: no type errors; all tests PASS (8 tests).
 
-- [ ] **Step 18: Commit**
+- [x] **Step 18: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add -A
@@ -939,20 +939,20 @@ Wait for the user's go-ahead before starting Stage 2.
 
 # STAGE 2: Persisted settings, UI kit, toasts, dialogs, Settings screen
 
-## Task 5: SQLite settings store in Rust + IPC commands
+## Task 5: SQLite settings store in Rust + IPC commands ✅
 
 **Files:**
 - Create: `src-tauri/src/store.rs`
 - Replace: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/Cargo.toml`
 
-- [ ] **Step 1: Add the dependency**
+- [x] **Step 1: Add the dependency**
 
 ```bash
 cd src-tauri && cargo add rusqlite --features bundled && cd ..
 ```
 
-- [ ] **Step 2: Write `src-tauri/src/store.rs` with its failing test first.** The test module is at the bottom; `get` and `set` start as `todo!()`.
+- [x] **Step 2: Write `src-tauri/src/store.rs` with its failing test first.** The test module is at the bottom; `get` and `set` start as `todo!()`.
 
 ```rust
 use rusqlite::{params, Connection, OptionalExtension};
@@ -1010,12 +1010,12 @@ mod tests {
 
 Add `mod store;` as the first line of `src-tauri/src/lib.rs` so the module compiles.
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `cd src-tauri && cargo test store && cd ..`
 Expected: FAIL with `not yet implemented`.
 
-- [ ] **Step 4: Implement `get` and `set`.** Replace the two `todo!()` methods:
+- [x] **Step 4: Implement `get` and `set`.** Replace the two `todo!()` methods:
 
 ```rust
     pub fn get(&self, key: &str) -> rusqlite::Result<Option<String>> {
@@ -1035,12 +1035,12 @@ Expected: FAIL with `not yet implemented`.
     }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cd src-tauri && cargo test store && cd ..`
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Replace `src-tauri/src/lib.rs`** to wire up the store and the commands
+- [x] **Step 6: Replace `src-tauri/src/lib.rs`** to wire up the store and the commands
 
 ```rust
 mod store;
@@ -1075,19 +1075,19 @@ pub fn run() {
 }
 ```
 
-- [ ] **Step 7: Verify the build and lints**
+- [x] **Step 7: Verify the build and lints**
 
 Run: `cd src-tauri && cargo clippy -- -D warnings && cargo test && cd ..`
 Expected: no warnings; 2 tests PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add src-tauri
 git commit -m "feat(store): SQLite settings store with settings_get/settings_set commands"
 ```
 
-## Task 6: Settings IPC wrapper + persisted theme store
+## Task 6: Settings IPC wrapper + persisted theme store ✅
 
 **Files:**
 - Create: `src/ipc/settings.ts`
@@ -1095,7 +1095,7 @@ git commit -m "feat(store): SQLite settings store with settings_get/settings_set
 - Test: `src/state/settings.test.ts`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Create `src/ipc/settings.ts`.** Outside Tauri (plain browser, tests) it falls back to `localStorage`.
+- [x] **Step 1: Create `src/ipc/settings.ts`.** Outside Tauri (plain browser, tests) it falls back to `localStorage`.
 
 ```ts
 import { invoke } from "@tauri-apps/api/core";
@@ -1118,7 +1118,7 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
 }
 ```
 
-- [ ] **Step 2: Write the failing test** `src/state/settings.test.ts`
+- [x] **Step 2: Write the failing test** `src/state/settings.test.ts`
 
 ```ts
 import { useSettings } from "./settings";
@@ -1146,12 +1146,12 @@ it("fills missing fields from defaults when loading older settings", async () =>
 });
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [x] **Step 3: Run it to verify it fails**
 
 Run: `pnpm test src/state`
 Expected: FAIL, because `./settings` cannot be resolved.
 
-- [ ] **Step 4: Create `src/state/settings.ts`**
+- [x] **Step 4: Create `src/state/settings.ts`**
 
 ```ts
 import { create } from "zustand";
@@ -1183,12 +1183,12 @@ export const useSettings = create<SettingsStore>((set, get) => ({
 }));
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `pnpm test src/state`
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Load settings on startup and follow system appearance changes.** Replace `src/App.tsx`:
+- [x] **Step 6: Load settings on startup and follow system appearance changes.** Replace `src/App.tsx`:
 
 ```tsx
 import { useEffect } from "react";
@@ -1218,7 +1218,7 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 7: Run the gate and commit**
+- [x] **Step 7: Run the gate and commit**
 
 Run: `pnpm typecheck && pnpm test`
 Expected: PASS.
@@ -1228,14 +1228,14 @@ git add src
 git commit -m "feat(settings): persisted theme store via Tauri IPC with browser fallback"
 ```
 
-## Task 7: UI kit: Button, controls, Menu, toasts, `ask()` dialog
+## Task 7: UI kit: Button, controls, Menu, toasts, `ask()` dialog ✅
 
 **Files:**
 - Create: `src/ui/Button.tsx`, `src/ui/controls.tsx`, `src/ui/Menu.tsx`, `src/ui/toast.tsx`, `src/ui/dialog.tsx`, `src/ui/ui.css`
 - Test: `src/ui/toast.test.ts`, `src/ui/dialog.test.tsx`
 - Modify: `src/App.tsx`, `src/main.tsx`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/ui/toast.test.ts`:
 
@@ -1297,12 +1297,12 @@ it("returns the trimmed input value on Enter", async () => {
 });
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `pnpm test src/ui`
 Expected: FAIL, because the modules cannot be resolved.
 
-- [ ] **Step 3: Create `src/ui/toast.tsx`**
+- [x] **Step 3: Create `src/ui/toast.tsx`**
 
 ```tsx
 import { create } from "zustand";
@@ -1355,7 +1355,7 @@ export function Toaster() {
 }
 ```
 
-- [ ] **Step 4: Create `src/ui/dialog.tsx`**
+- [x] **Step 4: Create `src/ui/dialog.tsx`**
 
 ```tsx
 import { useEffect, useRef } from "react";
@@ -1437,12 +1437,12 @@ export function DialogHost() {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `pnpm test src/ui`
 Expected: PASS (5 tests).
 
-- [ ] **Step 6: Create `src/ui/Button.tsx`**
+- [x] **Step 6: Create `src/ui/Button.tsx`**
 
 ```tsx
 import type { ButtonHTMLAttributes } from "react";
@@ -1460,7 +1460,7 @@ export function Button({
 }
 ```
 
-- [ ] **Step 7: Create `src/ui/controls.tsx`**
+- [x] **Step 7: Create `src/ui/controls.tsx`**
 
 ```tsx
 import type { ReactNode } from "react";
@@ -1489,7 +1489,7 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="kbd">{children}</kbd>;
 ```
 
-- [ ] **Step 8: Create `src/ui/Menu.tsx`**
+- [x] **Step 8: Create `src/ui/Menu.tsx`**
 
 ```tsx
 import { useEffect, useRef, type ReactNode } from "react";
@@ -1541,7 +1541,7 @@ export function Menu({ x, y, items, onClose, width = 240 }: { x: number; y: numb
 }
 ```
 
-- [ ] **Step 9: Create `src/ui/ui.css`**
+- [x] **Step 9: Create `src/ui/ui.css`**
 
 ```css
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 0; border-radius: 999px; background: var(--s2); box-shadow: var(--spec), 0 0 0 .5px var(--line2); color: var(--fg); font-weight: 500; white-space: nowrap; cursor: pointer; transition: transform .2s var(--spring), background .15s; }
@@ -1600,7 +1600,7 @@ export function Menu({ x, y, items, onClose, width = 240 }: { x: number; y: numb
 .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 ```
 
-- [ ] **Step 10: Mount the hosts.** In `src/App.tsx`, add the imports and render them after the `.body` div:
+- [x] **Step 10: Mount the hosts.** In `src/App.tsx`, add the imports and render them after the `.body` div:
 
 ```tsx
 import { Toaster } from "./ui/toast";
@@ -1616,7 +1616,7 @@ import { DialogHost } from "./ui/dialog";
 
 Add `import "./ui/ui.css";` to `src/main.tsx` after the tokens import.
 
-- [ ] **Step 11: Run the gate and commit**
+- [x] **Step 11: Run the gate and commit**
 
 Run: `pnpm typecheck && pnpm test`
 Expected: PASS.
@@ -1626,7 +1626,7 @@ git add src
 git commit -m "feat(ui): button, segmented, switch, menu, toasts and ask() dialog"
 ```
 
-## Task 8: Settings screen (Appearance + component preview)
+## Task 8: Settings screen (Appearance + component preview) ✅
 
 **Files:**
 - Create: `src/screens/settings/SettingsScreen.tsx`
@@ -1634,7 +1634,7 @@ git commit -m "feat(ui): button, segmented, switch, menu, toasts and ask() dialo
 - Test: `src/screens/settings/SettingsScreen.test.tsx`
 - Modify: `src/screens/views.tsx`, `src/main.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 import { render, screen } from "@testing-library/react";
@@ -1661,12 +1661,12 @@ it("toggles reduce transparency", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `pnpm test src/screens`
 Expected: FAIL, because the module cannot be resolved.
 
-- [ ] **Step 3: Create `src/screens/settings/SettingsScreen.tsx`**
+- [x] **Step 3: Create `src/screens/settings/SettingsScreen.tsx`**
 
 ```tsx
 import type { ReactNode } from "react";
@@ -1772,7 +1772,7 @@ export function SettingsView() {
 }
 ```
 
-- [ ] **Step 4: Create `src/screens/settings/settings.css`**
+- [x] **Step 4: Create `src/screens/settings/settings.css`**
 
 ```css
 .settings { max-width: 760px; padding: 20px 28px 40px; }
@@ -1789,7 +1789,7 @@ export function SettingsView() {
 .demo { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px; }
 ```
 
-- [ ] **Step 5: Register the real Settings screen.** In `src/screens/views.tsx`, add the import and an override after the `VIEWS` definition:
+- [x] **Step 5: Register the real Settings screen.** In `src/screens/views.tsx`, add the import and an override after the `VIEWS` definition:
 
 ```tsx
 import { SettingsToolbar, SettingsView } from "./settings/SettingsScreen";
@@ -1801,7 +1801,7 @@ VIEWS.settings = { Toolbar: SettingsToolbar, View: SettingsView };
 
 Add `import "./screens/settings/settings.css";` to `src/main.tsx`.
 
-- [ ] **Step 6: Run the gate and commit**
+- [x] **Step 6: Run the gate and commit**
 
 Run: `pnpm typecheck && pnpm test && (cd src-tauri && cargo test)`
 Expected: PASS.
@@ -1981,7 +1981,7 @@ Move the new `import { SCREEN_IDS } ...` line to the top of the file, next to th
 Run: `pnpm test src/stage`
 Expected: PASS (all stageModel tests).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Commit** (skipped — no commit/push per harness rules)
 
 ```bash
 git add src/stage

@@ -1,0 +1,72 @@
+:root { --ah: 250; --bh: 265; --k: 1; color-scheme: dark; }
+:root {
+  --glass: oklch(.22 .014 var(--bh) / .42);
+  --glass2: oklch(.30 .016 var(--bh) / .62);
+  --surf: oklch(.155 .009 var(--bh) / .94);
+  --s2: oklch(.21 .011 var(--bh));
+  --s3: oklch(.27 .013 var(--bh));
+  --s4: oklch(.33 .015 var(--bh));
+  --line: oklch(1 0 0 / calc(.07 * var(--k)));
+  --line2: oklch(1 0 0 / calc(.13 * var(--k)));
+  --spec: inset 0 1px 0 oklch(1 0 0 / .14), inset 0 -1px 0 oklch(0 0 0 / .25);
+  --fg: oklch(.97 .004 var(--bh));
+  --fg2: oklch(calc(.62 + .1 * var(--k)) .012 var(--bh));
+  --fg3: oklch(calc(.60 + .08 * var(--k)) .014 var(--bh));
+  --acc: oklch(.68 .19 var(--ah));
+  --accs: oklch(.68 .19 var(--ah) / .16);
+  --on-acc: #fff;
+  --grn: oklch(.77 .16 155);
+  --red: oklch(.68 .2 22);
+  --yel: oklch(.83 .15 85);
+  --blu: oklch(.72 .14 245);
+  --pur: oklch(.71 .17 300);
+  --shadow-pop: 0 24px 60px -16px oklch(0 0 0 / .6);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+  --row-h: 30px;
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --glass: oklch(.98 .005 var(--bh) / .45);
+  --glass2: oklch(1 0 0 / .7);
+  --surf: oklch(.99 .003 var(--bh) / .96);
+  --s2: oklch(.955 .006 var(--bh));
+  --s3: oklch(.92 .008 var(--bh));
+  --s4: oklch(.88 .01 var(--bh));
+  --line: oklch(0 0 0 / calc(.07 * var(--k)));
+  --line2: oklch(0 0 0 / calc(.12 * var(--k)));
+  --spec: inset 0 1px 0 oklch(1 0 0 / .9), inset 0 -1px 0 oklch(0 0 0 / .06);
+  --fg: oklch(.2 .012 var(--bh));
+  --fg2: oklch(calc(.47 - .08 * var(--k)) .014 var(--bh));
+  --fg3: oklch(calc(.55 - .07 * var(--k)) .014 var(--bh));
+  --acc: oklch(.58 .2 var(--ah));
+  --accs: oklch(.58 .2 var(--ah) / .12);
+  --grn: oklch(.6 .16 155);
+  --red: oklch(.58 .21 22);
+  --yel: oklch(.68 .15 75);
+  --blu: oklch(.58 .17 245);
+  --pur: oklch(.56 .2 300);
+  --shadow-pop: 0 24px 60px -20px oklch(0 0 0 / .35);
+}
+:root[data-density="compact"] { --row-h: 26px; }
+:root[data-density="comfy"] { --row-h: 34px; }
+:root[data-solid] { --glass: oklch(.2 .012 var(--bh)); --glass2: oklch(.26 .014 var(--bh)); }
+:root[data-solid][data-theme="light"] { --glass: oklch(.95 .006 var(--bh)); --glass2: oklch(.985 .004 var(--bh)); }
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass: oklch(.2 .012 var(--bh)); --glass2: oklch(.26 .014 var(--bh)); }
+  :root[data-theme="light"] { --glass: oklch(.95 .006 var(--bh)); --glass2: oklch(.985 .004 var(--bh)); }
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+html, body { background: transparent; }
+/* In a plain browser (no native vibrancy) show a backdrop so glass is visible. */
+html:not(.tauri) body { background: radial-gradient(60% 60% at 20% 10%, oklch(.45 .15 280), transparent 70%), radial-gradient(50% 60% at 90% 90%, oklch(.5 .12 200), transparent 70%), oklch(.2 .03 270); }
+body { color: var(--fg); font: 13px/1.45 var(--font-ui); -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; }
+button { font: inherit; color: inherit; }
+input, textarea { user-select: text; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

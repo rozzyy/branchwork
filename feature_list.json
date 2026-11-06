@@ -1,0 +1,222 @@
+{
+  "milestone": "M0 Shell & design system",
+  "plan": "docs/superpowers/plans/2026-11-06-m0-shell-design-system.md",
+  "statuses": [
+    "not-started",
+    "in-progress",
+    "review",
+    "done",
+    "blocked"
+  ],
+  "features": [
+    {
+      "id": "m0-task-01",
+      "stage": 1,
+      "name": "Scaffold Tauri + React app",
+      "description": ".agent/tasks/m0-task-01.md",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; pnpm typecheck exit 0; pnpm test 'No test files found' (expected at this point)"
+    },
+    {
+      "id": "m0-task-02",
+      "stage": 1,
+      "name": "Native macOS window (transparent, overlay, vibrancy, CSP)",
+      "description": ".agent/tasks/m0-task-02.md",
+      "dependencies": [
+        "m0-task-01"
+      ],
+      "status": "done",
+      "evidence": "cargo check Finished (1m24s, no errors); spec-reviewer PASS (tauri.conf.json byte-exact, macos-private-api feature, drag capability; scope clean)"
+    },
+    {
+      "id": "m0-task-03",
+      "stage": 1,
+      "name": "Theme tokens, applyTheme, English catalog",
+      "description": ".agent/tasks/m0-task-03.md",
+      "dependencies": [
+        "m0-task-01"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; pnpm test 2 files/5 tests pass; typecheck clean; approved exception: tsconfig lib + ES2021.String"
+    },
+    {
+      "id": "m0-task-04",
+      "stage": 1,
+      "name": "Registry, stage store, shell, placeholder screens",
+      "description": ".agent/tasks/m0-task-04.md",
+      "dependencies": [
+        "m0-task-02",
+        "m0-task-03"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; init.sh green: typecheck clean, vitest 4 files/9 tests pass, clippy -D warnings clean, cargo test ok"
+    },
+    {
+      "id": "m0-stage-1-review",
+      "stage": 1,
+      "name": "Stage 1 batch review (code, security, e2e) + manual E2E spec + 🛑 checkpoint 1",
+      "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
+      "dependencies": [
+        "m0-task-04"
+      ],
+      "status": "done",
+      "evidence": "code-reviewer APPROVE (2 Important fixed in task 04b: fg3 contrast 6.78/6.36:1, crate renamed branchwork); security-reviewer PASS (4 minor, deferred: drop opener:default + narrow core:default before untrusted content; CSP base-uri/form-action/object-src; release smoke test); e2e PASS 5/5 (Playwright, browser build, first render 499ms); bundle 72KB gzip; init.sh green. Manual spec: docs/testing/m0-manual-e2e.md Stage 1. Awaiting user manual test. | User manual test: S1-02 bug (light vibrancy) fixed in task 04c, re-verified by screenshot; user go-ahead given."
+    },
+    {
+      "id": "m0-task-05",
+      "stage": 2,
+      "name": "SQLite settings store + IPC commands",
+      "description": ".agent/tasks/m0-task-05.md",
+      "dependencies": [
+        "m0-stage-1-review"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; cargo test 2/2; clippy clean; init.sh green (vitest 10)"
+    },
+    {
+      "id": "m0-task-06",
+      "stage": 2,
+      "name": "Settings IPC wrapper + persisted theme store",
+      "description": ".agent/tasks/m0-task-06.md",
+      "dependencies": [
+        "m0-task-05"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; vitest 12/12; init.sh green; syncNativeTheme in setTheme+load"
+    },
+    {
+      "id": "m0-task-07",
+      "stage": 2,
+      "name": "UI kit: Button, controls, Menu, toasts, ask()",
+      "description": ".agent/tasks/m0-task-07.md",
+      "dependencies": [
+        "m0-stage-1-review"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; vitest 17/17; init.sh green"
+    },
+    {
+      "id": "m0-task-08",
+      "stage": 2,
+      "name": "Settings screen (Appearance + preview)",
+      "description": ".agent/tasks/m0-task-08.md",
+      "dependencies": [
+        "m0-task-06",
+        "m0-task-07"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; vitest 9 files/19 tests; init.sh green"
+    },
+    {
+      "id": "m0-stage-2-review",
+      "stage": 2,
+      "name": "Stage 2 batch review + manual E2E spec + 🛑 checkpoint 2",
+      "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
+      "dependencies": [
+        "m0-task-08"
+      ],
+      "status": "done",
+      "evidence": "code-reviewer CHANGES REQUESTED → fixed in task 08b (IPC mockIPC integration test, i18n accentHue, light reduce-transparency, stage1 e2e update); security PASS (3 minor deferred: Rust-side settings key allowlist before executable settings, shape-check loaded theme, size cap); e2e 14/14; vitest 20/20; init.sh green; bundle 74.9KB gzip (+3.1KB). Manual spec Stage 2 written. Awaiting user. | User go-ahead given after manual test."
+    },
+    {
+      "id": "m0-task-09",
+      "stage": 3,
+      "name": "Split-view reducer",
+      "description": ".agent/tasks/m0-task-09.md",
+      "dependencies": [
+        "m0-stage-2-review"
+      ],
+      "status": "in-progress",
+      "evidence": ""
+    },
+    {
+      "id": "m0-task-10",
+      "stage": 3,
+      "name": "Persisted stage store with split actions",
+      "description": ".agent/tasks/m0-task-10.md",
+      "dependencies": [
+        "m0-task-09"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m0-task-11",
+      "stage": 3,
+      "name": "Split rendering, divider, pane controls, split menu",
+      "description": ".agent/tasks/m0-task-11.md",
+      "dependencies": [
+        "m0-task-10"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m0-task-12",
+      "stage": 3,
+      "name": "Split-aware sidebar",
+      "description": ".agent/tasks/m0-task-12.md",
+      "dependencies": [
+        "m0-task-11"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m0-stage-3-review",
+      "stage": 3,
+      "name": "Stage 3 batch review + manual E2E spec + 🛑 checkpoint 3",
+      "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
+      "dependencies": [
+        "m0-task-12"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m0-task-13",
+      "stage": 4,
+      "name": "Fuzzy ranking",
+      "description": ".agent/tasks/m0-task-13.md",
+      "dependencies": [
+        "m0-stage-3-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m0-task-14",
+      "stage": 4,
+      "name": "Command list, palette store, Palette UI",
+      "description": ".agent/tasks/m0-task-14.md",
+      "dependencies": [
+        "m0-task-13"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m0-task-15",
+      "stage": 4,
+      "name": "Global keyboard map",
+      "description": ".agent/tasks/m0-task-15.md",
+      "dependencies": [
+        "m0-task-14"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m0-stage-4-review",
+      "stage": 4,
+      "name": "Stage 4 batch review + final manual E2E spec + 🛑 checkpoint 4 (M0 done)",
+      "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
+      "dependencies": [
+        "m0-task-15"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    }
+  ]
+}
