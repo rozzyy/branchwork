@@ -1,11 +1,11 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-06
-- **Current Objective:** M0 Stage 3 (Tasks 9–12, split view) → stop at 🛑 Checkpoint 3
+- **Current Objective:** 🛑 Checkpoint 3: waiting for the user's manual test of Stage 3 (split view). On go-ahead: commit Stage 3, then start Stage 4 (m0-task-13).
 
 - **Milestone / stage:** M0, Stage 1 (Tasks 1–4), ending at 🛑 Manual Test Checkpoint 1
 - **Branch:** `docs/branchwork-design`. Implementation changes are uncommitted on purpose (rule: no commit, no push).
-- **Active task:** `m0-task-09`
+- **Active task:** `m0-stage-3-review` (review; waiting for user)
 
 ## Recommended Next Step (in order)
 

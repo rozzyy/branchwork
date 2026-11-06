@@ -193,3 +193,101 @@ Expected: every control is reachable, a focus ring is visible, and the segmented
 | S2-05 | | |
 | S2-06 | | |
 | S2-07 | | |
+
+---
+
+## Stage 3: Arc-style split view
+
+Run Stages 1–2 again first as a regression check (at least S1-04 and S2-01, S2-04).
+
+### S3-01 · Drag a sidebar item to split
+
+1. Open **Agents**.
+2. Drag **Changes** from the sidebar over the content area. Move the pointer slowly toward the left, right, top, and bottom edges.
+3. Release near the right edge.
+4. Close the second pane (✕). Drag **Graph** and release near the bottom edge.
+
+Expected:
+- While dragging, a blurred overlay previews the half nearest the pointer, with a label (Split left / right / top / bottom) and the hint "Drop on the left, right, top, or bottom edge".
+- Releasing on the right gives Agents | Changes side by side.
+- Releasing at the bottom stacks Agents above Graph.
+- Moving the drag out of the window removes the overlay.
+
+### S3-02 · Modifier clicks
+
+1. With a single pane, **⌘-click** Graph.
+2. Close the second pane, then **⌥-click** Files & editor.
+
+Expected: ⌘-click opens Graph on the right, and ⌥-click opens Files & editor at the bottom.
+
+### S3-03 · Sidebar context menu
+
+1. Right-click **Inbox** in the sidebar and try each split direction.
+2. With a split open, right-click one of the two open screens.
+
+Expected:
+- The menu offers Open here, Split right (⌘-click), Split left, Split top, and Split bottom (⌥-click). Each item works.
+- For a screen that is in the split, the menu also offers "Remove from split".
+- Esc or clicking outside closes the menu.
+
+### S3-04 · ⊞ split menu
+
+1. In single-pane mode, click **⊞** in the pane toolbar.
+2. Click a screen row.
+3. Open ⊞ again and click one of the ◧ ◨ ⬒ ⬓ icons on a row.
+
+Expected:
+- The menu lists every screen except the one already open.
+- Clicking a row splits it to the right. Each icon splits it to the matching side.
+
+### S3-05 · Pane controls and focus
+
+1. With two panes open, click inside the left pane, then the right pane.
+2. Click a sidebar item while the right pane is focused.
+3. Click the sidebar item of the screen that is open in the *other* pane.
+4. Use **⇄** (swap), **⬒/◫** (orientation), and **✕** (close).
+
+Expected:
+- The focused pane has an accent outline.
+- Sidebar clicks replace the screen in the focused pane only.
+- Clicking a screen open in the other pane just moves focus there. No duplicate pane appears.
+- Both open screens are highlighted in the sidebar, with position glyphs ◧/◨ (or ⬒/⬓ when stacked).
+- ⇄ swaps the panes, ⬒ turns side-by-side into stacked (and back), and ✕ returns to a single pane.
+
+### S3-06 · Divider
+
+1. Drag the divider left and right as far as it goes.
+2. Switch to stacked and drag the divider up and down.
+3. Double-click the divider.
+
+Expected:
+- The divider highlights in the accent color while hovered or dragged.
+- The first pane stops at about 20% and 80% of the width (or height when stacked).
+- Double-click resets it to 50/50.
+- Text is not selected while dragging, and resizing is smooth.
+
+### S3-07 · Persistence
+
+1. Make a split (for example Agents ⬒ Changes, stacked, with a 70/30 ratio).
+2. Quit (⌘Q) and relaunch.
+
+Expected: the same two screens, orientation, and ratio are restored.
+
+### S3-08 · Narrow panes
+
+1. Make a side-by-side split, then shrink the window to its minimum width (1000 px).
+
+Expected: both pane toolbars stay on one line, and long titles are truncated with "…" rather than wrapping.
+
+### Stage 3 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| S3-01 | | |
+| S3-02 | | |
+| S3-03 | | |
+| S3-04 | | |
+| S3-05 | | |
+| S3-06 | | |
+| S3-07 | | |
+| S3-08 | | |

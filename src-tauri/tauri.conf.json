@@ -15,6 +15,7 @@
       {
         "title": "Branchwork",
         "theme": "Dark",
+        "dragDropEnabled": false,
         "width": 1440,
         "height": 900,
         "minWidth": 1000,

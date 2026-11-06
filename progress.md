@@ -2,6 +2,27 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-06: Checkpoint 3 manual test, drag & drop bug
+
+- **Bug (S3-01):** dragging a sidebar item onto the stage did nothing in the native window.
+- **Diagnosis:** a real-mouse drag in Playwright works in both Chromium and WebKit, so the frontend is correct. Tauri's internal webview drag-drop handler swallows the HTML5 drag events.
+- **Fix (task 12b):** `"dragDropEnabled": false` in the window config. Trade-off: no Tauri file-drop events; use HTML5 `dataTransfer.files` when needed.
+- **Learned:** the stage3 e2e uses synthetic drag events, so it cannot catch native-webview issues. Manual check S3-01 stays essential.
+
+## 2026-11-06: M0 Stage 3 complete → 🛑 Checkpoint 3
+
+- Stages 1–2 committed as `b2bc1cf` (the user asked for a commit per stage). Harness rule updated: one commit per stage, after user go-ahead.
+- Tasks 09–12 done (spec PASS each), checked off in the plan.
+- **Approved fix:** `toggleSplit` closes the focused pane. The plan text was wrong; plan corrected.
+- **code-reviewer:** APPROVE. Important item: the Task 14 palette `split:close` conflicted with the fix above. Plan and task file corrected to `closePane(s.focus)` before Task 14 runs.
+- **Deferred minors:**
+  - the saved ratio is not clamped on load
+  - memoize `Pane` before heavy screens arrive
+  - check drop-zone flicker and ⌃-click behaviour in the native webview at the checkpoint
+- **e2e:** stage3-split.spec 11/11, full suite 25/25.
+- **Gate:** vitest 41/41, init.sh green. Bundle 77.1 KB gzip (+2.2 KB).
+- **Manual spec:** docs/testing/m0-manual-e2e.md Stage 3 (S3-01…S3-08).
+
 ## 2026-11-06: M0 Stage 2 complete → 🛑 Checkpoint 2
 
 - Tasks 05–08 done (spec PASS each). The syncNativeTheme exception is honoured in the settings store.

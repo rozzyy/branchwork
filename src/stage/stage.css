@@ -8,3 +8,24 @@
 .placeholder-icon { font-size: 34px; color: var(--acc); }
 .placeholder h2 { margin: 0; color: var(--fg); font-size: 18px; }
 .placeholder p { margin: 0; }
+.stage.split-h { grid-template-columns: minmax(0, calc((100% - 8px) * var(--r))) 8px minmax(0, 1fr); }
+.stage.split-v { grid-template-rows: minmax(0, calc((100% - 8px) * var(--r))) 8px minmax(0, 1fr); }
+.pane.focus { box-shadow: var(--spec), 0 0 0 1.5px color-mix(in oklch, var(--acc) 70%, transparent), 0 10px 40px -20px var(--acc); }
+.pane-ctl { display: flex; gap: 2px; margin-left: auto; padding-left: 8px; }
+.divider { position: relative; cursor: col-resize; }
+.split-v .divider { cursor: row-resize; }
+.divider::after { content: ""; position: absolute; inset: 0; margin: auto; width: 3px; height: 44px; border-radius: 2px; background: var(--line2); transition: all .2s var(--spring); }
+.split-v .divider::after { width: 44px; height: 3px; }
+.divider:hover::after, .resizing .divider::after { background: var(--acc); height: 90px; }
+.split-v .divider:hover::after, .split-v.resizing .divider::after { width: 90px; height: 3px; }
+.stage.resizing { user-select: none; }
+.dropzone { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: 16px; background: oklch(0 0 0 / .18); backdrop-filter: blur(3px); animation: fade .15s; }
+.dz-hl { position: absolute; inset: 6px 50% 6px 6px; display: grid; place-items: center; border: 2px dashed var(--acc); border-radius: 14px; background: var(--accs); color: var(--acc); font-size: 15px; font-weight: 650; transition: inset .25s var(--spring); }
+.dropzone[data-side="right"] .dz-hl { inset: 6px 6px 6px 50%; }
+.dropzone[data-side="top"] .dz-hl { inset: 6px 6px 50% 6px; }
+.dropzone[data-side="bottom"] .dz-hl { inset: 50% 6px 6px 6px; }
+.dz-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; background: var(--glass2); color: var(--fg2); font-size: 11.5px; }
+.dirs { display: flex; gap: 2px; margin-left: 8px; }
+.dir { width: 22px; height: 20px; display: grid; place-items: center; border-radius: 5px; opacity: .65; }
+.dir:hover { opacity: 1; background: oklch(1 0 0 / .25); }
+@container (max-width: 560px) { .pane-title { overflow: hidden; text-overflow: ellipsis; } }

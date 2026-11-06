@@ -1835,13 +1835,13 @@ Wait for the user's go-ahead before starting Stage 3.
 
 # STAGE 3: Arc-style split view
 
-## Task 9: Split-view reducer (open, close, swap, orientation, ratio, drop side, validation)
+## Task 9: Split-view reducer (open, close, swap, orientation, ratio, drop side, validation) ✅
 
 **Files:**
 - Modify: `src/stage/stageModel.ts` (append)
 - Modify: `src/stage/stageModel.test.ts` (append)
 
-- [ ] **Step 1: Append the failing tests** to `src/stage/stageModel.test.ts`
+- [x] **Step 1: Append the failing tests** to `src/stage/stageModel.test.ts`
 
 ```ts
 import { closePane, isValidStage, nearestSide, openSplit, setRatio, swap, toggleDir } from "./stageModel";
@@ -1913,12 +1913,12 @@ describe("isValidStage", () => {
 });
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `pnpm test src/stage`
 Expected: FAIL, because the named exports are missing.
 
-- [ ] **Step 3: Append the implementation** to `src/stage/stageModel.ts`
+- [x] **Step 3: Append the implementation** to `src/stage/stageModel.ts`
 
 ```ts
 import { SCREEN_IDS } from "../screens/registry";
@@ -1976,7 +1976,7 @@ export function isValidStage(v: unknown): v is StageState {
 
 Move the new `import { SCREEN_IDS } ...` line to the top of the file, next to the existing `ScreenId` type import.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm test src/stage`
 Expected: PASS (all stageModel tests).
@@ -1988,14 +1988,14 @@ git add src/stage
 git commit -m "feat(stage): split-view reducer with open/close/swap/orientation/drop side"
 ```
 
-## Task 10: Persisted stage store with split actions
+## Task 10: Persisted stage store with split actions ✅
 
 **Files:**
 - Replace: `src/state/stage.ts`
 - Test: `src/state/stage.test.ts`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Write the failing test** `src/state/stage.test.ts`
+- [x] **Step 1: Write the failing test** `src/state/stage.test.ts`
 
 ```ts
 import { useStage } from "./stage";
@@ -2035,12 +2035,12 @@ it("persists and restores the layout", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `pnpm test src/state/stage`
 Expected: FAIL, because `openSplit` is not a function.
 
-- [ ] **Step 3: Replace `src/state/stage.ts`**
+- [x] **Step 3: Replace `src/state/stage.ts`** (one line changed from the snippet below: `toggleSplit` uses `M.closePane(st, st.focus)` not `1 - st.focus` — the literal snippet fails the "opens and toggles a split" test; see `.agent/tasks/m0-task-10.md` Implementation Log)
 
 ```ts
 import { create } from "zustand";
@@ -2055,7 +2055,7 @@ interface StageStore extends M.StageState {
   focusPane(i: number): void;
   openSplit(id: ScreenId, side: M.Side): void;
   closePane(i: number): void;
-  /** ⌘\ behavior: close the unfocused pane if split, otherwise open a split on `side`. */
+  /** ⌘\ behavior: if split, close the focused pane (undoes the split just opened), otherwise open a split on `side`. */
   toggleSplit(side: M.Side): void;
   swap(): void;
   toggleDir(): void;
@@ -2094,7 +2094,7 @@ export const useStage = create<StageStore>((set, get) => {
     closePane: (i) => apply((s) => M.closePane(s, i)),
     toggleSplit: (side) => {
       const s = get();
-      if (s.panes.length > 1) apply((st) => M.closePane(st, 1 - st.focus));
+      if (s.panes.length > 1) apply((st) => M.closePane(st, st.focus));
       else get().openSplit(s.panes[0] === "changes" ? "agents" : "changes", side);
     },
     swap: () => apply(M.swap),
@@ -2108,12 +2108,12 @@ export const useStage = create<StageStore>((set, get) => {
 });
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm test src/state`
 Expected: PASS.
 
-- [ ] **Step 5: Restore the layout on startup.** In `src/App.tsx`, add the import and the load call:
+- [x] **Step 5: Restore the layout on startup.** In `src/App.tsx`, add the import and the load call:
 
 ```tsx
 import { useStage } from "./state/stage";
@@ -2125,7 +2125,7 @@ Inside the existing `useEffect`, after the settings load:
     void useStage.getState().load();
 ```
 
-- [ ] **Step 6: Run the gate and commit**
+- [x] **Step 6: Run the gate** (commit skipped — coordinator commits per stage)
 
 Run: `pnpm typecheck && pnpm test`
 Expected: PASS.
@@ -2135,7 +2135,7 @@ git add src
 git commit -m "feat(stage): persisted split-view store with toggle/swap/orientation"
 ```
 
-## Task 11: Split rendering: two panes, resizable divider, pane controls, ⊞ split menu
+## Task 11: Split rendering: two panes, resizable divider, pane controls, ⊞ split menu ✅
 
 **Files:**
 - Create: `src/stage/dnd.ts`
@@ -2428,13 +2428,13 @@ git add src/stage
 git commit -m "feat(stage): two-pane split rendering, resizable divider, pane controls and split menu"
 ```
 
-## Task 12: Split-aware sidebar (drag to split, ⌘/⌥-click, context menu, position glyphs)
+## Task 12: Split-aware sidebar (drag to split, ⌘/⌥-click, context menu, position glyphs) ✅
 
 **Files:**
 - Replace: `src/shell/Sidebar.tsx`
 - Test: `src/shell/Sidebar.test.tsx`
 
-- [ ] **Step 1: Write the failing test** `src/shell/Sidebar.test.tsx`
+- [x] **Step 1: Write the failing test** `src/shell/Sidebar.test.tsx`
 
 ```tsx
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -2469,12 +2469,12 @@ it("shows position glyphs for both split screens", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `pnpm test src/shell`
 Expected: FAIL (no split on ⌘-click, no menu).
 
-- [ ] **Step 3: Replace `src/shell/Sidebar.tsx`**
+- [x] **Step 3: Replace `src/shell/Sidebar.tsx`**
 
 ```tsx
 import { useState, type MouseEvent } from "react";
@@ -2547,12 +2547,12 @@ export function Sidebar() {
 }
 ```
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 Run: `pnpm typecheck && pnpm test`
 Expected: PASS (all tests, including `App.test.tsx`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add src/shell
@@ -2788,7 +2788,7 @@ export function buildCommands(): Command[] {
   const split: Command[] = [
     ...SCREENS.map((s): Command => ({ id: "split-r:" + s.id, group: "palette.group.split", icon: "◨", title: t("palette.splitRight", { screen: t(s.label) }), run: () => stage().openSplit(s.id, "right") })),
     ...SCREENS.map((s): Command => ({ id: "split-b:" + s.id, group: "palette.group.split", icon: "⬓", title: t("palette.splitBottom", { screen: t(s.label) }), run: () => stage().openSplit(s.id, "bottom") })),
-    { id: "split:close", group: "palette.group.split", icon: "✕", title: t("palette.closeSplit"), kbd: "⌘\\", run: () => { const s = stage(); if (s.panes.length > 1) s.closePane(1 - s.focus); } },
+    { id: "split:close", group: "palette.group.split", icon: "✕", title: t("palette.closeSplit"), kbd: "⌘\\", run: () => { const s = stage(); if (s.panes.length > 1) s.closePane(s.focus); } },
     { id: "split:swap", group: "palette.group.split", icon: "⇄", title: t("palette.swapSplit"), run: () => stage().swap() },
   ];
   const appearance: Command[] = [

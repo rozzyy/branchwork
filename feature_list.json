@@ -127,8 +127,8 @@
       "dependencies": [
         "m0-stage-2-review"
       ],
-      "status": "in-progress",
-      "evidence": ""
+      "status": "done",
+      "evidence": "spec-reviewer PASS; vitest 33/33; init.sh green"
     },
     {
       "id": "m0-task-10",
@@ -138,8 +138,8 @@
       "dependencies": [
         "m0-task-09"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "spec-reviewer PASS; vitest 36/36; e2e 14/14; init.sh green; approved fix: toggleSplit closes focused pane (plan corrected)"
     },
     {
       "id": "m0-task-11",
@@ -149,8 +149,8 @@
       "dependencies": [
         "m0-task-10"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "spec-reviewer PASS; vitest 38/38; e2e 14/14 (executor); init.sh green"
     },
     {
       "id": "m0-task-12",
@@ -160,8 +160,8 @@
       "dependencies": [
         "m0-task-11"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "spec-reviewer PASS; vitest 41/41; e2e 14/14 (executor); init.sh green"
     },
     {
       "id": "m0-stage-3-review",
@@ -171,8 +171,8 @@
       "dependencies": [
         "m0-task-12"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "code-reviewer APPROVE (1 Important = plan conflict in Task 14 split:close → fixed in plan + task file; 10 minor incl. unclamped saved ratio, Pane memo later); e2e PASS 11/11 new, 25/25 full suite; vitest 41/41; init.sh green; bundle 245.7KB/77.1KB gz (+2.2KB). Manual spec Stage 3 (S3-01..08). Awaiting user. | Manual test: S3-01 drag bug in native window fixed (task 12b dragDropEnabled:false), re-verified by user; go-ahead given."
     },
     {
       "id": "m0-task-13",

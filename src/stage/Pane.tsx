@@ -1,5 +1,6 @@
 import { useStage } from "../state/stage";
 import { VIEWS } from "../screens/views";
+import { PaneControls } from "./PaneControls";
 
 export function Pane({ index }: { index: number }) {
   const id = useStage((s) => s.panes[index]);
@@ -10,6 +11,7 @@ export function Pane({ index }: { index: number }) {
     <section className={"pane" + (focused ? " focus" : "")} data-pane={index} onMouseDown={() => focusPane(index)}>
       <header className="pane-tool">
         <Toolbar />
+        <PaneControls index={index} />
       </header>
       <div className="pane-view" key={id}>
         <View />
