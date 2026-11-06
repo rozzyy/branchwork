@@ -10,6 +10,7 @@ import { DialogHost } from "./ui/dialog";
 import { Palette } from "./palette/Palette";
 import { useGlobalKeys } from "./keys/globalKeys";
 import { useSidebar } from "./state/sidebar";
+import { useRepos } from "./state/repos";
 
 export default function App() {
   useGlobalKeys();
@@ -18,6 +19,7 @@ export default function App() {
     void useSettings.getState().load();
     void useStage.getState().load();
     void useSidebar.getState().load();
+    void useRepos.getState().load();
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme(useSettings.getState().theme);
     mq?.addEventListener("change", onChange);

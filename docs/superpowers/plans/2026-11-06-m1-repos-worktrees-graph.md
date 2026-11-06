@@ -1,0 +1,111 @@
+# M1 — Repositories, groups, worktrees, and graph
+
+**Status:** In progress  
+**Depends on:** M0 — Shell & design system  
+**Source of truth:** `docs/superpowers/specs/2026-11-06-branchwork-design.md`, especially §§3–4, 6.1.1–6.1.3, 6.2, 7–10.
+
+## Goal
+
+Make local repositories first-class: open or clone repositories, organize them into groups, manage worktrees and pins, and browse repository history in the Graph screen. Preserve M0's shell, split view, palette, settings, and accessibility behavior.
+
+## Architecture and invariants
+
+- Keep all Git and filesystem operations behind typed Rust commands. The WebView must not gain generic shell access.
+- Use `git2` for repository discovery and reads. Use the user's `git` executable with argument arrays (never a shell string) for clone and worktree writes.
+- Opening a repository must not run repository-defined scripts. Clone/setup scripts are out of scope.
+- Persist groups, projects, and worktree pins in SQLite; preserve the existing settings table and its data.
+- Resolve and validate repository/worktree paths in Rust. Never remove a repository when removing a worktree; refuse unsafe removal of dirty worktrees unless the product flow explicitly preserves their changes.
+- Keep screen components independent. Cross-screen state and IPC subscriptions live in stores/hooks.
+- Surface recoverable errors through the existing toast/dialog system; do not silently substitute success-shaped results.
+
+## Stage 1: Repository catalog and project groups
+
+### Task 01 — SQLite catalog schema ✅
+
+Add versioned, idempotent schema setup for `groups`, `projects`, and `worktree_pins` to the existing store. Enforce unique project paths, group foreign keys with `ON DELETE SET NULL`, and pin foreign keys with `ON DELETE CASCADE`. Preserve settings behavior and existing databases.
+
+**Tests:** migration is repeatable; settings survive initialization; group deletion ungroups projects; project deletion removes pins; duplicate project paths are rejected.
+
+**Status:** Complete — spec review PASS; `./init.sh` green (typecheck clean, 16 Vitest files/56 tests, Clippy clean, Rust tests 5/5).
+
+### Task 02 — Catalog persistence and IPC ✅
+
+Implement typed Rust models and CRUD for groups, projects, and pins, then expose narrowly scoped Tauri commands and typed frontend wrappers. Validate IDs, paths, required names, and group references. Return explicit errors.
+
+**Tests:** Rust store/command tests cover create, list, update, delete, ungroup, and pin operations; frontend wrappers cover browser fallback and IPC payloads.
+
+**Status:** Complete — spec review and security review PASS; `./init.sh` green (typecheck clean, 17 Vitest files/58 tests, Clippy clean, Rust tests 9/9).
+
+### Task 03 — Open and clone repositories ✅
+
+Implement repository discovery/metadata reads with `git2` and clone via the Git CLI using argument arrays. Reject non-repositories, invalid destinations, and unsafe path cases. Register successfully opened/cloned repositories in the catalog; do not execute hooks or setup scripts automatically.
+
+**Tests:** temporary repositories cover open, invalid paths, clone success/failure, and catalog registration.
+
+**Status:** Complete — spec review PASS; security review APPROVE; `./init.sh` green (typecheck clean, 17 Vitest files/58 tests, Clippy clean, Rust tests 13/13); `cargo fmt --check` clean.
+
+### Task 04 — Repository state and project navigation ✅
+
+Add a repository/group Zustand store, startup restoration, active-project selection, and project tabs. Keep loading and operation errors explicit; switching projects must not corrupt stage or settings state.
+
+**Tests:** store restoration, selection, and failure cases.
+
+**Status:** Complete — spec review PASS; `./init.sh` green (typecheck clean, 19 Vitest files/67 tests, Clippy clean, Rust tests 13/13).
+
+### Task 05 — Group and project switcher ✅
+
+Implement the title-bar switcher/popover with search across groups, projects, and Ungrouped; open/clone entry points; group create/edit (name, color, clone path template), project-to-group movement, and confirmed group deletion that moves projects to Ungrouped with an undo toast. Profile defaults are persisted only if the existing domain contract supports them; profile resolution remains deferred to M3.
+
+**Tests:** focused component tests for search, grouping, open/clone entry points, delete/undo, and keyboard dismissal.
+
+**Status:** Complete — spec review PASS; security review APPROVE; `./init.sh` green (typecheck clean, 20 Vitest files/78 tests, Clippy clean, Rust tests 13/13). Folder input is a text path (no dialog plugin); group profile fields deferred to M3; move via menu (no drag).
+
+### Stage 1 follow-ups ✅
+
+Added after the Stage 1 review and user requests: 05b review fixes (clone off main thread, `~` expansion, popover toggle, undo active group), 05c native folder picker for Open repository (`tauri-plugin-dialog`, `dialog:allow-open`), 05d close/hide project tabs, 05e collapsible group sections, 05g fix for projects invisible in the switcher, 05f remove project from Branchwork with undo, 05h group clone folder via Browse, 05i follow-up review fixes, and 05j per-group Add repository, repository-folder warning, and simpler new-group form. Footer Open repository leaves new projects Ungrouped. Task files: `.agent/tasks/m1-task-05{b..j}.md`.
+
+**Status:** Complete — spec review PASS; code review found no significant issues; security review found no vulnerabilities; `./init.sh` green (117 Vitest, 18 Rust); cargo fmt clean; e2e 48/48.
+
+**Stage 1 gate:** `./init.sh`, targeted browser E2E for repository/group flows, code and security review, then update the manual test spec and stop at Checkpoint M1.1.
+
+## Stage 2: Worktrees and sidebar
+
+### Task 06 — Worktree reads and file watcher
+
+List worktrees and read branch/head/ahead/behind/dirty/conflict/rebase state with `git2`. Add a debounced watcher that coalesces changes per worktree, skips/retries while `.git/index.lock` exists, and emits typed `git:changed` events.
+
+**Tests:** temporary repositories cover worktree metadata, dirty state, event coalescing, and index-lock retry behavior.
+
+### Task 07 — Worktree lifecycle and pin persistence
+
+Create worktrees with the Git CLI, list/prune stale registrations, and safely remove only validated worktree paths. Persist pins and automatically pin user-created worktrees; do not pin race/handover worktrees (those arrive in M3).
+
+**Tests:** temporary repositories cover add/list/remove/prune, refusal of unsafe removal, pin persistence, and unchanged repository data.
+
+### Task 08 — Worktree sidebar and picker
+
+Replace the M0 empty state with pinned worktrees plus the active worktree, the `n/total` count, searchable checkbox picker, overflow row, branch/status display, terminal affordance placeholder, and unpin action. Preserve collapsed-rail behavior and existing split gestures.
+
+**Tests:** focused UI tests for active/pinned visibility, filtering, overflow, unpin, and collapsed mode; E2E for create/pin/select/restore.
+
+**Stage 2 gate:** `./init.sh`, worktree E2E, code and security review, manual spec update, then stop at Checkpoint M1.2.
+
+## Stage 3: Commit graph
+
+### Task 09 — Paged graph read model
+
+Implement a Rust graph query that returns 500 commits per page with stable lane layout, refs, author, message, relative-time source fields, short SHA, and worktree-head markers. Include an active-worktree WIP summary. Avoid loading the full history into the UI.
+
+**Tests:** generated temporary repositories cover branches, merges, tags, worktree heads, pagination, and stable lane assignments.
+
+### Task 10 — Graph screen and inspector
+
+Replace the Graph placeholder with a virtualized commit list, All branches/Worktrees/Mine filters, WIP row, commit/WIP inspector, and a context menu. Implement actions supported by M1; expose later-milestone GitHub, diff, and agent actions only as disabled or clearly deferred entries. Preserve keyboard, split, and palette navigation.
+
+**Tests:** frontend tests cover paging, filters, selection, WIP/commit inspector, and action availability; E2E covers graph browsing and inspector interactions.
+
+**Stage 3 gate:** `./init.sh`, full E2E, code and security review, performance check against the graph budget, final manual spec update, and stop at Checkpoint M1.3.
+
+## Scope deferred beyond M1
+
+Changes/editor and diff operations (M2), PTYs and agent sessions (M3), GitHub data and PR/CI decorations (M4), advanced Git actions not required for initial graph browsing (M5), and AI summaries (M6). Do not implement these as part of M1.

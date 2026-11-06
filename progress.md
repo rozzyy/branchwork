@@ -2,6 +2,63 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-06: M1 Stage 1 approved at Checkpoint M1.1
+
+- **05j:** Added per-group Add repository, repository-folder warning, and clarified clone-folder editing. New-group form omits clone-folder input/Browse and keeps `~/clients/{repo}`; editing retains the folder controls. Footer Open repository now leaves newly opened repositories Ungrouped.
+- **Reviews:** spec review PASS (all six ACs); code review found no significant issues; security review found no vulnerabilities.
+- **Verification:** `./init.sh` — typecheck clean, 20 Vitest files/117 tests passed, Clippy clean, Rust tests 18/18 passed. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` clean. `pnpm test:e2e` — 48 passed.
+- **Manual spec:** M1-S1-02 updated for Open repository → Ungrouped; M1-S1-04 updated for create/edit forms; M1-S1-13 covers Add repository from a collapsed group.
+- **Checkpoint:** User approved proceeding and authorized the Stage 1 commit.
+- **Next:** Commit M1 Stage 1, then start Stage 2 Task 06.
+
+## 2026-11-06: M1 Stage 1 follow-up tasks 05b–05h complete
+
+- **05b (review fixes):** clone runs off the main thread (`command(async)`), `GIT_TERMINAL_PROMPT=0` + HTTP low-speed abort; `~` expansion in Rust; missing clone parent allowed (git creates it, `..` rejected); open requires absolute path; chip/＋ toggle closes popover; Undo of group delete restores active group; error toasts use ⚠. Spec PASS; security re-review Clear.
+- **05c (user request):** native folder picker for Open repository via `tauri-plugin-dialog` 2.8.4, capability `dialog:allow-open` only. Spec PASS; security Clear (tripwire: re-review asset scope if `protocol-asset` or fs plugin is enabled).
+- **05d (user request):** × on project tabs hides the tab (`openProjectIds` persisted). Spec PASS.
+- **05e (user request):** collapsible group sections (`collapsedGroupIds`); all `repos` writes go through `persistRepos`. Spec PASS.
+- **05g (user bug):** opened repos missing from the switcher. Root causes: projects with a groupId not in the loaded groups rendered nowhere; `load()` discarded data when a selection happened mid-load. Fixed with regression tests written first. Spec PASS. Debt: a stale in-flight load can re-add a group deleted mid-load (in-memory only).
+- **05f (user request):** Remove from Branchwork (catalog only, disk untouched) with confirm + Undo. Spec PASS; security Clear.
+- **05h (user request):** group clone folder chosen via Browse… (stored as `<folder>/{repo}`). Spec PASS.
+- **Gate (after 05h):** vitest 105/105, cargo test 17/17, `pnpm test:e2e` 35/35.
+- **Next:** follow-up code review + e2e extension, then 🛑 Checkpoint M1.1.
+
+## 2026-11-06: M1 Task 05 complete — group and project switcher
+
+- `GroupSwitcher` chip + popover in the title bar: search across groups/projects/Ungrouped, group create/edit (name, 7 swatches, clone path template), Move-to menu, Open/Clone repository via `ask()`, confirmed group delete with Undo toast, ＋ entry point, Escape/outside-click dismissal.
+- New IPC wrappers `openRepository`/`cloneRepository` (reject outside Tauri); store actions on `useRepos`.
+- **Spec review:** FAIL (1 extra: `moveProject` updates active group) → AC amended by coordinator → re-review PASS.
+- **Security review:** APPROVE. Minor fixed: `{repo}` replacement now function-form (regression test added). Deferred: clone timeout/`GIT_TERMINAL_PROMPT=0`/main-thread blocking; protocol allowlist before untrusted clone URLs; narrow `project_move` command before M3.
+- **Verification:** `./init.sh` — Test Files 20 passed, Tests 78 passed, Clippy clean, Rust tests 13/13.
+- **Next:** M1 Stage 1 batch review → manual spec → Checkpoint M1.1.
+
+## 2026-11-06: M1 Task 04 complete — repository state and project navigation
+
+- Added `useRepos` store (`src/state/repos.ts`): loads groups/projects, restores persisted selection (settings key `repos`) with fallback (group's first project → first project → null), explicit load errors with toast while keeping prior data.
+- Title bar renders project tabs (`role="tablist"`) for the active group; switching projects leaves stage/settings untouched.
+- Bug found during implementation: zustand selector returning a fresh array caused a max-update-depth loop; fixed with `useMemo` in `TitleBar`.
+- **Spec review:** PASS. No security surfaces touched.
+- **Verification:** `./init.sh` — typecheck clean, 19 Vitest files/67 tests passed, Clippy clean, Rust tests 13/13 passed.
+- **Next:** M1 Task 05 (group and project switcher).
+
+## 2026-11-06: M1 Task 03 complete — open and clone repositories
+
+- Added typed repository discovery/open and Git CLI clone operations; successfully opened/cloned repositories are registered in the catalog, and occupied destinations are preserved.
+- **Spec review:** PASS. **Security review:** APPROVE.
+- **Verification:** `./init.sh` — typecheck clean, 17 Vitest files/58 tests passed, Clippy clean, Rust tests 13/13 passed. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` passed.
+- **Next:** M1 Task 04 (repository state and project navigation).
+
+## 2026-11-06: M1 started — plan established
+
+- M0 Stage 4 was approved by the user and committed as `a3e9952` (one commit for the stage).
+- Added the M1 plan for repository catalog/groups, open/clone, worktrees/file watcher, and paged commit graph, with three manual checkpoints and explicit deferrals.
+- **Task 01 complete:** added versioned SQLite schema for groups, projects, and pins while preserving settings.
+- **Spec review:** PASS. **Verification:** `./init.sh` green (typecheck clean, 16 Vitest files/56 tests, Clippy clean, Rust tests 5/5).
+- **Task 02 complete:** typed catalog persistence/commands and frontend IPC wrappers with browser fallback.
+- **Review:** spec review PASS; security review APPROVE.
+- **Verification:** `./init.sh` green (typecheck clean, 17 Vitest files/58 tests, Clippy clean, Rust tests 9/9).
+- **Active:** M1 Task 03 (open and clone repositories).
+
 ## 2026-11-06: M0 complete — Stage 4 approved
 
 - Task 15b adds persisted sidebar collapse/restore through ⌘B, the title-bar button, and a palette command; the collapsed rail retains accessible labels/tooltips and existing split interactions.
@@ -10,7 +67,7 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Performance:** isolated browser first-render proxy 1,922 ms; actual native cold start remains unmeasured (spec budget <1.5 s). Recorded in `.agent/reviews/m0-stage-4-code.md` and `m0-stage-4-e2e.md`.
 - **Manual spec:** added Stage 4 checks S4-01..S4-04 in `docs/testing/m0-manual-e2e.md`, including the native cold-start budget measurement.
 - **Checkpoint:** user approved proceeding without a recorded native manual-test result; native cold start remains unverified.
-- **Next:** commit M0 as one stage commit, then write the M1 plan.
+- **Next:** M0 stage commit created as `a3e9952`; M1 planning started.
 
 ## 2026-11-06: M0 Task 15 complete — global keyboard map
 

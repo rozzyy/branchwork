@@ -1,6 +1,6 @@
 {
-  "milestone": "M0 Shell & design system",
-  "plan": "docs/superpowers/plans/2026-11-06-m0-shell-design-system.md",
+  "milestone": "M1 Repositories, worktrees, and graph",
+  "plan": "docs/superpowers/plans/2026-11-06-m1-repos-worktrees-graph.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -239,6 +239,248 @@
       ],
       "status": "done",
       "evidence": "User approved proceeding at Checkpoint 4. Code review APPROVE after two Medium fixes; no security-sensitive surfaces touched; E2E 25/25; manual spec S4-01..04 added. Browser first-render proxy 1,922 ms; native cold-start measurement remains unverified."
+    },
+    {
+      "id": "m1-task-01",
+      "stage": 5,
+      "name": "SQLite catalog schema",
+      "description": ".agent/tasks/m1-task-01.md",
+      "dependencies": [
+        "m0-stage-4-review"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS; cargo test 5/5; cargo clippy -- -D warnings clean; ./init.sh green: typecheck clean, Vitest 16 files/56 tests, Rust tests 5/5."
+    },
+    {
+      "id": "m1-task-02",
+      "stage": 5,
+      "name": "Catalog persistence and IPC",
+      "description": "Implement typed group/project/pin persistence and narrowly scoped Tauri commands",
+      "dependencies": [
+        "m1-task-01"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS; security review APPROVE; catalog IPC tests 2/2; Rust tests 9/9; Clippy clean; ./init.sh green: typecheck clean, Vitest 17 files/58 tests, Rust tests 9/9."
+    },
+    {
+      "id": "m1-task-03",
+      "stage": 5,
+      "name": "Open and clone repositories",
+      "description": "Add safe repository discovery/open/clone backend operations",
+      "dependencies": [
+        "m1-task-02"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS; security review APPROVE; ./init.sh green: typecheck clean, Vitest 17 files/58 tests, Clippy clean, Rust tests 13/13; cargo fmt --check clean."
+    },
+    {
+      "id": "m1-task-04",
+      "stage": 5,
+      "name": "Repository state and project navigation",
+      "description": ".agent/tasks/m1-task-04.md",
+      "dependencies": [
+        "m1-task-03"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; init.sh green: typecheck clean, vitest 19 files/67 tests, clippy clean, cargo test 13/13; security surfaces none"
+    },
+    {
+      "id": "m1-task-05",
+      "stage": 5,
+      "name": "Group and project switcher",
+      "description": ".agent/tasks/m1-task-05.md",
+      "dependencies": [
+        "m1-task-04"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS (after coordinator AC amendment: moveProject active group follows); security-reviewer APPROVE (minor 1 fixed: function-form {repo} replace + regression test; minors 2-4 deferred to stage review); init.sh green: vitest 20 files/78 tests, clippy clean, cargo test 13/13"
+    },
+    {
+      "id": "m1-task-05b",
+      "stage": 1,
+      "name": "Stage 1 review fixes (clone off main thread, ~ expansion, popover toggle, undo active group)",
+      "description": ".agent/tasks/m1-task-05b.md",
+      "dependencies": [
+        "m1-task-05"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; security re-review Clear (Medium fixed; minor: command(async) uses tokio worker not blocking pool — comment corrected in 05c, spawn_blocking deferred to §7 cancellable clone); init.sh green: vitest 20 files/80 tests, cargo test 17/17, fmt clean; e2e 35/35"
+    },
+    {
+      "id": "m1-task-05c",
+      "stage": 1,
+      "name": "Native folder picker for Open repository (user request)",
+      "description": ".agent/tasks/m1-task-05c.md",
+      "dependencies": [
+        "m1-task-05b"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; security Clear (only dialog:allow-open; tripwire: plugin widens asset scope on pick — re-review if protocol-asset or fs plugin enabled); tauri-plugin-dialog 2.8.4 Rust+npm; init.sh green: vitest 81, cargo 17/17, fmt clean; e2e 35/35"
+    },
+    {
+      "id": "m1-task-05d",
+      "stage": 1,
+      "name": "Close button on project tabs (hide tab, user request)",
+      "description": ".agent/tasks/m1-task-05d.md",
+      "dependencies": [
+        "m1-task-05c"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS (restoreGroup persisting openProjectIds judged necessary, not extra); no security surfaces; vitest 90/90, cargo 17/17, e2e 35/35"
+    },
+    {
+      "id": "m1-task-05e",
+      "stage": 1,
+      "name": "Collapsible group sections in switcher (user request)",
+      "description": ".agent/tasks/m1-task-05e.md",
+      "dependencies": [
+        "m1-task-05d"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; persistRepos helper routes all repos writes; no security surfaces; vitest 95/95, cargo 17/17, e2e 35/35"
+    },
+    {
+      "id": "m1-task-05g",
+      "stage": 1,
+      "name": "Fix projects invisible in switcher (unknown group + load race)",
+      "description": ".agent/tasks/m1-task-05g.md",
+      "dependencies": [
+        "m1-task-05e"
+      ],
+      "status": "done",
+      "evidence": "regression tests failed before fix (orphan not rendered; load discarded data on stale revision), pass after; spec-reviewer PASS; debt: stale in-flight load can re-add a group deleted/reverted mid-load (narrow startup window, in-memory only); vitest 97/97, cargo 17/17, e2e 35/35"
+    },
+    {
+      "id": "m1-task-05f",
+      "stage": 1,
+      "name": "Remove project from Branchwork with undo (user request)",
+      "description": ".agent/tasks/m1-task-05f.md",
+      "dependencies": [
+        "m1-task-05g"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; security Clear (catalog row only, disk untouched, undo uses store snapshot, project_save debt not widened); vitest 102/102, cargo 17/17, e2e 35/35"
+    },
+    {
+      "id": "m1-task-05h",
+      "stage": 1,
+      "name": "Browse for group clone folder (user request)",
+      "description": ".agent/tasks/m1-task-05h.md",
+      "dependencies": [
+        "m1-task-05f"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS; no security surfaces (reuses pickFolder + dialog:allow-open); vitest 105/105, cargo 17/17, e2e 35/35"
+    },
+    {
+      "id": "m1-task-05i",
+      "stage": 1,
+      "name": "Stage 1 follow-up review fixes (orphan selection, close-all relaunch, removeProject stale read, tablist ARIA, chip name)",
+      "description": ".agent/tasks/m1-task-05i.md",
+      "dependencies": [
+        "m1-task-05h"
+      ],
+      "status": "done",
+      "evidence": "spec FAIL on AC4 (role=presentation still exposes close buttons in tablist) → AC4 amended (labelled ul/li list + aria-current; amends Task 04 tablist AC) → re-review PASS; regression tests failed pre-fix; vitest 111/111, cargo 17/17, e2e 47/47"
+    },
+    {
+      "id": "m1-task-05j",
+      "stage": 1,
+      "name": "Add repository to a group + clearer clone folder + repo warning (user report)",
+      "description": ".agent/tasks/m1-task-05j.md",
+      "dependencies": [
+        "m1-task-05i"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS (all 6 ACs); footer Open repository leaves new projects Ungrouped; new-group form hides clone-folder controls while edit retains folder selection/warning. Code review found no significant issues; security review found no vulnerabilities. ./init.sh green: typecheck clean, 20 Vitest files/117 tests, Clippy clean, Rust tests 18/18; cargo fmt --check clean; pnpm test:e2e 48 passed."
+    },
+    {
+      "id": "m1-stage-1-review",
+      "stage": 5,
+      "name": "M1 Stage 1 review and manual checkpoint",
+      "description": "Review repository catalog/group flows, update manual test spec, and stop at Checkpoint M1.1",
+      "dependencies": [
+        "m1-task-05j"
+      ],
+      "status": "done",
+      "evidence": "User approved Checkpoint M1.1 and authorized the Stage 1 commit. Code review PASS; security review found no vulnerabilities; E2E 48/48; ./init.sh green; manual spec updated through M1-S1-13."
+    },
+    {
+      "id": "m1-task-06",
+      "stage": 6,
+      "name": "Worktree reads and file watcher",
+      "description": "Implement git2 worktree metadata and debounced git:changed notifications",
+      "dependencies": [
+        "m1-stage-1-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m1-task-07",
+      "stage": 6,
+      "name": "Worktree lifecycle and pin persistence",
+      "description": "Add safe Git CLI worktree operations and persistent pins",
+      "dependencies": [
+        "m1-task-06"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m1-task-08",
+      "stage": 6,
+      "name": "Worktree sidebar and picker",
+      "description": "Render active/pinned worktrees and searchable pin picker in the sidebar",
+      "dependencies": [
+        "m1-task-07"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m1-stage-2-review",
+      "stage": 6,
+      "name": "M1 Stage 2 review and manual checkpoint",
+      "description": "Review worktree lifecycle/watcher/sidebar, update manual test spec, and stop at Checkpoint M1.2",
+      "dependencies": [
+        "m1-task-08"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m1-task-09",
+      "stage": 7,
+      "name": "Paged graph read model",
+      "description": "Implement paged graph data and stable lane layout with Rust tests",
+      "dependencies": [
+        "m1-stage-2-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m1-task-10",
+      "stage": 7,
+      "name": "Graph screen and inspector",
+      "description": "Implement virtualized Graph list, filters, WIP/commit inspector, and supported context actions",
+      "dependencies": [
+        "m1-task-09"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m1-stage-3-review",
+      "stage": 7,
+      "name": "M1 Stage 3 review and completion checkpoint",
+      "description": "Review graph implementation, verify performance, update manual test spec, and stop at Checkpoint M1.3",
+      "dependencies": [
+        "m1-task-10"
+      ],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }
