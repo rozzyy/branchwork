@@ -21,3 +21,12 @@
 .nav-ic { width: 18px; text-align: center; color: var(--fg3); }
 .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-split { font-size: 11px; color: var(--acc); }
+.side-toggle { flex: none; }
+.body { transition: grid-template-columns .25s var(--spring); }
+.app[data-sidebar="collapsed"] .body { grid-template-columns: 52px minmax(0, 1fr); }
+.app[data-sidebar="collapsed"] .side-scroll, .app[data-sidebar="collapsed"] .side-foot { padding-left: 6px; padding-right: 6px; }
+.app[data-sidebar="collapsed"] .nav { justify-content: center; padding: 0; }
+.app[data-sidebar="collapsed"] .nav-label,
+.app[data-sidebar="collapsed"] .nav-split,
+.app[data-sidebar="collapsed"] .side-empty { display: none; }
+.app[data-sidebar="collapsed"] .side-h { font-size: 0; padding: 8px 0 4px; border-top: 1px solid var(--line); margin: 6px 4px 0; }

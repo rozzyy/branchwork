@@ -2,6 +2,37 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-06: M0 complete — Stage 4 approved
+
+- Task 15b adds persisted sidebar collapse/restore through ⌘B, the title-bar button, and a palette command; the collapsed rail retains accessible labels/tooltips and existing split interactions.
+- **Stage code review:** APPROVE after fixing two Medium findings: protect sidebar state from a stale startup load and contain keyboard focus in the modal palette. Re-review approved. No security-sensitive surfaces were touched.
+- **Verification:** `./init.sh` — typecheck clean, 16 Vitest files/56 tests passed, Clippy clean, Rust tests 2/2 passed. `pnpm test:e2e` — 25 passed. `pnpm build` — main JS 251.63 KB / 78.65 KB gzip; CSS 15.61 KB / 4.05 KB gzip.
+- **Performance:** isolated browser first-render proxy 1,922 ms; actual native cold start remains unmeasured (spec budget <1.5 s). Recorded in `.agent/reviews/m0-stage-4-code.md` and `m0-stage-4-e2e.md`.
+- **Manual spec:** added Stage 4 checks S4-01..S4-04 in `docs/testing/m0-manual-e2e.md`, including the native cold-start budget measurement.
+- **Checkpoint:** user approved proceeding without a recorded native manual-test result; native cold start remains unverified.
+- **Next:** commit M0 as one stage commit, then write the M1 plan.
+
+## 2026-11-06: M0 Task 15 complete — global keyboard map
+
+- Added global shortcuts for palette, split toggles, Changes navigation, and screen number keys; registered keyboard and title-bar palette events through `useGlobalKeys()` in `App`.
+- **Spec review:** PASS; all five specified tests present. Plan steps checked off, commit step skipped per no-commit rule.
+- **Verification:** `pnpm test src/keys` — 1 file, 5 tests passed. `pnpm typecheck && pnpm test && (cd src-tauri && cargo clippy -- -D warnings && cargo test)` — typecheck clean, 15 Vitest files/54 tests passed, Clippy clean, Rust tests 2/2 passed. `pnpm test:e2e` — 25 passed.
+- **Next:** implement M0 Task 15b (collapse/show sidebar).
+
+## 2026-11-06: M0 Task 14 complete — command palette
+
+- Added the palette store, localized navigation/split/theme/Ask commands, fuzzy-filtered palette UI and CSS; mounted it in `App` while retaining existing effects and hosts.
+- **Spec review:** implementation PASS; Task 14 plan steps checked off, commit step marked skipped per no-commit rule.
+- **Verification:** `pnpm test src/palette` — 2 files, 8 tests passed. `./init.sh` — typecheck clean, 14 Vitest files/49 tests passed, Clippy clean, Rust tests 2/2 passed. `pnpm test:e2e` — 25 passed.
+- **Next:** start M0 Task 15 (global keyboard map).
+
+## 2026-11-06: M0 Task 13 complete — fuzzy ranking
+
+- Implemented case-insensitive subsequence scoring and stable ranking/filtering in `src/palette/fuzzy.ts`; all four specified tests pass.
+- **spec-reviewer:** PASS.
+- **Verification:** `pnpm test src/palette` — 1 file, 4 tests passed. `./init.sh` — typecheck clean, 13 Vitest files/45 tests passed, Clippy clean, Rust tests 2/2 passed.
+- **Next:** start M0 Task 14 (command list, palette store, Palette UI).
+
 ## 2026-11-06: Checkpoint 3 manual test, drag & drop bug
 
 - **Bug (S3-01):** dragging a sidebar item onto the stage did nothing in the native window.

@@ -193,6 +193,11 @@ Commit, Ref, FileChange { path, status: M|A|D|R|U, hunks[], stagedHunks[] }, Pul
 - **Tools:** Resolve conflicts (count), Interactive rebase, Blame & history, Compare worktrees.
 - **Stashes.**
 - **Footer:** GitHub account and a Settings button.
+- **Collapse / show:**
+  - **⌘B**, the ◧ button in the title bar, or the palette command "Toggle sidebar" collapses the sidebar to a 52 px icon rail.
+  - In the rail, labels, section headers and worktree names are hidden. Each icon keeps its tooltip and accessible name, and still supports drag-to-split, modifier clicks and the context menu.
+  - Pressing it again expands the sidebar.
+  - The state is persisted (`settings` key `sidebar`).
 
 #### 6.1.4 Router and split view (Arc-style)
 
@@ -220,6 +225,7 @@ Commit, Ref, FileChange { path, status: M|A|D|R|U, hunks[], stagedHunks[] }, Pul
 | Action | Keys |
 |---|---|
 | Palette / quick open | ⌘K / ⌘P |
+| Collapse / show sidebar | ⌘B |
 | Terminal dock | ⌃\` |
 | Undo last Git op | ⌘Z (outside text inputs) |
 | Commit (Changes) | ⌘↵ |

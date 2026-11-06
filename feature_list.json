@@ -175,6 +175,17 @@
       "evidence": "code-reviewer APPROVE (1 Important = plan conflict in Task 14 split:close → fixed in plan + task file; 10 minor incl. unclamped saved ratio, Pane memo later); e2e PASS 11/11 new, 25/25 full suite; vitest 41/41; init.sh green; bundle 245.7KB/77.1KB gz (+2.2KB). Manual spec Stage 3 (S3-01..08). Awaiting user. | Manual test: S3-01 drag bug in native window fixed (task 12b dragDropEnabled:false), re-verified by user; go-ahead given."
     },
     {
+      "id": "m0-task-12c",
+      "stage": 4,
+      "name": "Terminal screen placeholder (spec §6.5a)",
+      "description": ".agent/tasks/m0-task-12c-terminal-placeholder.md",
+      "dependencies": [
+        "m0-stage-3-review"
+      ],
+      "status": "done",
+      "evidence": "vitest 41/41; e2e 25/25; init.sh green; NUMBER_KEYS now ends terminal/prs/repo/inbox"
+    },
+    {
       "id": "m0-task-13",
       "stage": 4,
       "name": "Fuzzy ranking",
@@ -182,8 +193,8 @@
       "dependencies": [
         "m0-stage-3-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Spec review PASS; pnpm test src/palette: 1 file, 4 tests passed; ./init.sh green: typecheck clean, Vitest 13 files/45 tests passed, Clippy clean, Rust tests 2/2 passed."
     },
     {
       "id": "m0-task-14",
@@ -193,8 +204,8 @@
       "dependencies": [
         "m0-task-13"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Spec review passed after plan tracking was completed; pnpm test src/palette: 2 files, 8 tests passed; ./init.sh green: typecheck clean, Vitest 14 files/49 tests passed, Clippy clean, Rust tests 2/2 passed; pnpm test:e2e: 25 passed."
     },
     {
       "id": "m0-task-15",
@@ -204,8 +215,19 @@
       "dependencies": [
         "m0-task-14"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Spec review PASS; pnpm test src/keys: 1 file, 5 tests passed; typecheck clean; pnpm typecheck + pnpm test: 15 files/54 tests passed; Clippy clean; Rust tests 2/2 passed; pnpm test:e2e: 25 passed."
+    },
+    {
+      "id": "m0-task-15b",
+      "stage": 4,
+      "name": "Collapse / show sidebar (⌘B)",
+      "description": ".agent/tasks/m0-task-15b-sidebar-collapse.md",
+      "dependencies": [
+        "m0-task-15"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS; sidebar persistence and ⌘B tests pass; ./init.sh green: typecheck clean, 16 Vitest files/56 tests passed, Clippy clean, Rust tests 2/2 passed; pnpm test:e2e: 25 passed. Stage 4 code review APPROVE after fixing sidebar-load race and palette focus containment."
     },
     {
       "id": "m0-stage-4-review",
@@ -213,10 +235,10 @@
       "name": "Stage 4 batch review + final manual E2E spec + 🛑 checkpoint 4 (M0 done)",
       "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
       "dependencies": [
-        "m0-task-15"
+        "m0-task-15b"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "User approved proceeding at Checkpoint 4. Code review APPROVE after two Medium fixes; no security-sensitive surfaces touched; E2E 25/25; manual spec S4-01..04 added. Browser first-render proxy 1,922 ms; native cold-start measurement remains unverified."
     }
   ]
 }

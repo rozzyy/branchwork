@@ -5,6 +5,7 @@ export const en = {
   "nav.files": "Files & editor",
   "nav.changes": "Changes",
   "nav.agents": "Agents",
+  "nav.terminal": "Terminal",
   "nav.prs": "Pull requests",
   "nav.repo": "Repository",
   "nav.inbox": "Inbox",
@@ -17,6 +18,7 @@ export const en = {
   "sidebar.tools": "Tools",
   "sidebar.noRepo": "Open a repository to see its worktrees",
   "sidebar.splitHint": "⌘-click: split right · ⌥-click: split bottom · drag onto content",
+  "sidebar.toggle": "Toggle sidebar (⌘B)",
   "search.placeholder": "Search, jump, or ask Claude…",
   "placeholder.body": "This screen arrives in a later milestone.",
   "dialog.cancel": "Cancel",
@@ -86,6 +88,7 @@ export const en = {
   "palette.closeSplit": "Close split view",
   "palette.swapSplit": "Swap split panes",
   "palette.toggleTheme": "Toggle dark / light",
+  "palette.toggleSidebar": "Toggle sidebar",
   "palette.askClaude": "Ask Claude: {q}",
   "palette.aiLater": "Claude integration arrives in a later milestone",
 } as const;

@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   "Files & editor",
   "Changes",
   "Agents",
+  "Terminal",
   "Pull requests",
   "Repository",
   "Inbox",

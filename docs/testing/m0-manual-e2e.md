@@ -51,9 +51,9 @@ Expected:
 - The window cannot shrink below 1000×640, and the layout doesn't break at that size (no horizontal scroll, the sidebar stays visible).
 - Double-click follows the macOS setting (zoom or minimize).
 
-### S1-04 · Sidebar navigation (all 13 screens)
+### S1-04 · Sidebar navigation (all 14 screens)
 
-Click each item in this order: Launchpad, Graph, Files & editor, Changes, Agents, Pull requests, Repository, Inbox, Resolve conflicts, Interactive rebase, Blame & history, Compare worktrees, Settings (footer).
+Click each item in this order: Launchpad, Graph, Files & editor, Changes, Agents, Terminal, Pull requests, Repository, Inbox, Resolve conflicts, Interactive rebase, Blame & history, Compare worktrees, Settings (footer).
 
 Expected for each item:
 - The pane toolbar title equals the item name.
@@ -291,3 +291,61 @@ Expected: both pane toolbars stay on one line, and long titles are truncated wit
 | S3-06 | | |
 | S3-07 | | |
 | S3-08 | | |
+
+---
+
+## Stage 4: Command palette, keyboard map, and collapsible sidebar
+
+Run Stages 1–3 again first as a regression check (at least S1-04, S2-01/S2-04, S3-02/S3-03/S3-05).
+
+### S4-01 · Command palette
+
+1. Press **⌘K**, then close with **Esc**. Click the title-bar search pill to reopen it.
+2. Type `spl bot gra`; move with **↑/↓**, run with **Enter**, then close with **Esc** or click outside.
+3. Try "Go to Changes", "Split right with Graph", "Split bottom with Graph", "Close split view", "Swap split panes", and "Toggle dark / light".
+4. Type `what changed?`; run the single **Ask Claude** result.
+
+Expected:
+- The glass command palette opens, fuzzy-filters commands, and shows group and shortcut hints.
+- Arrow keys move the selected row; Enter runs it; Escape and clicking outside close it.
+- The listed navigation, split, and theme commands work. Ask Claude shows the later-milestone toast.
+- While open, Tab and Shift+Tab keep focus in the palette input.
+
+### S4-02 · Global keyboard shortcuts
+
+1. Press **⌘\\** twice, then **⌘⇧\\**.
+2. Press **⌃⇧G**.
+3. Press **1–9** in order, then focus a text input and press a number key.
+
+Expected:
+- ⌘\\ toggles a right split; ⌘⇧\\ toggles a bottom split; ⌃⇧G navigates to Changes.
+- Number keys 1–9 navigate to Launchpad, Graph, Files, Changes, Agents, Terminal, Pull requests, Repository, and Inbox.
+- Number keys do nothing while typing or while the palette or a dialog is open.
+
+### S4-03 · Collapse and restore the sidebar
+
+1. Press **⌘B**, then press it again. Repeat using the title-bar **◧** button.
+2. Open the palette and run **Toggle sidebar**.
+3. Collapse the sidebar, quit, relaunch, and check its state.
+4. While collapsed, drag a nav icon to the stage, use ⌘-click and ⌥-click, and open a nav context menu.
+
+Expected:
+- The sidebar toggles between its 232 px full width and 52 px icon rail, consistently from all three entry points.
+- The collapsed rail shows icons only; section headings, labels, empty-state text, and split glyphs are hidden. Nav buttons remain accessible by name and expose tooltips.
+- The collapsed state survives relaunch.
+- Drag-to-split, modifier-click, and context-menu actions still work from the icon rail.
+
+### S4-04 · Native cold-start performance
+
+Run the release smoke test in **S1-09** and record the measured cold start to interactive.
+
+Expected: cold start is under the spec §9 budget of 1.5 s.
+
+### Stage 4 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| S4-01 | | |
+| S4-02 | | |
+| S4-03 | | |
+| S4-04 | | cold start = ___ s |

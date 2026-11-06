@@ -41,7 +41,8 @@ export function Sidebar() {
       key={s.id}
       className={"nav" + (panes[focus] === s.id ? " on" : panes.includes(s.id) ? " on2" : "")}
       draggable
-      title={t("sidebar.splitHint")}
+      aria-label={t(s.label)}
+      title={`${t(s.label)} · ${t("sidebar.splitHint")}`}
       onDragStart={(e) => { e.dataTransfer.setData(SCREEN_MIME, s.id); e.dataTransfer.effectAllowed = "copy"; }}
       onClick={(e) => onClick(e, s.id)}
       onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: s.id }); }}

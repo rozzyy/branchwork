@@ -2590,7 +2590,7 @@ Wait for the user's go-ahead before starting Stage 4.
 - Create: `src/palette/fuzzy.ts`
 - Test: `src/palette/fuzzy.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { fuzzyScore, rank } from "./fuzzy";
@@ -2617,12 +2617,12 @@ describe("rank", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `pnpm test src/palette`
 Expected: FAIL, because the module cannot be resolved.
 
-- [ ] **Step 3: Create `src/palette/fuzzy.ts`**
+- [x] **Step 3: Create `src/palette/fuzzy.ts`**
 
 ```ts
 /** Subsequence match score: +1 per matched char, +3 if contiguous, +2 at word start. null = no match. */
@@ -2653,12 +2653,12 @@ export function rank<T>(items: T[], query: string, text: (x: T) => string): T[] 
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm test src/palette`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add src/palette
@@ -2675,7 +2675,7 @@ git commit -m "feat(palette): fuzzy scoring and ranking"
 - Test: `src/palette/Palette.test.tsx`
 - Modify: `src/App.tsx`, `src/main.tsx`
 
-- [ ] **Step 1: Write the failing test** `src/palette/Palette.test.tsx`
+- [x] **Step 1: Write the failing test** `src/palette/Palette.test.tsx`
 
 ```tsx
 import { render, screen } from "@testing-library/react";
@@ -2722,12 +2722,12 @@ it("closes on Escape", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `pnpm test src/palette/Palette`
 Expected: FAIL, because the modules cannot be resolved.
 
-- [ ] **Step 3: Create `src/palette/store.ts`**
+- [x] **Step 3: Create `src/palette/store.ts`**
 
 ```ts
 import { create } from "zustand";
@@ -2751,7 +2751,7 @@ export const usePalette = create<PaletteStore>((set, get) => ({
 }));
 ```
 
-- [ ] **Step 4: Create `src/palette/commands.ts`**
+- [x] **Step 4: Create `src/palette/commands.ts`**
 
 ```ts
 import type { MsgKey } from "../i18n/en";
@@ -2811,7 +2811,7 @@ export function askClaudeCommand(q: string): Command {
 }
 ```
 
-- [ ] **Step 5: Create `src/palette/Palette.tsx`**
+- [x] **Step 5: Create `src/palette/Palette.tsx`**
 
 ```tsx
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -2893,7 +2893,7 @@ export function Palette() {
 }
 ```
 
-- [ ] **Step 6: Create `src/palette/palette.css`**
+- [x] **Step 6: Create `src/palette/palette.css`**
 
 ```css
 .pal-scrim { position: fixed; inset: 0; z-index: 90; background: oklch(0 0 0 / .25); backdrop-filter: blur(3px); animation: fade .2s; }
@@ -2913,14 +2913,14 @@ export function Palette() {
 .pal-ask { margin-left: auto; }
 ```
 
-- [ ] **Step 7: Mount the palette.** In `src/App.tsx` add `import { Palette } from "./palette/Palette";` and render `<Palette />` next to `<Toaster />`. In `src/main.tsx` add `import "./palette/palette.css";`.
+- [x] **Step 7: Mount the palette.** In `src/App.tsx` add `import { Palette } from "./palette/Palette";` and render `<Palette />` next to `<Toaster />`. In `src/main.tsx` add `import "./palette/palette.css";`.
 
-- [ ] **Step 8: Run the tests to verify they pass**
+- [x] **Step 8: Run the tests to verify they pass**
 
 Run: `pnpm test src/palette`
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add src
@@ -2934,7 +2934,7 @@ git commit -m "feat(palette): command palette with navigation, split, theme and 
 - Test: `src/keys/globalKeys.test.ts`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { handleGlobalKey } from "./globalKeys";
@@ -2985,12 +2985,12 @@ it("⌃⇧G goes to Changes", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `pnpm test src/keys`
 Expected: FAIL, because the module cannot be resolved.
 
-- [ ] **Step 3: Create `src/keys/globalKeys.ts`**
+- [x] **Step 3: Create `src/keys/globalKeys.ts`**
 
 ```ts
 import { useEffect } from "react";
@@ -3030,19 +3030,19 @@ export function useGlobalKeys(): void {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm test src/keys`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Use the hook in `src/App.tsx`.** Add `import { useGlobalKeys } from "./keys/globalKeys";` and call `useGlobalKeys();` as the first line inside `App()`.
+- [x] **Step 5: Use the hook in `src/App.tsx`.** Add `import { useGlobalKeys } from "./keys/globalKeys";` and call `useGlobalKeys();` as the first line inside `App()`.
 
-- [ ] **Step 6: Run the full gate**
+- [x] **Step 6: Run the full gate**
 
 Run: `pnpm typecheck && pnpm test && (cd src-tauri && cargo clippy -- -D warnings && cargo test)`
 Expected: everything PASSES with no warnings.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit** _(skipped: no-commit rule)_
 
 ```bash
 git add src

@@ -6,6 +6,7 @@ import "./ui/ui.css";
 import "./shell/shell.css";
 import "./stage/stage.css";
 import "./screens/settings/settings.css";
+import "./palette/palette.css";
 
 if ("__TAURI_INTERNALS__" in window) document.documentElement.classList.add("tauri");
 
