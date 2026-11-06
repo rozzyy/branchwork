@@ -70,25 +70,44 @@ Added after the Stage 1 review and user requests: 05b review fixes (clone off ma
 
 ## Stage 2: Worktrees and sidebar
 
-### Task 06 — Worktree reads and file watcher
+### Task 06 — Worktree reads and file watcher ✅
 
 List worktrees and read branch/head/ahead/behind/dirty/conflict/rebase state with `git2`. Add a debounced watcher that coalesces changes per worktree, skips/retries while `.git/index.lock` exists, and emits typed `git:changed` events.
 
-**Tests:** temporary repositories cover worktree metadata, dirty state, event coalescing, and index-lock retry behavior.
+**Tests:** temporary repositories cover main/linked worktree metadata, dirty state, actual filesystem notifications (including newly created top-level directories), independent per-worktree event coalescing, ahead/behind and conflict/rebase state, and index-lock retry behavior.
 
-### Task 07 — Worktree lifecycle and pin persistence
+- [x] Add typed worktree reads and metadata using `git2`.
+- [x] Watch worktree files and Git metadata; coalesce and defer on `index.lock`.
+- [x] Cover filesystem changes, new directories, per-worktree debounce, and metadata states.
+- [x] Commit _(skipped: no-commit rule)_
+
+### Task 07 — Worktree lifecycle and pin persistence ✅
 
 Create worktrees with the Git CLI, list/prune stale registrations, and safely remove only validated worktree paths. Persist pins and automatically pin user-created worktrees; do not pin race/handover worktrees (those arrive in M3).
 
 **Tests:** temporary repositories cover add/list/remove/prune, refusal of unsafe removal, pin persistence, and unchanged repository data.
 
-### Task 08 — Worktree sidebar and picker
+- [x] Add typed Git-CLI worktree create/remove/prune operations with path validation.
+- [x] Automatically pin created worktrees and validate persisted pins against the project.
+- [x] Isolate Git configuration and neutralize configured checkout filters during worktree creation; cover with sentinel regression tests.
+- [x] Cover lifecycle, unsafe paths/removal, pin persistence, and unchanged repository data.
+- [x] Commit _(skipped: no-commit rule)_
+
+### Task 08 — Worktree sidebar and picker ✅
 
 Replace the M0 empty state with pinned worktrees plus the active worktree, the `n/total` count, searchable checkbox picker, overflow row, branch/status display, terminal affordance placeholder, and unpin action. Preserve collapsed-rail behavior and existing split gestures.
 
 **Tests:** focused UI tests for active/pinned visibility, filtering, overflow, unpin, and collapsed mode; E2E for create/pin/select/restore.
 
-**Stage 2 gate:** `./init.sh`, worktree E2E, code and security review, manual spec update, then stop at Checkpoint M1.2.
+- [x] Render the active and pinned worktrees with count, status, overflow, and terminal placeholder.
+- [x] Add the searchable pin picker, selection persistence, and collapsed-sidebar behavior.
+- [x] Refresh matching worktree metadata on `git:changed` and clean up the listener.
+- [x] Cover sidebar interactions and create/pin/select/restore in focused tests and E2E.
+- [x] Pass Task 08 spec review and the Stage 2 code, security, and E2E reviews.
+- [x] Run `./init.sh`, focused worktree E2E, and full E2E.
+- [x] Commit _(skipped: no-commit rule)_
+
+**Stage 2 gate:** Complete — `./init.sh` green (21 Vitest files/129 tests; Clippy clean; Rust 35/35), focused worktree E2E 1/1, full E2E 49/49, code review no significant issues, security re-review no remaining vulnerabilities. Manual test spec updated. Awaiting Checkpoint M1.2; status-refresh performance (<200 ms for 10k files) remains for the manual checkpoint.
 
 ## Stage 3: Commit graph
 

@@ -349,3 +349,69 @@ Expected: cold start is under the spec §9 budget of 1.5 s.
 | S4-02 | | |
 | S4-03 | | |
 | S4-04 | | cold start = ___ s |
+
+---
+
+## M1 Stage 2: Worktrees and sidebar
+
+Run the completed M0 checks first as a regression check. Open a registered Git repository that has its main worktree and at least two linked worktrees. If needed, create linked worktrees with Git before launching Branchwork.
+
+### M1-S2-01 · Active and pinned worktrees
+
+1. Open the repository and inspect **WORKTREES**.
+2. Select a different worktree, then pin it from the picker.
+3. Pin the active worktree and inspect the sidebar rows and count.
+
+Expected:
+- The active worktree is visible even when unpinned; pinned worktrees are also visible.
+- The active worktree is not duplicated when it is pinned.
+- The count shows visible worktrees / total worktrees, and selecting a row updates the active worktree.
+
+### M1-S2-02 · Search, pinning, and persistence
+
+1. Open the worktree picker and search by branch name and by path.
+2. Pin and unpin entries with their checkboxes.
+3. Quit and relaunch Branchwork, then reopen the picker.
+
+Expected:
+- Search filters the picker by branch and path.
+- Pin choices update the sidebar and are restored after relaunch.
+- The active worktree remains visible even if it is not pinned.
+
+### M1-S2-03 · Overflow, status, and refresh
+
+1. Pin enough worktrees to exceed the sidebar's visible rows, then open the overflow row.
+2. In a linked worktree, edit a tracked file and save it; revert the edit afterward.
+3. If available, inspect worktrees with ahead/behind, conflict, or rebase state.
+4. For the §9 performance check, time a status refresh in a worktree containing about 10,000 files.
+
+Expected:
+- The overflow row reports additional worktrees and opens the picker.
+- Branch and status labels are shown; the changed-file count refreshes after the Git change notification.
+- Ahead/behind and conflict/rebase state appears where the repository has those conditions.
+- Status refresh is under 200 ms; record the measured time and file count.
+
+### M1-S2-04 · Collapsed sidebar and split interactions
+
+1. Collapse the sidebar and inspect the worktree controls.
+2. Select a worktree and use a navigation item to open a split; restore the sidebar.
+
+Expected:
+- Collapsed controls retain accessible names/tooltips and remain usable.
+- Worktree selection and existing split gestures continue to work.
+
+### M1-S2-05 · Terminal affordance placeholder
+
+1. Inspect the terminal affordance beside a worktree row and try to focus it with the keyboard.
+
+Expected: it is disabled and clearly indicates that terminal integration is not available yet; no terminal is launched.
+
+### M1 Stage 2 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M1-S2-01 | | |
+| M1-S2-02 | | |
+| M1-S2-03 | | |
+| M1-S2-04 | | |
+| M1-S2-05 | | |

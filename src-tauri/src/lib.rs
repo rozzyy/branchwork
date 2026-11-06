@@ -1,9 +1,10 @@
 mod repository;
 mod store;
+mod worktree;
 
 use std::path::Path;
 use store::{Group, Project, Store, WorktreePin};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 fn validate_id(id: &str, kind: &str) -> Result<(), String> {
     if id.trim().is_empty() {
@@ -107,7 +108,17 @@ fn pins_list(
 #[tauri::command]
 fn pin_worktree(store: State<'_, Store>, pin: WorktreePin) -> Result<(), String> {
     validate_pin(&pin)?;
-    store.pin_worktree(&pin).map_err(|e| e.to_string())
+    let project = project_by_id(&store, &pin.project_id)?;
+    let worktree_path = worktree::validate_pin(
+        Path::new(&project.local_path),
+        Path::new(&pin.worktree_path),
+    )?;
+    store
+        .pin_worktree(&WorktreePin {
+            project_id: pin.project_id,
+            worktree_path,
+        })
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -130,10 +141,61 @@ fn repository_open(store: State<'_, Store>, path: String) -> Result<Project, Str
     repository::open_and_register(Path::new(&path), &store)
 }
 
+fn project_by_id(store: &Store, project_id: &str) -> Result<Project, String> {
+    store
+        .list_projects()
+        .map_err(|error| format!("Cannot read projects: {error}"))?
+        .into_iter()
+        .find(|project| project.id == project_id)
+        .ok_or_else(|| format!("Unknown project: {project_id}"))
+}
+
 /// Read-only: never executes anything from the repository at `path`.
 #[tauri::command]
 fn path_is_repository(path: String) -> Result<bool, String> {
     repository::is_repository(Path::new(&path))
+}
+
+#[tauri::command]
+fn worktree_list(
+    store: State<'_, Store>,
+    watcher: State<'_, worktree::WorktreeWatcher>,
+    project_id: String,
+) -> Result<Vec<worktree::Worktree>, String> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    worktree::list(Path::new(&project.local_path), &watcher)
+}
+
+#[tauri::command]
+fn worktree_create(
+    store: State<'_, Store>,
+    watcher: State<'_, worktree::WorktreeWatcher>,
+    project_id: String,
+    destination: String,
+    branch: String,
+) -> Result<worktree::Worktree, String> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    worktree::create(&project, Path::new(&destination), &branch, &store, &watcher)
+}
+
+#[tauri::command]
+fn worktree_remove(
+    store: State<'_, Store>,
+    project_id: String,
+    path: String,
+) -> Result<(), String> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    worktree::remove(&project, Path::new(&path), &store)
+}
+
+#[tauri::command]
+fn worktree_prune(store: State<'_, Store>, project_id: String) -> Result<(), String> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    worktree::prune(&project)
 }
 
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
@@ -158,6 +220,12 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let store = Store::open(&dir.join("app.db")).map_err(|e| e.to_string())?;
             app.manage(store);
+            let app_handle = app.handle().clone();
+            app.manage(worktree::WorktreeWatcher::new(move |event| {
+                if let Err(error) = app_handle.emit("git:changed", event) {
+                    eprintln!("Could not emit git:changed event: {error}");
+                }
+            }));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -174,7 +242,11 @@ pub fn run() {
             unpin_worktree,
             repository_open,
             repository_clone,
-            path_is_repository
+            path_is_repository,
+            worktree_list,
+            worktree_create,
+            worktree_remove,
+            worktree_prune
         ])
         .run(tauri::generate_context!())
         .expect("error while running Branchwork");

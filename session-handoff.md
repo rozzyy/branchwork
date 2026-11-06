@@ -1,24 +1,23 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-06
-- **Current Objective:** M1 Stage 2 (Task 06: worktree reads and file watcher)
+- **Current Objective:** M1 Stage 2 checkpoint (worktree integration)
 
 - **Milestone / stage:** M1, Stage 2
 - **Branch:** `docs/branchwork-design`.
-- **Active task:** `m1-task-06` (Stage 1 checkpoint approved; one Stage 1 commit authorized before Stage 2 implementation)
+- **Active task:** Stage 2 review complete; waiting at Checkpoint M1.2
 
-## Recommended Next Step (in order)
+## Recommended Next Step
 
-1. Create one commit for M1 Stage 1 (user authorized).
-2. Read the Task 06 plan/spec and create its missing local task file, run `./init.sh`, then implement Task 06.
+Run the manual checks M1-S2-01…M1-S2-05 in `docs/testing/m0-manual-e2e.md`, record results (especially the §9 status-refresh budget for about 10,000 files), and wait for the user's go-ahead. Only after approval, create one Stage 2 commit, then begin Task 09.
 
 ## Blockers / notes
 
-- M0 stage commit: `a3e9952`.
-- Checkpoint M1.1 approved by user; Stage 1 commit is the immediate next action.
-- Follow-ups 05b–05j done (review fixes, folder picker, tab close, collapsible groups, invisible-project fix, remove project, clone-folder Browse, group Add repository, repository-folder warning, Open repository leaves projects Ungrouped). Reviews PASS; `./init.sh` green (117 Vitest, 18 Rust); E2E 48/48. Deferred debt: stale mid-load group re-add; project_save arbitrary localPath (narrow before M3); pin_worktree path check (Stage 2 Task 07); clone protocol allowlist (M4); clone cancel/timeout + spawn_blocking (§7); dialog asset-scope tripwire.
-- Task 05 complete: group switcher; spec PASS; security APPROVE (deferred: clone timeout/prompt, protocol allowlist, narrow project_move).
-- Task 04 complete: `useRepos` store + project tabs; spec PASS; init.sh green (vitest 67).
-- Task 03 complete: typed open/clone backend; `./init.sh` green; spec review PASS and security review APPROVE.
-- User approved proceeding at Checkpoint 4. The isolated browser first-render proxy measured 1,922 ms; native cold-start performance remains unmeasured.
-- `.agent/` is gitignored (local workflow state).
+- The previous session stopped with Task 08 implemented, the checkout-filter security finding being fixed, and final review/validation pending.
+- Task 06 and Task 07 are complete. Task 08 spec review PASS.
+- Stage 2 code review found no significant issues. Focused worktree E2E passed 1/1; full E2E passed 49/49.
+- The security review found a HIGH risk: configured Git checkout `smudge`/`process` filters could execute during `git worktree add`. The fix isolates system/global config and overrides configured local and enabled worktree filters. Sentinel regression coverage passes; security re-review confirmed the finding resolved with no remaining vulnerabilities.
+- `./init.sh` is green: typecheck clean, 21 Vitest files/129 tests, Clippy clean, Rust tests 35/35. `cargo fmt --check` and `git diff --check` are clean.
+- The M1 Stage 2 manual test section is ready, including the status-refresh target (<200 ms for approximately 10,000 files). That performance measurement and the manual UI checks remain unverified until the checkpoint.
+- Stage 2 changes are intentionally uncommitted. Do not start Task 09 or commit before Checkpoint M1.2 approval. Never push. Exclude local untracked `.claude/`.
+- Stage 1 commit: `6c69746 feat(m1): complete repository groups stage 1`. `.agent/` is gitignored local workflow state.

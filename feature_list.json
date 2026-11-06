@@ -413,8 +413,8 @@
       "dependencies": [
         "m1-stage-1-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Spec review PASS. ./init.sh: `Test Files 21 passed (21)`, `Tests 119 passed (119)`, Clippy clean, `test result: ok. 28 passed; 0 failed`; cargo fmt --check and git diff --check clean. Watcher covers new directories, real file/ref events, per-worktree debounce; metadata tests cover ahead/behind, conflict, and rebase."
     },
     {
       "id": "m1-task-07",
@@ -424,8 +424,8 @@
       "dependencies": [
         "m1-task-06"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Spec review PASS. Added typed Git-CLI create/remove/prune, safe path and dirty-worktree refusal, automatic/disk-persisted pins, and temp-repo lifecycle/IPC tests. Stage 2 security finding on checkout filters was fixed by isolating config and overriding local/worktree smudge/process drivers; security re-review confirmed resolved with no remaining findings."
     },
     {
       "id": "m1-task-08",
@@ -435,8 +435,8 @@
       "dependencies": [
         "m1-task-07"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Spec review PASS. `./init.sh`: `Test Files 21 passed (21)`, `Tests 129 passed (129)`, Clippy clean, Rust 35/35; cargo fmt --check and git diff --check clean. Focused worktree E2E 1/1; full Playwright E2E 49/49; code review found no significant issues. Security review's HIGH checkout-filter finding was fixed and re-review found no remaining vulnerabilities. Manual M1 Stage 2 checks added; awaiting Checkpoint M1.2."
     },
     {
       "id": "m1-stage-2-review",
@@ -446,8 +446,8 @@
       "dependencies": [
         "m1-task-08"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "in-progress",
+      "evidence": "Task 08 spec review PASS; code review no significant issues; security re-review confirmed the HIGH checkout-filter finding resolved and no remaining vulnerabilities; focused E2E 1/1 and full E2E 49/49; ./init.sh green. Manual M1 Stage 2 test section added. Awaiting user manual verification and Checkpoint M1.2 approval before the single Stage 2 commit."
     },
     {
       "id": "m1-task-09",
