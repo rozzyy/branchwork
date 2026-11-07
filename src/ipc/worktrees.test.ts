@@ -7,6 +7,7 @@ import {
   removeWorktree,
   type Worktree,
 } from "./worktrees";
+import { errorMessage, type AppError } from "./errors";
 
 const worktree: Worktree = {
   path: "/repos/repo",
@@ -45,6 +46,23 @@ it("invokes the typed worktree list command with its project id", async () => {
 
   await expect(listWorktrees("project-1")).resolves.toEqual([worktree]);
   expect(calls).toEqual([{ command: "worktree_list", payload: { projectId: "project-1" } }]);
+});
+
+it("preserves typed AppError rejections from generated IPC commands", async () => {
+  mockWindows("main");
+  const appError: AppError = {
+    kind: "notFound",
+    message: "Project not found",
+    detail: null,
+    recoverable: false,
+  };
+  mockIPC(() => {
+    throw appError;
+  });
+
+  await expect(listWorktrees("missing-project").catch(errorMessage)).resolves.toBe(
+    "Project not found",
+  );
 });
 
 it("routes worktree lifecycle operations through typed Tauri commands", async () => {

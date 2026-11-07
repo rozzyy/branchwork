@@ -9,6 +9,12 @@
 .btn:disabled { opacity: .4; pointer-events: none; }
 .icon-btn { width: 26px; height: 24px; display: inline-grid; place-items: center; border: 0; border-radius: 7px; background: none; color: var(--fg2); cursor: pointer; }
 .icon-btn:hover { background: var(--s3); color: var(--fg); }
+.ib2 { width: 22px; height: 20px; flex: none; display: inline-grid; place-items: center; border: 0; border-radius: 5px; background: none; color: var(--fg2); cursor: pointer; font-size: 12px; }
+.ib2:hover { background: var(--s4); color: var(--fg); }
+.ib2:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; background: var(--s3); color: var(--fg2); font: 600 10.5px var(--font-ui); white-space: nowrap; }
+.chip.cg { background: color-mix(in oklch, var(--grn) 16%, transparent); color: var(--grn); }
+.file-icon { display: inline-block; min-width: 22px; flex: none; padding: 1px 3px; border-radius: 3px; background: color-mix(in oklch, var(--file-icon-color) 22%, transparent); color: var(--file-icon-color); font: 700 8.5px var(--font-mono); text-align: center; }
 .kbd { font: 500 10.5px var(--font-mono); min-width: 18px; text-align: center; padding: 1px 5px; border-radius: 5px; background: var(--s3); color: var(--fg2); box-shadow: inset 0 -1px 0 oklch(0 0 0 / .35), inset 0 1px 0 oklch(1 0 0 / .1), 0 0 0 .5px var(--line2); }
 .input { width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: var(--s2); box-shadow: inset 0 0 0 1px var(--line2); color: var(--fg); font: inherit; outline: none; }
 .input:focus { box-shadow: inset 0 0 0 1.5px var(--acc), 0 0 0 4px var(--accs); }

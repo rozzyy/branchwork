@@ -1,27 +1,17 @@
-import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { commands, type Worktree_Serialize, type WorktreeChanged } from "./bindings";
 
-export type WorktreeState = "clean" | "dirty" | "conflict" | "rebasing";
+export type { WorktreeState } from "./bindings";
+export type Worktree = Worktree_Serialize;
+export type GitChanged = WorktreeChanged;
 
-export interface Worktree {
-  path: string;
-  branch: string | null;
-  head: string;
-  ahead: number;
-  behind: number;
-  dirtyCount: number;
-  state: WorktreeState;
-}
-
-export interface GitChanged {
-  worktree: string;
-}
+const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function listWorktrees(projectId: string): Promise<Worktree[]> {
-  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!inTauri()) {
     return Promise.reject(new Error("Reading worktrees requires the desktop app"));
   }
-  return invoke("worktree_list", { projectId });
+  return commands.worktreeList(projectId);
 }
 
 export function createWorktree(
@@ -29,10 +19,10 @@ export function createWorktree(
   destination: string,
   branch: string,
 ): Promise<Worktree> {
-  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!inTauri()) {
     return Promise.reject(new Error("Creating worktrees requires the desktop app"));
   }
-  return invoke("worktree_create", { projectId, destination, branch });
+  return commands.worktreeCreate(projectId, destination, branch);
 }
 
 export function createWorktreeAtCommit(
@@ -41,24 +31,24 @@ export function createWorktreeAtCommit(
   branch: string,
   commit: string,
 ): Promise<Worktree> {
-  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!inTauri()) {
     return Promise.reject(new Error("Creating worktrees requires the desktop app"));
   }
-  return invoke("worktree_create_at_commit", { projectId, destination, branch, commit });
+  return commands.worktreeCreateAtCommit(projectId, destination, branch, commit);
 }
 
 export function removeWorktree(projectId: string, path: string): Promise<void> {
-  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!inTauri()) {
     return Promise.reject(new Error("Removing worktrees requires the desktop app"));
   }
-  return invoke("worktree_remove", { projectId, path });
+  return commands.worktreeRemove(projectId, path).then(() => undefined);
 }
 
 export function pruneWorktrees(projectId: string): Promise<void> {
-  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!inTauri()) {
     return Promise.reject(new Error("Pruning worktrees requires the desktop app"));
   }
-  return invoke("worktree_prune", { projectId });
+  return commands.worktreePrune(projectId).then(() => undefined);
 }
 
 export function onGitChanged(callback: (event: GitChanged) => void): Promise<UnlistenFn> {

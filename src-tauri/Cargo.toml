@@ -26,6 +26,9 @@ rusqlite = { version = "0.41.1", features = ["bundled"] }
 git2 = "0.21.0"
 tauri-plugin-dialog = "2.8.4"
 notify = "8"
+tauri-specta = { version = "2.0.0-rc.26", features = ["derive", "typescript"] }
+specta = { version = "2.0.0-rc.26", features = ["derive"] }
+specta-typescript = "0.0.13"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

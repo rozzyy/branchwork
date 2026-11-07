@@ -3,6 +3,7 @@ import { SCREENS, screenById, type ScreenId } from "./registry";
 import { t } from "../i18n/t";
 import { SettingsToolbar, SettingsView } from "./settings/SettingsScreen";
 import { GraphToolbar, GraphView } from "./graph/GraphScreen";
+import { ChangesToolbar, ChangesView } from "./changes/ChangesScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -27,3 +28,4 @@ export const VIEWS = Object.fromEntries(SCREENS.map((s) => [s.id, placeholder(s.
 
 VIEWS.settings = { Toolbar: SettingsToolbar, View: SettingsView };
 VIEWS.graph = { Toolbar: GraphToolbar, View: GraphView };
+VIEWS.changes = { Toolbar: ChangesToolbar, View: ChangesView };

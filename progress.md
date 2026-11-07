@@ -2,6 +2,54 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-07: M2 Stage 1 review gate → 🛑 Checkpoint M2.1
+
+- **Changes stub:** `src/screens/changes/ChangesScreen.tsx` shows Staged/Unstaged lists and the selected file's diff through `DiffRenderer`, with live `git:changed` refresh. Read-only.
+- **Open questions (user):** OQ1 discard backup = oplog blob; OQ3 external changes = reuse `git:changed` + focus mtime check.
+- **Security review** (`.agent/reviews/m2-stage-1-security.md`): PASS, 4 Minor. Fixed #1 (NUL path panic), #2 (unbounded/FIFO working-file read), #3 (`status`/`diff_file` now async). #4 (no line cap) mitigated by windowing.
+- **Code review** (`.agent/reviews/m2-stage-1-code.md`): REQUEST CHANGES twice → APPROVE WITH NITS. Fixed: staged large-file deletion bypassed 1 MB truncation; staged diff misread as binary; select/refresh race; stale debounce timer after worktree switch; `dmode` not restored; split view did not pair del/add; ruler clipped; perf fixture collapsed most lines.
+- **E2E** (`.agent/reviews/m2-stage-1-e2e.md`): new `e2e/m2-stage1-changes.spec.ts`; full suite 53/53.
+- **Perf §9** (prod build, Chromium, i5-1038NG7, realistic 5 000-line diff): 139.6 ms median before → 52 ms median after hunk windowing. Budget met.
+- **Gate:** `./init.sh` — `Test Files 27 passed (27)`, `Tests 166 passed (166)`, Clippy clean, Rust `60 passed; 0 failed; 2 ignored`. fmt and `git diff --check` clean.
+- **Carried nits:** N-1 Task 05 diff panel must be a non-scrolling full-height child (else ruler residual returns); N-2 one-frame blank on refresh; N-3 tick 0 half-clipped; N-4 a single huge hunk (new/deleted 5 000-line file) renders ~705 ms — user decision; Minor #3–9 in code report. Plan defect: ">7 context collapse" cannot trigger with `context_lines=3, interhunk_lines=0`.
+- **Manual spec:** `docs/testing/m2-manual-e2e.md` M2-S1-01…07 (not run; user-only).
+- **Next:** user runs the manual checks. On go-ahead: one Stage 1 commit, then Task 05.
+
+## 2026-11-07: M2 Task 04 — Changes store scaffolding
+
+- Added `src/state/changes.ts` + `changes.test.ts`: status/diff read model for the selected file, `select`/`setDiffMode`, `dmode` persisted via `loadSetting`/`saveSetting`, `handleGitChanged` (250 ms per-worktree debounce; Task 05 screen registers `onGitChanged` like `GraphScreen.tsx`), module-scope `useWorktrees.subscribe` clearing state on worktree switch, `ChangesCommand = never`.
+- **Spec review:** FAIL on AC-4 (state cleared only inside `refresh()`, no store subscription); executor added the subscription; re-review PASS.
+- **Verification:** `./init.sh` — `Test Files 27 passed (27)`, `Tests 163 passed (163)`, Clippy clean, Rust `58 passed; 0 failed; 2 ignored`. Cargo fmt and `git diff --check` clean.
+- **Next:** M2 Stage 1 review gate (`.agent/tasks/m2-stage-1-review.md`), then 🛑 Checkpoint M2.1.
+
+## 2026-11-07: M2 Task 03 — Shared diff renderer
+
+- Added `src/diff/DiffRenderer.tsx` + `diff.css`: split/inline rows, hunk header with range, Staged/Unstaged chip and area-correct actions, intraline `<mark>` spans, off-area dimming, collapse of >7 context lines, right-edge overview ruler, binary/truncated summary card. Strings under `diff.*` in `src/i18n/en.ts`. Vitest coverage in `DiffRenderer.test.tsx`.
+- **Spec review:** first pass FAIL on AC-1 (extra `hunkAreas`/`fileName` props, needed because Task 02's DiffModel lacks per-hunk area and file name). User chose to amend AC-1; re-review PASS. Notes (unscored): unstaged hunks show Stage + Revert; ruler position approximated (no whole-file line total in DiffModel).
+- **Verification:** `./init.sh` — `Test Files 26 passed (26)`, `Tests 158 passed (158)`, Clippy clean, Rust `58 passed; 0 failed; 2 ignored`. Cargo fmt and `git diff --check` clean.
+- **Next:** M2 Task 04, Changes store scaffolding (must supply `hunkAreas`/`fileName` to the renderer). No M2 stage commit before the M2.1 manual checkpoint.
+
+## 2026-11-07: M2 Task 02 — DiffModel computation
+
+- Added `diff_file(worktree_path, path, area)` with typed DiffModel/Specta types, patience diffs, staged/unstaged hunks, intraline Unicode-aware spans, binary and >1 MB short-circuits, and path/symlink containment checks. Added IPC wrapper and focused Rust/Vitest tests.
+- **Spec review:** PASS; no blockers.
+- **Verification:** `./init.sh` — `Test Files 25 passed (25)`, `Tests 150 passed (150)`, Clippy clean, Rust `58 passed; 0 failed; 2 ignored` (including binding drift check). Cargo formatting and `git diff --check` clean.
+- **Next:** M2 Task 03, shared diff renderer. No M2 stage commit before the M2.1 manual checkpoint.
+
+## 2026-11-07: M2 Task 01 — Status read model
+
+- Added the typed `status(worktree_path)` command, validated against registered worktrees; it reports deterministic staged/unstaged entries, rename paths, blob sizes, and refuses a locked index. Added the generated IPC wrapper and bindings plus temporary-repository coverage for status categories, partial staging, large files, empty trees, invalid paths, and index locks.
+- **Spec review:** no implementation blockers. The reviewer flagged verification as incomplete, but the executed `./init.sh` output below confirms the required gate and focused tests ran.
+- **Verification:** `./init.sh` — `Test Files 24 passed (24)`, `Tests 148 passed (148)`, Clippy clean, Rust `53 passed; 0 failed; 2 ignored` (including `export_bindings_matches_checked_in_file`). `cargo fmt --manifest-path src-tauri/Cargo.toml --check` and `git diff --check` clean.
+- **Next:** M2 Task 02, Diff computation and `DiffModel` IPC. No M2 stage commit before the M2.1 manual checkpoint.
+
+## 2026-11-07: M2 Task 00 — AppError and generated IPC contract
+
+- Migrated existing IPC commands and frontend wrappers to typed `AppError` and Specta-generated bindings. Added coverage proving typed IPC errors reach the UI as their `message`.
+- **Reviews:** spec review PASS after adding IPC rejection and E2E backend-error coverage; security review APPROVE, no vulnerabilities. Inherited clone stderr message behavior noted by security reviewer; unchanged by this task.
+- **Verification:** `./init.sh` — `Test Files 23 passed (23)`, `Tests 146 passed (146)`, Clippy clean, Rust `46 passed; 0 failed; 2 ignored`. `pnpm test:e2e` — `51 passed`. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` and `git diff --check` clean.
+- **Next:** M2 Task 01, Status read model. No M2 stage commit before the M2.1 manual checkpoint.
+
 ## 2026-11-07: M1 Stage 3 committed — M1 complete
 
 - The user approved Checkpoint M1.3 and authorized the commit. Single Stage 3 commit (Tasks 09, 10, 10b, 10c and the review/performance fixes); local `.claude/` excluded.

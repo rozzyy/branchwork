@@ -1,6 +1,6 @@
 {
-  "milestone": "M1 Repositories, worktrees, and graph",
-  "plan": "docs/superpowers/plans/2026-11-06-m1-repos-worktrees-graph.md",
+  "milestone": "M2 Changes, files, and editor",
+  "plan": "docs/superpowers/plans/2026-11-07-m2-changes-files-editor.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -503,6 +503,226 @@
       ],
       "status": "done",
       "evidence": "User approved Checkpoint M1.3 and authorized the Stage 3 commit. Code review With fixes (.agent/reviews/m1-stage-3-code.md): I1 page-boundary dup/miss fixed with paged topo order + regression test (fails on old code: 1201/1202 unique); I2 partly fixed (one read per commit, log_graph async; deep pages still re-walk, ponytail-noted); I3/I4 fixed in 10b. Security review no vulnerabilities. Perf: first page 100k commits 38.3 ms release (budget <300 ms; was 11.19 s due to libgit2 revwalk sort walking full history), Intel i5-1038NG7, 100k loose objects. Virtualization bounded (<80 mounted rows test). ./init.sh green (Vitest 145/145, Rust 42/1 ignored); E2E 50/50."
+    },
+    {
+      "id": "m2-task-00",
+      "stage": 8,
+      "name": "AppError and specta-generated IPC types (user decision: full spec)",
+      "description": ".agent/tasks/m2-task-00.md",
+      "dependencies": [
+        "m1-stage-3-review"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS after adding typed AppError rejection coverage through generated IPC and an E2E backend error mock; security review APPROVE, no vulnerabilities. ./init.sh green: 23 Vitest files/146 tests, Clippy clean, Rust 46 passed/0 failed/2 ignored; pnpm test:e2e: 51 passed; cargo fmt --check and git diff --check clean."
+    },
+    {
+      "id": "m2-task-01",
+      "stage": 8,
+      "name": "Status read model",
+      "description": ".agent/tasks/m2-task-01.md",
+      "dependencies": [
+        "m2-task-00"
+      ],
+      "status": "done",
+      "evidence": "Status model, catalog-worktree validation, lock refusal, generated bindings, wrapper, and temporary-repository tests completed. ./init.sh: 24 Vitest files/148 tests; Clippy clean; Rust 53 passed/0 failed/2 ignored (including export_bindings_matches_checked_in_file). cargo fmt --check and git diff --check clean. Spec review found no implementation blockers; its verification concern was resolved by the captured gate output."
+    },
+    {
+      "id": "m2-task-02",
+      "stage": 8,
+      "name": "Diff computation and DiffModel IPC",
+      "description": ".agent/tasks/m2-task-02.md",
+      "dependencies": [
+        "m2-task-01"
+      ],
+      "status": "done",
+      "evidence": "DiffModel and staged/unstaged git2 diff IPC completed with bounded Unicode-aware intraline spans, binary/large-file short circuits, path safety, wrapper, generated bindings, and focused tests. Spec review PASS. ./init.sh: 25 Vitest files/150 tests; Clippy clean; Rust 58 passed/0 failed/2 ignored; fmt and diff checks clean."
+    },
+    {
+      "id": "m2-task-03",
+      "stage": 8,
+      "name": "Shared diff renderer",
+      "description": ".agent/tasks/m2-task-03.md",
+      "dependencies": [
+        "m2-task-02"
+      ],
+      "status": "done",
+      "evidence": "DiffRenderer (split/inline, hunk chips + area actions, intraline marks, off-area dimming, >7 context collapse, overview ruler, binary/truncated summary card) with Vitest coverage. AC-1 amended by user to allow optional hunkAreas/fileName props. Spec review PASS. ./init.sh: 26 Vitest files/158 tests; Clippy clean; Rust 58 passed/0 failed/2 ignored; fmt and diff checks clean."
+    },
+    {
+      "id": "m2-task-04",
+      "stage": 8,
+      "name": "Changes store scaffolding",
+      "description": ".agent/tasks/m2-task-04.md",
+      "dependencies": [
+        "m2-task-03"
+      ],
+      "status": "done",
+      "evidence": "src/state/changes.ts Zustand store (entries, selection, diff, dmode persisted via loadSetting/saveSetting, refresh, select, setDiffMode, handleGitChanged 250ms per-worktree debounce, module-scope useWorktrees.subscribe clears state on worktree switch, ChangesCommand=never dispatch). Spec review: FAIL on AC-4 (no store subscription) -> fixed -> PASS. ./init.sh: 27 Vitest files/163 tests; Clippy clean; Rust 58 passed/0 failed/2 ignored; fmt and diff checks clean."
+    },
+    {
+      "id": "m2-stage-1-review",
+      "stage": 8,
+      "name": "M2 Stage 1 review and manual checkpoint",
+      "description": ".agent/tasks/m2-stage-1-review.md",
+      "dependencies": [
+        "m2-task-04"
+      ],
+      "status": "done",
+      "evidence": "Changes stub renders real status+diff via DiffRenderer. Security review PASS (4 Minor; #1 NUL path, #2 working-file read, #3 async commands fixed; #4 line cap mitigated by windowing). Code review REQUEST CHANGES x2 -> fixed (staged large-file truncation, staged binary misdetection, select/refresh race, stale timer after worktree switch, dmode restore, split pairing, ruler, perf fixture) -> APPROVE WITH NITS. Perf §9 (prod, i5-1038NG7, realistic 5000-line diff): median 52 ms (was 140). ./init.sh: 27 Vitest files/166 tests; Clippy clean; Rust 60 passed/2 ignored; Playwright 53/53. OQ1=oplog blob, OQ3=reuse git:changed (user). Manual spec docs/testing/m2-manual-e2e.md written, not run. Awaiting Checkpoint M2.1."
+    },
+    {
+      "id": "m2-task-05",
+      "stage": 9,
+      "name": "Changes screen scaffold",
+      "description": ".agent/tasks/m2-task-05.md",
+      "dependencies": [
+        "m2-stage-1-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-06",
+      "stage": 9,
+      "name": "Stage, unstage, and discard",
+      "description": ".agent/tasks/m2-task-06.md",
+      "dependencies": [
+        "m2-task-05"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-07",
+      "stage": 9,
+      "name": "Commit variants and message validator",
+      "description": ".agent/tasks/m2-task-07.md",
+      "dependencies": [
+        "m2-task-06"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-08",
+      "stage": 9,
+      "name": "Stashes",
+      "description": ".agent/tasks/m2-task-08.md",
+      "dependencies": [
+        "m2-task-07"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-stage-2-review",
+      "stage": 9,
+      "name": "M2 Stage 2 review and manual checkpoint",
+      "description": ".agent/tasks/m2-stage-2-review.md",
+      "dependencies": [
+        "m2-task-08"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-09",
+      "stage": 10,
+      "name": "Filesystem IPC",
+      "description": ".agent/tasks/m2-task-09.md",
+      "dependencies": [
+        "m2-stage-2-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-10",
+      "stage": 10,
+      "name": "File manager UI",
+      "description": ".agent/tasks/m2-task-10.md",
+      "dependencies": [
+        "m2-task-09"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-11",
+      "stage": 10,
+      "name": "CodeMirror editor",
+      "description": ".agent/tasks/m2-task-11.md",
+      "dependencies": [
+        "m2-task-10"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-stage-3-review",
+      "stage": 10,
+      "name": "M2 Stage 3 review and manual checkpoint",
+      "description": ".agent/tasks/m2-stage-3-review.md",
+      "dependencies": [
+        "m2-task-11"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-12",
+      "stage": 11,
+      "name": "Blame and file history IPC",
+      "description": ".agent/tasks/m2-task-12.md",
+      "dependencies": [
+        "m2-stage-3-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-13",
+      "stage": 11,
+      "name": "Blame screen",
+      "description": ".agent/tasks/m2-task-13.md",
+      "dependencies": [
+        "m2-task-12"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-14",
+      "stage": 11,
+      "name": "Oplog persistence and undo_last",
+      "description": ".agent/tasks/m2-task-14.md",
+      "dependencies": [
+        "m2-task-13"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-task-15",
+      "stage": 11,
+      "name": "M2 wrap-up polish",
+      "description": ".agent/tasks/m2-task-15.md",
+      "dependencies": [
+        "m2-task-14"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m2-stage-4-review",
+      "stage": 11,
+      "name": "M2 Stage 4 review and M2 completion checkpoint",
+      "description": ".agent/tasks/m2-stage-4-review.md",
+      "dependencies": [
+        "m2-task-15"
+      ],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { listPins, pinWorktree, unpinWorktree, type Project } from "../ipc/catalog";
+import { errorMessage } from "../ipc/errors";
 import { listWorktrees, type Worktree } from "../ipc/worktrees";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { t } from "../i18n/t";
@@ -75,7 +76,7 @@ export const useWorktrees = create<WorktreesStore>((set, get) => ({
         pinnedPaths: [],
         activePath: null,
         loading: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
     }
   },
@@ -86,7 +87,7 @@ export const useWorktrees = create<WorktreesStore>((set, get) => ({
     set({ activePath: path, selections: nextSelections });
     void saveSetting("activeWorktrees", nextSelections).catch((error: unknown) => {
       toast({
-        title: t("sidebar.selectionError", { message: error instanceof Error ? error.message : String(error) }),
+        title: t("sidebar.selectionError", { message: errorMessage(error) }),
         icon: "⚠",
       });
     });
@@ -106,7 +107,7 @@ export const useWorktrees = create<WorktreesStore>((set, get) => ({
     } catch (error) {
       if (get().projectId !== projectId) return;
       toast({
-        title: t("sidebar.pinError", { message: error instanceof Error ? error.message : String(error) }),
+        title: t("sidebar.pinError", { message: errorMessage(error) }),
         icon: "⚠",
       });
     }

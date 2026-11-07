@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { errorMessage } from "../../ipc/errors";
 import { t } from "../../i18n/t";
 import type { Project } from "../../ipc/catalog";
 import {
@@ -320,7 +321,7 @@ async function createWorktreeFromCommit(project: Project, commit: GraphCommit) {
     toast({ title: t("graph.worktreeCreated"), detail: created.branch ?? created.path, icon: "✓" });
   } catch (reason) {
     toast({
-      title: t("graph.worktreeError", { message: reason instanceof Error ? reason.message : String(reason) }),
+      title: t("graph.worktreeError", { message: errorMessage(reason) }),
       icon: "⚠",
     });
   }
@@ -385,7 +386,7 @@ export function GraphView() {
       applyPage(page, true);
     } catch (reason) {
       if (requestId.current !== currentRequest) return;
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(errorMessage(reason));
     } finally {
       if (requestId.current === currentRequest) {
         pageLoading.current = false;
@@ -429,7 +430,7 @@ export function GraphView() {
       applyPage(page, true);
     } catch (reason) {
       if (requestId.current !== currentRequest) return;
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(errorMessage(reason));
     } finally {
       if (requestId.current === currentRequest) pageLoading.current = false;
     }
@@ -491,7 +492,7 @@ export function GraphView() {
       applyPage(page, false);
     } catch (reason) {
       if (requestId.current !== currentRequest) return;
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(errorMessage(reason));
     } finally {
       if (requestId.current === currentRequest) {
         pageLoading.current = false;
@@ -559,7 +560,7 @@ export function GraphView() {
       })
       .catch((reason: unknown) => {
         if (detailRequestId.current === currentRequest) {
-          setDetailError(reason instanceof Error ? reason.message : String(reason));
+          setDetailError(errorMessage(reason));
         }
       })
       .finally(() => {
@@ -676,7 +677,7 @@ export function GraphView() {
                 })
                 .catch((reason: unknown) => {
                   if (detailRequestId.current === currentRequest) {
-                    setDetailError(reason instanceof Error ? reason.message : String(reason));
+                    setDetailError(errorMessage(reason));
                   }
                 })
                 .finally(() => {

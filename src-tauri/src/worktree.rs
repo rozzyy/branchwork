@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::store::{Project, Store, WorktreePin};
 use git2::{BranchType, ErrorCode, Repository, RepositoryState, Status, StatusOptions};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -15,7 +16,7 @@ use std::{
 
 const DEBOUNCE: Duration = Duration::from_millis(250);
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum WorktreeState {
     Clean,
@@ -24,7 +25,7 @@ pub enum WorktreeState {
     Rebasing,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Worktree {
     pub path: String,
@@ -36,7 +37,7 @@ pub struct Worktree {
     pub state: WorktreeState,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeChanged {
     pub worktree: String,
@@ -183,18 +184,17 @@ impl WorktreeWatcher {
         }
     }
 
-    fn watch(&self, repository: &Repository, worktree_path: &Path) -> Result<(), String> {
+    fn watch(&self, repository: &Repository, worktree_path: &Path) -> Result<(), AppError> {
         let worktree_path = worktree_path
             .canonicalize()
-            .map_err(|error| format!("Cannot resolve worktree path: {error}"))?;
+            .map_err(|error| AppError::io(format!("Cannot resolve worktree path: {error}")))?;
         let git_dir = repository
             .path()
             .canonicalize()
-            .map_err(|error| format!("Cannot resolve Git directory: {error}"))?;
-        let common_dir = repository
-            .commondir()
-            .canonicalize()
-            .map_err(|error| format!("Cannot resolve common Git directory: {error}"))?;
+            .map_err(|error| AppError::io(format!("Cannot resolve Git directory: {error}")))?;
+        let common_dir = repository.commondir().canonicalize().map_err(|error| {
+            AppError::io(format!("Cannot resolve common Git directory: {error}"))
+        })?;
         let mut metadata_paths = HashMap::new();
         metadata_paths.insert(git_dir.clone(), RecursiveMode::NonRecursive);
         metadata_paths.insert(common_dir.clone(), RecursiveMode::NonRecursive);
@@ -343,16 +343,17 @@ impl WorktreeWatcher {
     }
 }
 
-fn worktree_watch_paths(worktree_path: &Path) -> Result<Vec<(PathBuf, RecursiveMode)>, String> {
+fn worktree_watch_paths(worktree_path: &Path) -> Result<Vec<(PathBuf, RecursiveMode)>, AppError> {
     let mut paths = vec![(worktree_path.to_path_buf(), RecursiveMode::NonRecursive)];
     for entry in fs::read_dir(worktree_path)
-        .map_err(|error| format!("Cannot inspect worktree directories: {error}"))?
+        .map_err(|error| AppError::io(format!("Cannot inspect worktree directories: {error}")))?
     {
-        let entry = entry.map_err(|error| format!("Cannot inspect worktree directory: {error}"))?;
+        let entry = entry
+            .map_err(|error| AppError::io(format!("Cannot inspect worktree directory: {error}")))?;
         if entry.file_name() != ".git"
             && entry
                 .file_type()
-                .map_err(|error| format!("Cannot inspect worktree entry: {error}"))?
+                .map_err(|error| AppError::io(format!("Cannot inspect worktree entry: {error}")))?
                 .is_dir()
         {
             paths.push((entry.path(), RecursiveMode::Recursive));
@@ -366,18 +367,18 @@ fn register_paths(
     registered: &mut HashSet<PathBuf>,
     paths: impl IntoIterator<Item = (PathBuf, RecursiveMode)>,
     worktree_path: &Path,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     for (path, mode) in paths {
         if !registered.insert(path.clone()) {
             continue;
         }
         if let Err(error) = watcher.watch(&path, mode) {
             registered.remove(&path);
-            return Err(format!(
+            return Err(AppError::internal(format!(
                 "Cannot watch {} for worktree {}: {error}",
                 path.display(),
                 worktree_path.display()
-            ));
+            )));
         }
     }
     Ok(())
@@ -435,23 +436,27 @@ fn path_matches_watch(path: &Path, watched_path: &Path, mode: &RecursiveMode) ->
     }
 }
 
-pub fn list(path: &Path, watcher: &WorktreeWatcher) -> Result<Vec<Worktree>, String> {
-    let repository = Repository::open(path)
-        .map_err(|error| format!("Invalid Git repository at {}: {error}", path.display()))?;
+pub fn list(path: &Path, watcher: &WorktreeWatcher) -> Result<Vec<Worktree>, AppError> {
+    let repository = Repository::open(path).map_err(|error| {
+        AppError::not_a_repo(format!(
+            "Invalid Git repository at {}: {error}",
+            path.display()
+        ))
+    })?;
     let main_path = if repository.is_worktree() {
         repository
             .commondir()
             .parent()
-            .ok_or_else(|| "Cannot resolve main worktree path".to_string())?
+            .ok_or_else(|| AppError::internal("Cannot resolve main worktree path"))?
     } else {
         repository
             .workdir()
-            .ok_or_else(|| "Bare repositories do not have worktrees".to_string())?
+            .ok_or_else(|| AppError::not_a_repo("Bare repositories do not have worktrees"))?
     }
     .canonicalize()
-    .map_err(|error| format!("Cannot resolve repository worktree: {error}"))?;
+    .map_err(|error| AppError::io(format!("Cannot resolve repository worktree: {error}")))?;
     let main_repository = Repository::open(&main_path)
-        .map_err(|error| format!("Cannot open main worktree: {error}"))?;
+        .map_err(|error| AppError::not_a_repo(format!("Cannot open main worktree: {error}")))?;
     let names = main_repository
         .worktrees()
         .map_err(|error| format!("Cannot list linked worktrees: {error}"))?;
@@ -463,12 +468,12 @@ pub fn list(path: &Path, watcher: &WorktreeWatcher) -> Result<Vec<Worktree>, Str
         let linked = main_repository
             .find_worktree(name)
             .map_err(|error| format!("Cannot find linked worktree {name}: {error}"))?;
-        let linked_repository = Repository::open_from_worktree(&linked)
-            .map_err(|error| format!("Cannot open linked worktree {name}: {error}"))?;
-        let linked_path = linked
-            .path()
-            .canonicalize()
-            .map_err(|error| format!("Cannot resolve linked worktree {name}: {error}"))?;
+        let linked_repository = Repository::open_from_worktree(&linked).map_err(|error| {
+            AppError::not_a_repo(format!("Cannot open linked worktree {name}: {error}"))
+        })?;
+        let linked_path = linked.path().canonicalize().map_err(|error| {
+            AppError::io(format!("Cannot resolve linked worktree {name}: {error}"))
+        })?;
         linked_repositories.push((linked_path, linked_repository));
     }
     let mut repositories = vec![(main_path, main_repository)];
@@ -484,47 +489,58 @@ pub fn list(path: &Path, watcher: &WorktreeWatcher) -> Result<Vec<Worktree>, Str
         .collect()
 }
 
-fn project_main_repository(path: &Path) -> Result<(PathBuf, Repository), String> {
+fn project_main_repository(path: &Path) -> Result<(PathBuf, Repository), AppError> {
     if !path.is_absolute() {
-        return Err("Project path must be absolute".into());
+        return Err(AppError::validation("Project path must be absolute"));
     }
-    let project_path = path
-        .canonicalize()
-        .map_err(|error| format!("Cannot resolve project path {}: {error}", path.display()))?;
-    let project_repository = Repository::open(&project_path)
-        .map_err(|error| format!("Invalid Git repository at {}: {error}", path.display()))?;
+    let project_path = path.canonicalize().map_err(|error| {
+        AppError::io(format!(
+            "Cannot resolve project path {}: {error}",
+            path.display()
+        ))
+    })?;
+    let project_repository = Repository::open(&project_path).map_err(|error| {
+        AppError::not_a_repo(format!(
+            "Invalid Git repository at {}: {error}",
+            path.display()
+        ))
+    })?;
     let workdir = project_repository
         .workdir()
-        .ok_or_else(|| "Bare repositories cannot be used for worktree operations".to_string())?
+        .ok_or_else(|| {
+            AppError::not_a_repo("Bare repositories cannot be used for worktree operations")
+        })?
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve project worktree: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve project worktree: {error}")))?;
     if workdir != project_path {
-        return Err("Project path must be the root of a registered worktree".into());
+        return Err(AppError::validation(
+            "Project path must be the root of a registered worktree",
+        ));
     }
     let main_path = if project_repository.is_worktree() {
         project_repository
             .commondir()
             .parent()
-            .ok_or_else(|| "Cannot resolve main worktree path".to_string())?
+            .ok_or_else(|| AppError::internal("Cannot resolve main worktree path"))?
     } else {
         project_repository
             .workdir()
-            .ok_or_else(|| "Bare repositories do not have worktrees".to_string())?
+            .ok_or_else(|| AppError::not_a_repo("Bare repositories do not have worktrees"))?
     }
     .canonicalize()
-    .map_err(|error| format!("Cannot resolve main worktree path: {error}"))?;
+    .map_err(|error| AppError::io(format!("Cannot resolve main worktree path: {error}")))?;
     let main_repository = Repository::open(&main_path)
-        .map_err(|error| format!("Cannot open main worktree: {error}"))?;
+        .map_err(|error| AppError::not_a_repo(format!("Cannot open main worktree: {error}")))?;
     Ok((main_path, main_repository))
 }
 
-fn registered_worktree_paths(repository: &Repository) -> Result<Vec<PathBuf>, String> {
+fn registered_worktree_paths(repository: &Repository) -> Result<Vec<PathBuf>, AppError> {
     let mut paths = Vec::new();
     let main = repository
         .workdir()
-        .ok_or_else(|| "Bare repositories do not have worktrees".to_string())?
+        .ok_or_else(|| AppError::not_a_repo("Bare repositories do not have worktrees"))?
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve main worktree path: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve main worktree path: {error}")))?;
     paths.push(main);
     let names = repository
         .worktrees()
@@ -543,15 +559,19 @@ fn registered_worktree_paths(repository: &Repository) -> Result<Vec<PathBuf>, St
     Ok(paths)
 }
 
-fn resolve_worktree_destination(path: &Path) -> Result<PathBuf, String> {
+fn resolve_worktree_destination(path: &Path) -> Result<PathBuf, AppError> {
     if !path.is_absolute() {
-        return Err("Worktree destination must be an absolute path".into());
+        return Err(AppError::validation(
+            "Worktree destination must be an absolute path",
+        ));
     }
     if path
         .components()
         .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
     {
-        return Err("Worktree destination contains an invalid path segment".into());
+        return Err(AppError::validation(
+            "Worktree destination contains an invalid path segment",
+        ));
     }
     let mut missing = Vec::new();
     let mut current = path;
@@ -559,18 +579,22 @@ fn resolve_worktree_destination(path: &Path) -> Result<PathBuf, String> {
         let component = current
             .components()
             .next_back()
-            .ok_or_else(|| "Worktree destination path is invalid".to_string())?;
+            .ok_or_else(|| AppError::validation("Worktree destination path is invalid"))?;
         let Component::Normal(part) = component else {
-            return Err("Worktree destination must name a directory".into());
+            return Err(AppError::validation(
+                "Worktree destination must name a directory",
+            ));
         };
         missing.push(part.to_os_string());
         let parent = current
             .parent()
-            .ok_or_else(|| "Worktree destination has no existing ancestor".to_string())?;
+            .ok_or_else(|| AppError::validation("Worktree destination has no existing ancestor"))?;
         if parent.exists() {
-            let mut destination = parent
-                .canonicalize()
-                .map_err(|error| format!("Cannot resolve worktree destination parent: {error}"))?;
+            let mut destination = parent.canonicalize().map_err(|error| {
+                AppError::io(format!(
+                    "Cannot resolve worktree destination parent: {error}"
+                ))
+            })?;
             missing.reverse();
             destination.extend(missing);
             return Ok(destination);
@@ -579,44 +603,49 @@ fn resolve_worktree_destination(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn ensure_destination_missing(path: &Path) -> Result<(), String> {
+fn ensure_destination_missing(path: &Path) -> Result<(), AppError> {
     match fs::symlink_metadata(path) {
-        Ok(_) => Err(format!(
+        Ok(_) => Err(AppError::validation(format!(
             "Worktree destination already exists: {}",
             path.display()
-        )),
+        ))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(format!(
+        Err(error) => Err(AppError::io(format!(
             "Cannot inspect worktree destination {}: {error}",
             path.display()
-        )),
+        ))),
     }
 }
 
-fn resolve_existing_worktree_path(path: &Path) -> Result<PathBuf, String> {
+fn resolve_existing_worktree_path(path: &Path) -> Result<PathBuf, AppError> {
     if !path.is_absolute() {
-        return Err("Worktree path must be an absolute path".into());
+        return Err(AppError::validation(
+            "Worktree path must be an absolute path",
+        ));
     }
-    let canonical = path
-        .canonicalize()
-        .map_err(|error| format!("Cannot resolve worktree path {}: {error}", path.display()))?;
+    let canonical = path.canonicalize().map_err(|error| {
+        AppError::io(format!(
+            "Cannot resolve worktree path {}: {error}",
+            path.display()
+        ))
+    })?;
     Ok(canonical)
 }
 
 /// Resolves a pin only when it names the selected project's main or linked worktree.
-pub fn validate_pin(project_path: &Path, worktree_path: &Path) -> Result<String, String> {
+pub fn validate_pin(project_path: &Path, worktree_path: &Path) -> Result<String, AppError> {
     let (_, repository) = project_main_repository(project_path)?;
     let worktree_path = resolve_existing_worktree_path(worktree_path)?;
     if !registered_worktree_paths(&repository)?.contains(&worktree_path) {
-        return Err(format!(
+        return Err(AppError::not_found(format!(
             "Path {} is not a registered worktree for this project",
             worktree_path.display()
-        ));
+        )));
     }
     worktree_path
         .to_str()
         .map(str::to_owned)
-        .ok_or_else(|| "Worktree path is not valid UTF-8".into())
+        .ok_or_else(|| AppError::validation("Worktree path is not valid UTF-8"))
 }
 
 fn git_command(repository_path: &Path) -> Command {
@@ -641,7 +670,7 @@ fn git_command(repository_path: &Path) -> Command {
     command
 }
 
-fn configured_checkout_filters(repository_path: &Path) -> Result<HashSet<String>, String> {
+fn configured_checkout_filters(repository_path: &Path) -> Result<HashSet<String>, AppError> {
     let mut filters = HashSet::new();
     let worktree_config = git_command(repository_path)
         .args([
@@ -652,7 +681,11 @@ fn configured_checkout_filters(repository_path: &Path) -> Result<HashSet<String>
             "extensions.worktreeConfig",
         ])
         .output()
-        .map_err(|error| format!("Could not inspect Git worktree configuration: {error}"))?;
+        .map_err(|error| {
+            AppError::io(format!(
+                "Could not inspect Git worktree configuration: {error}"
+            ))
+        })?;
     let worktree_config_enabled = if worktree_config.status.success() {
         String::from_utf8_lossy(&worktree_config.stdout)
             .trim()
@@ -663,14 +696,14 @@ fn configured_checkout_filters(repository_path: &Path) -> Result<HashSet<String>
         let detail = String::from_utf8_lossy(&worktree_config.stderr)
             .trim()
             .to_string();
-        return Err(if detail.is_empty() {
+        return Err(AppError::internal(if detail.is_empty() {
             format!(
                 "Could not inspect Git worktree configuration: status {}",
                 worktree_config.status
             )
         } else {
             format!("Could not inspect Git worktree configuration: {detail}")
-        });
+        }));
     };
     let scopes = if worktree_config_enabled {
         vec!["--local", "--worktree"]
@@ -687,20 +720,22 @@ fn configured_checkout_filters(repository_path: &Path) -> Result<HashSet<String>
                 r"^filter\..*\.(smudge|process)$",
             ])
             .output()
-            .map_err(|error| format!("Could not inspect Git checkout filters: {error}"))?;
+            .map_err(|error| {
+                AppError::io(format!("Could not inspect Git checkout filters: {error}"))
+            })?;
         if !output.status.success() {
             if output.status.code() == Some(1) {
                 continue;
             }
             let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(if detail.is_empty() {
+            return Err(AppError::internal(if detail.is_empty() {
                 format!(
                     "Could not inspect Git checkout filters: status {}",
                     output.status
                 )
             } else {
                 format!("Could not inspect Git checkout filters: {detail}")
-            });
+            }));
         }
         for key in String::from_utf8_lossy(&output.stdout).lines() {
             let Some(filter_key) = key.strip_prefix("filter.") else {
@@ -721,7 +756,7 @@ fn run_git_write_with_filters(
     repository_path: &Path,
     args: &[&OsStr],
     filters: &HashSet<String>,
-) -> Result<Output, String> {
+) -> Result<Output, AppError> {
     let mut command = git_command(repository_path);
     command
         .env("GIT_CONFIG_COUNT", (filters.len() * 2).to_string())
@@ -742,25 +777,24 @@ fn run_git_write_with_filters(
                 .env(format!("GIT_CONFIG_VALUE_{config_index}"), "");
         }
     }
-    let output = command
-        .args(args)
-        .output()
-        .map_err(|error| format!("Could not start Git worktree operation: {error}"))?;
+    let output = command.args(args).output().map_err(|error| {
+        AppError::io(format!("Could not start Git worktree operation: {error}"))
+    })?;
     if output.status.success() {
         return Ok(output);
     }
     let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    Err(if detail.is_empty() {
+    Err(AppError::internal(if detail.is_empty() {
         format!(
             "Git worktree operation failed with status {}",
             output.status
         )
     } else {
         format!("Git worktree operation failed: {detail}")
-    })
+    }))
 }
 
-fn run_git_write(repository_path: &Path, args: &[&OsStr]) -> Result<Output, String> {
+fn run_git_write(repository_path: &Path, args: &[&OsStr]) -> Result<Output, AppError> {
     run_git_write_with_filters(repository_path, args, &HashSet::new())
 }
 
@@ -770,7 +804,7 @@ pub fn create(
     branch: &str,
     store: &Store,
     watcher: &WorktreeWatcher,
-) -> Result<Worktree, String> {
+) -> Result<Worktree, AppError> {
     create_from(project, destination, branch, None, store, watcher)
 }
 
@@ -781,9 +815,10 @@ pub fn create_at_commit(
     commit: &str,
     store: &Store,
     watcher: &WorktreeWatcher,
-) -> Result<Worktree, String> {
-    let commit = git2::Oid::from_str(commit)
-        .map_err(|error| format!("Selected commit SHA is invalid: {error}"))?;
+) -> Result<Worktree, AppError> {
+    let commit = git2::Oid::from_str(commit).map_err(|error| {
+        AppError::validation(format!("Selected commit SHA is invalid: {error}"))
+    })?;
     create_from(project, destination, branch, Some(commit), store, watcher)
 }
 
@@ -794,10 +829,10 @@ fn create_from(
     start_point: Option<git2::Oid>,
     store: &Store,
     watcher: &WorktreeWatcher,
-) -> Result<Worktree, String> {
+) -> Result<Worktree, AppError> {
     if branch.trim().is_empty() || !git2::Reference::is_valid_name(&format!("refs/heads/{branch}"))
     {
-        return Err("Branch name is invalid".into());
+        return Err(AppError::validation("Branch name is invalid"));
     }
     let (main_path, repository) = project_main_repository(Path::new(&project.local_path))?;
     let mut destination = resolve_worktree_destination(destination)?;
@@ -806,7 +841,9 @@ fn create_from(
         .iter()
         .any(|worktree| destination.starts_with(worktree))
     {
-        return Err("Worktree destination cannot be inside an existing worktree".into());
+        return Err(AppError::validation(
+            "Worktree destination cannot be inside an existing worktree",
+        ));
     }
     let checkout_filters = configured_checkout_filters(&main_path)?;
     if let Some(start_point) = start_point {
@@ -817,11 +854,16 @@ fn create_from(
     let parent = destination
         .parent()
         .ok_or_else(|| "Worktree destination has no parent directory".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|error| format!("Cannot create worktree destination parent: {error}"))?;
-    let canonical_parent = parent
-        .canonicalize()
-        .map_err(|error| format!("Cannot resolve worktree destination parent: {error}"))?;
+    fs::create_dir_all(parent).map_err(|error| {
+        AppError::io(format!(
+            "Cannot create worktree destination parent: {error}"
+        ))
+    })?;
+    let canonical_parent = parent.canonicalize().map_err(|error| {
+        AppError::io(format!(
+            "Cannot resolve worktree destination parent: {error}"
+        ))
+    })?;
     let name = destination
         .file_name()
         .ok_or_else(|| "Worktree destination must name a directory".to_string())?
@@ -832,7 +874,9 @@ fn create_from(
         .iter()
         .any(|worktree| destination.starts_with(worktree))
     {
-        return Err("Worktree destination cannot be inside an existing worktree".into());
+        return Err(AppError::validation(
+            "Worktree destination cannot be inside an existing worktree",
+        ));
     }
     destination
         .to_str()
@@ -852,9 +896,9 @@ fn create_from(
         args.push(OsStr::new(start_point));
     }
     run_git_write_with_filters(&main_path, &args, &checkout_filters)?;
-    let destination = destination
-        .canonicalize()
-        .map_err(|error| format!("Git created an unresolved worktree path: {error}"))?;
+    let destination = destination.canonicalize().map_err(|error| {
+        AppError::io(format!("Git created an unresolved worktree path: {error}"))
+    })?;
     let destination_text = destination
         .to_str()
         .ok_or_else(|| "Worktree path is not valid UTF-8".to_string())?
@@ -873,14 +917,14 @@ fn create_from(
                 OsStr::new(&destination_text),
             ],
         );
-        return Err(match rollback {
+        return Err(AppError::internal(match rollback {
             Ok(_) => {
                 format!("Worktree pin could not be saved, so the new worktree was removed: {error}")
             }
             Err(rollback_error) => format!(
                 "Could not save the worktree pin: {error}; removing the new worktree also failed: {rollback_error}"
             ),
-        });
+        }));
     }
     list(&main_path, watcher)
         .map_err(|error| {
@@ -893,26 +937,28 @@ fn create_from(
         })
 }
 
-pub fn remove(project: &Project, worktree_path: &Path, store: &Store) -> Result<(), String> {
+pub fn remove(project: &Project, worktree_path: &Path, store: &Store) -> Result<(), AppError> {
     let (main_path, repository) = project_main_repository(Path::new(&project.local_path))?;
     let worktree_path = resolve_existing_worktree_path(worktree_path)?;
     let main_path = main_path
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve main worktree path: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve main worktree path: {error}")))?;
     let project_path = Path::new(&project.local_path)
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve selected project path: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve selected project path: {error}")))?;
     if worktree_path == main_path {
-        return Err("The main worktree cannot be removed".into());
+        return Err(AppError::validation("The main worktree cannot be removed"));
     }
     if worktree_path == project_path {
-        return Err("The selected project's worktree cannot be removed".into());
+        return Err(AppError::validation(
+            "The selected project's worktree cannot be removed",
+        ));
     }
     if !registered_worktree_paths(&repository)?.contains(&worktree_path) {
-        return Err(format!(
+        return Err(AppError::not_found(format!(
             "Path {} is not a registered worktree for this project",
             worktree_path.display()
-        ));
+        )));
     }
     let path_arg = worktree_path.as_os_str();
     run_git_write(
@@ -935,7 +981,7 @@ pub fn remove(project: &Project, worktree_path: &Path, store: &Store) -> Result<
     Ok(())
 }
 
-pub fn prune(project: &Project) -> Result<(), String> {
+pub fn prune(project: &Project) -> Result<(), AppError> {
     let (main_path, _) = project_main_repository(Path::new(&project.local_path))?;
     run_git_write(
         &main_path,
@@ -948,7 +994,7 @@ pub fn prune(project: &Project) -> Result<(), String> {
     Ok(())
 }
 
-fn read_metadata(repository: &Repository, worktree_path: &Path) -> Result<Worktree, String> {
+fn read_metadata(repository: &Repository, worktree_path: &Path) -> Result<Worktree, AppError> {
     let head_ref = repository
         .head()
         .map_err(|error| format!("Cannot read HEAD for {}: {error}", worktree_path.display()))?;
@@ -987,11 +1033,15 @@ fn read_metadata(repository: &Repository, worktree_path: &Path) -> Result<Worktr
                 }
                 Err(error) if error.code() == ErrorCode::NotFound => (0, 0),
                 Err(error) => {
-                    return Err(format!("Cannot read upstream for {branch_name}: {error}"));
+                    return Err(AppError::internal(format!(
+                        "Cannot read upstream for {branch_name}: {error}"
+                    )));
                 }
             },
             Err(error) => {
-                return Err(format!("Cannot read branch {branch_name}: {error}"));
+                return Err(AppError::internal(format!(
+                    "Cannot read branch {branch_name}: {error}"
+                )));
             }
         }
     } else {
@@ -1364,7 +1414,7 @@ mod tests {
 
         let error = create(&project, &destination, "feature", &store, &watcher).unwrap_err();
 
-        assert!(error.contains("new worktree was removed"));
+        assert!(error.message.contains("new worktree was removed"));
         assert!(!destination.exists());
         assert_eq!(
             Repository::open(&main_path)
@@ -1393,11 +1443,13 @@ mod tests {
         assert!(
             remove(&project, &main_path, &store)
                 .unwrap_err()
+                .message
                 .contains("main worktree")
         );
         assert!(
             remove(&project, &arbitrary, &store)
                 .unwrap_err()
+                .message
                 .contains("not a registered worktree")
         );
         assert_eq!(
@@ -1474,11 +1526,13 @@ mod tests {
         assert!(
             validate_pin(&main_path, &arbitrary)
                 .unwrap_err()
+                .message
                 .contains("not a registered worktree")
         );
         assert!(
             validate_pin(&main_path, &other_linked)
                 .unwrap_err()
+                .message
                 .contains("not a registered worktree")
         );
     }
@@ -1502,6 +1556,7 @@ mod tests {
                 &watcher,
             )
             .unwrap_err()
+            .message
             .contains("Branch name is invalid")
         );
         assert!(
@@ -1513,12 +1568,14 @@ mod tests {
                 &watcher,
             )
             .unwrap_err()
+            .message
             .contains("inside an existing worktree")
         );
         let escaping = temp.0.join("parent").join("..").join("escaping");
         assert!(
             create(&project, &escaping, "escaping", &store, &watcher)
                 .unwrap_err()
+                .message
                 .contains("invalid path segment")
         );
         assert!(!main_path.join("nested").exists());

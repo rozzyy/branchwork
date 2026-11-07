@@ -41,6 +41,10 @@ test.describe("M0 Stage 1 shell", () => {
       await navButton.click();
       if (label === "Graph") {
         await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+      } else if (label === "Changes") {
+        // Changes now renders a real (empty) state instead of the generic placeholder (M2 Stage 1).
+        await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
+        await expect(page.getByText("Open a worktree to see its changes.")).toBeVisible();
       } else {
         await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
         await expect(page.getByText(PLACEHOLDER_BODY)).toBeVisible();

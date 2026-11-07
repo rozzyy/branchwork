@@ -1,187 +1,202 @@
+mod diff;
+mod error;
 mod graph;
 mod repository;
+mod status;
 mod store;
 mod worktree;
 
+use error::AppError;
 use std::path::Path;
 use store::{Group, Project, Store, WorktreePin};
 use tauri::{Emitter, Manager, State};
 
-fn validate_id(id: &str, kind: &str) -> Result<(), String> {
+fn validate_id(id: &str, kind: &str) -> Result<(), AppError> {
     if id.trim().is_empty() {
-        Err(format!("{kind} id must not be empty"))
+        Err(AppError::validation(format!("{kind} id must not be empty")))
     } else {
         Ok(())
     }
 }
 
-fn validate_group(group: &Group) -> Result<(), String> {
+fn validate_group(group: &Group) -> Result<(), AppError> {
     validate_id(&group.id, "group")?;
     if group.name.trim().is_empty() || group.color.trim().is_empty() {
-        return Err("group name and color must not be empty".into());
+        return Err(AppError::validation(
+            "group name and color must not be empty",
+        ));
     }
     Ok(())
 }
 
-fn validate_project(project: &Project) -> Result<(), String> {
+fn validate_project(project: &Project) -> Result<(), AppError> {
     validate_id(&project.id, "project")?;
     if project.name.trim().is_empty() {
-        return Err("project name must not be empty".into());
+        return Err(AppError::validation("project name must not be empty"));
     }
     if !Path::new(&project.local_path).is_absolute() {
-        return Err("project path must be absolute".into());
+        return Err(AppError::validation("project path must be absolute"));
     }
     if project
         .group_id
         .as_deref()
         .is_some_and(|id| id.trim().is_empty())
     {
-        return Err("group id must not be empty".into());
+        return Err(AppError::validation("group id must not be empty"));
     }
     Ok(())
 }
 
-fn validate_pin(pin: &WorktreePin) -> Result<(), String> {
+fn validate_pin(pin: &WorktreePin) -> Result<(), AppError> {
     validate_id(&pin.project_id, "project")?;
     if !Path::new(&pin.worktree_path).is_absolute() {
-        return Err("worktree path must be absolute".into());
+        return Err(AppError::validation("worktree path must be absolute"));
     }
     Ok(())
 }
 
 #[tauri::command]
-fn settings_get(store: State<'_, Store>, key: String) -> Result<Option<String>, String> {
-    store.get(&key).map_err(|e| e.to_string())
+#[specta::specta]
+fn settings_get(store: State<'_, Store>, key: String) -> Result<Option<String>, AppError> {
+    Ok(store.get(&key)?)
 }
 
 #[tauri::command]
-fn settings_set(store: State<'_, Store>, key: String, value: String) -> Result<(), String> {
-    store.set(&key, &value).map_err(|e| e.to_string())
+#[specta::specta]
+fn settings_set(store: State<'_, Store>, key: String, value: String) -> Result<(), AppError> {
+    Ok(store.set(&key, &value)?)
 }
 
 #[tauri::command]
-fn groups_list(store: State<'_, Store>) -> Result<Vec<Group>, String> {
-    store.list_groups().map_err(|e| e.to_string())
+#[specta::specta]
+fn groups_list(store: State<'_, Store>) -> Result<Vec<Group>, AppError> {
+    Ok(store.list_groups()?)
 }
 
 #[tauri::command]
-fn group_save(store: State<'_, Store>, group: Group) -> Result<(), String> {
+#[specta::specta]
+fn group_save(store: State<'_, Store>, group: Group) -> Result<(), AppError> {
     validate_group(&group)?;
-    store.save_group(&group).map_err(|e| e.to_string())
+    Ok(store.save_group(&group)?)
 }
 
 #[tauri::command]
-fn group_delete(store: State<'_, Store>, id: String) -> Result<bool, String> {
+#[specta::specta]
+fn group_delete(store: State<'_, Store>, id: String) -> Result<bool, AppError> {
     validate_id(&id, "group")?;
-    store.delete_group(&id).map_err(|e| e.to_string())
+    Ok(store.delete_group(&id)?)
 }
 
 #[tauri::command]
-fn projects_list(store: State<'_, Store>) -> Result<Vec<Project>, String> {
-    store.list_projects().map_err(|e| e.to_string())
+#[specta::specta]
+fn projects_list(store: State<'_, Store>) -> Result<Vec<Project>, AppError> {
+    Ok(store.list_projects()?)
 }
 
 #[tauri::command]
-fn project_save(store: State<'_, Store>, project: Project) -> Result<(), String> {
+#[specta::specta]
+fn project_save(store: State<'_, Store>, project: Project) -> Result<(), AppError> {
     validate_project(&project)?;
-    store.save_project(&project).map_err(|e| e.to_string())
+    Ok(store.save_project(&project)?)
 }
 
 #[tauri::command]
-fn project_delete(store: State<'_, Store>, id: String) -> Result<bool, String> {
+#[specta::specta]
+fn project_delete(store: State<'_, Store>, id: String) -> Result<bool, AppError> {
     validate_id(&id, "project")?;
-    store.delete_project(&id).map_err(|e| e.to_string())
+    Ok(store.delete_project(&id)?)
 }
 
 #[tauri::command]
+#[specta::specta]
 fn pins_list(
     store: State<'_, Store>,
     project_id: Option<String>,
-) -> Result<Vec<WorktreePin>, String> {
+) -> Result<Vec<WorktreePin>, AppError> {
     if let Some(id) = &project_id {
         validate_id(id, "project")?;
     }
-    store
-        .list_pins(project_id.as_deref())
-        .map_err(|e| e.to_string())
+    Ok(store.list_pins(project_id.as_deref())?)
 }
 
 #[tauri::command]
-fn pin_worktree(store: State<'_, Store>, pin: WorktreePin) -> Result<(), String> {
+#[specta::specta]
+fn pin_worktree(store: State<'_, Store>, pin: WorktreePin) -> Result<(), AppError> {
     validate_pin(&pin)?;
     let project = project_by_id(&store, &pin.project_id)?;
     let worktree_path = worktree::validate_pin(
         Path::new(&project.local_path),
         Path::new(&pin.worktree_path),
     )?;
-    store
-        .pin_worktree(&WorktreePin {
-            project_id: pin.project_id,
-            worktree_path,
-        })
-        .map_err(|e| e.to_string())
+    Ok(store.pin_worktree(&WorktreePin {
+        project_id: pin.project_id,
+        worktree_path,
+    })?)
 }
 
 #[tauri::command]
+#[specta::specta]
 fn unpin_worktree(
     store: State<'_, Store>,
     project_id: String,
     worktree_path: String,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     validate_id(&project_id, "project")?;
     if !Path::new(&worktree_path).is_absolute() {
-        return Err("worktree path must be absolute".into());
+        return Err(AppError::validation("worktree path must be absolute"));
     }
-    store
-        .unpin_worktree(&project_id, &worktree_path)
-        .map_err(|e| e.to_string())
+    Ok(store.unpin_worktree(&project_id, &worktree_path)?)
 }
 
 #[tauri::command]
-fn repository_open(store: State<'_, Store>, path: String) -> Result<Project, String> {
+#[specta::specta]
+fn repository_open(store: State<'_, Store>, path: String) -> Result<Project, AppError> {
     repository::open_and_register(Path::new(&path), &store)
 }
 
-fn project_by_id(store: &Store, project_id: &str) -> Result<Project, String> {
+fn project_by_id(store: &Store, project_id: &str) -> Result<Project, AppError> {
     store
-        .list_projects()
-        .map_err(|error| format!("Cannot read projects: {error}"))?
+        .list_projects()?
         .into_iter()
         .find(|project| project.id == project_id)
-        .ok_or_else(|| format!("Unknown project: {project_id}"))
+        .ok_or_else(|| AppError::not_found(format!("Unknown project: {project_id}")))
 }
 
 /// Read-only: never executes anything from the repository at `path`.
 #[tauri::command]
-fn path_is_repository(path: String) -> Result<bool, String> {
+#[specta::specta]
+fn path_is_repository(path: String) -> Result<bool, AppError> {
     repository::is_repository(Path::new(&path))
 }
 
 #[tauri::command]
+#[specta::specta]
 fn worktree_list(
     store: State<'_, Store>,
     watcher: State<'_, worktree::WorktreeWatcher>,
     project_id: String,
-) -> Result<Vec<worktree::Worktree>, String> {
+) -> Result<Vec<worktree::Worktree>, AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     worktree::list(Path::new(&project.local_path), &watcher)
 }
 
 #[tauri::command]
+#[specta::specta]
 fn worktree_create(
     store: State<'_, Store>,
     watcher: State<'_, worktree::WorktreeWatcher>,
     project_id: String,
     destination: String,
     branch: String,
-) -> Result<worktree::Worktree, String> {
+) -> Result<worktree::Worktree, AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     worktree::create(&project, Path::new(&destination), &branch, &store, &watcher)
 }
 
 #[tauri::command]
+#[specta::specta]
 fn worktree_create_at_commit(
     store: State<'_, Store>,
     watcher: State<'_, worktree::WorktreeWatcher>,
@@ -189,7 +204,7 @@ fn worktree_create_at_commit(
     destination: String,
     branch: String,
     commit: String,
-) -> Result<worktree::Worktree, String> {
+) -> Result<worktree::Worktree, AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     worktree::create_at_commit(
@@ -203,18 +218,20 @@ fn worktree_create_at_commit(
 }
 
 #[tauri::command]
+#[specta::specta]
 fn worktree_remove(
     store: State<'_, Store>,
     project_id: String,
     path: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     worktree::remove(&project, Path::new(&path), &store)
 }
 
 #[tauri::command]
-fn worktree_prune(store: State<'_, Store>, project_id: String) -> Result<(), String> {
+#[specta::specta]
+fn worktree_prune(store: State<'_, Store>, project_id: String) -> Result<(), AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     worktree::prune(&project)
@@ -222,12 +239,13 @@ fn worktree_prune(store: State<'_, Store>, project_id: String) -> Result<(), Str
 
 // Runs off the main thread: deep pages re-walk history and must not freeze the window.
 #[tauri::command(async)]
+#[specta::specta]
 fn log_graph(
     store: State<'_, Store>,
     project_id: String,
     worktree_path: String,
     page: usize,
-) -> Result<graph::GraphPage, String> {
+) -> Result<graph::GraphPage, AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     graph::read(
@@ -238,12 +256,13 @@ fn log_graph(
 }
 
 #[tauri::command]
+#[specta::specta]
 fn graph_commit_detail(
     store: State<'_, Store>,
     project_id: String,
     worktree_path: String,
     sha: String,
-) -> Result<graph::GraphCommitDetail, String> {
+) -> Result<graph::GraphCommitDetail, AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     graph::read_commit_detail(
@@ -253,37 +272,52 @@ fn graph_commit_detail(
     )
 }
 
+// Runs off the main thread: large trees and diffs must not freeze the window.
+#[tauri::command(async)]
+#[specta::specta]
+fn status(
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<status::StatusSummary, AppError> {
+    let path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    status::read(&path)
+}
+
+// Runs off the main thread: large trees and diffs must not freeze the window.
+#[tauri::command(async)]
+#[specta::specta]
+fn diff_file(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    area: diff::DiffArea,
+) -> Result<diff::DiffModel, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    diff::read(&worktree_path, &path, area)
+}
+
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
 // one async worker, not a blocking-threadpool thread), which frees the main thread. A true
 // `spawn_blocking` move is deferred to the cancellable-clone work (spec §7).
 #[tauri::command(async)]
+#[specta::specta]
 fn repository_clone(
     store: State<'_, Store>,
     url: String,
     destination: String,
-) -> Result<Project, String> {
+) -> Result<Project, AppError> {
     repository::clone_and_register(&url, Path::new(&destination), &store)
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
-            let dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&dir)?;
-            let store = Store::open(&dir.join("app.db")).map_err(|e| e.to_string())?;
-            app.manage(store);
-            let app_handle = app.handle().clone();
-            app.manage(worktree::WorktreeWatcher::new(move |event| {
-                if let Err(error) = app_handle.emit("git:changed", event) {
-                    eprintln!("Could not emit git:changed event: {error}");
-                }
-            }));
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
+/// Builds the typed command/event registry shared by `run()` (to export TS bindings in debug
+/// builds, spec §3/§10) and the `export_bindings` drift test.
+fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .error_handling(tauri_specta::ErrorHandlingMode::Throw)
+        // Matches the hand-written bindings this replaces: `usize`/`i64` fields (page sizes,
+        // commit counts, unix timestamps) serialize as plain JS numbers, not bigint/string.
+        .dangerously_cast_bigints_to_number()
+        .commands(tauri_specta::collect_commands![
             settings_get,
             settings_set,
             groups_list,
@@ -304,8 +338,45 @@ pub fn run() {
             worktree_remove,
             worktree_prune,
             log_graph,
-            graph_commit_detail
+            graph_commit_detail,
+            status,
+            diff_file
         ])
+        // `git:changed` (emitted in `run()`'s setup below) carries this payload; registering it
+        // here (rather than as a tauri-specta `Event`) exports its TS type without changing how
+        // it's emitted/listened to.
+        .typ::<worktree::WorktreeChanged>()
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let builder = specta_builder();
+
+    #[cfg(debug_assertions)]
+    builder
+        .export(
+            specta_typescript::Typescript::default(),
+            "../src/ipc/bindings.ts",
+        )
+        .expect("failed to export typescript bindings");
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&dir)?;
+            let store = Store::open(&dir.join("app.db")).map_err(|e| e.to_string())?;
+            app.manage(store);
+            let app_handle = app.handle().clone();
+            app.manage(worktree::WorktreeWatcher::new(move |event| {
+                if let Err(error) = app_handle.emit("git:changed", event) {
+                    eprintln!("Could not emit git:changed event: {error}");
+                }
+            }));
+            Ok(())
+        })
+        .invoke_handler(builder.invoke_handler())
         .run(tauri::generate_context!())
         .expect("error while running Branchwork");
 }
@@ -365,6 +436,43 @@ mod tests {
                 worktree_path: "relative/repo".into(),
             })
             .is_err()
+        );
+    }
+
+    #[test]
+    #[ignore = "one-off: regenerates the committed src/ipc/bindings.ts; run explicitly after changing commands/types"]
+    fn regenerate_bindings_file() {
+        specta_builder()
+            .export(
+                specta_typescript::Typescript::default(),
+                "../src/ipc/bindings.ts",
+            )
+            .expect("failed to export typescript bindings");
+    }
+
+    /// Spec §10: a drift check. If this fails, re-run `cargo test --lib -- --ignored
+    /// regenerate_bindings_file` from `src-tauri/`, then commit the updated `src/ipc/bindings.ts`.
+    #[test]
+    fn export_bindings_matches_checked_in_file() {
+        let path = std::env::temp_dir().join(format!(
+            "branchwork-bindings-{}-{}.ts",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        specta_builder()
+            .export(specta_typescript::Typescript::default(), &path)
+            .expect("failed to export typescript bindings");
+        let generated = std::fs::read_to_string(&path).expect("failed to read generated bindings");
+        std::fs::remove_file(&path).ok();
+        let checked_in = include_str!("../../src/ipc/bindings.ts");
+        assert_eq!(
+            generated, checked_in,
+            "src/ipc/bindings.ts is out of date. Regenerate it with \
+             `cargo test --lib -- --ignored regenerate_bindings_file` from src-tauri/, then commit \
+             the updated file."
         );
     }
 }

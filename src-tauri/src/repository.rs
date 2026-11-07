@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::store::{Project, Store};
 use git2::Repository;
 use std::{
@@ -10,15 +11,16 @@ use std::{
 /// Expands a leading `~/` (or a bare `~`) against `home`, leaving every other path
 /// untouched. Pulled out as a pure function, parameterized on `home`, so tests don't
 /// race on the process-wide `HOME` env var.
-fn expand_tilde(path: &Path, home: Option<&OsStr>) -> Result<PathBuf, String> {
+fn expand_tilde(path: &Path, home: Option<&OsStr>) -> Result<PathBuf, AppError> {
     let Some(text) = path.to_str() else {
         return Ok(path.to_path_buf());
     };
     if text != "~" && !text.starts_with("~/") {
         return Ok(path.to_path_buf());
     }
-    let home = home
-        .ok_or_else(|| "Cannot expand ~: the HOME environment variable is not set".to_string())?;
+    let home = home.ok_or_else(|| {
+        AppError::internal("Cannot expand ~: the HOME environment variable is not set")
+    })?;
     let home = Path::new(home);
     Ok(if text == "~" {
         home.to_path_buf()
@@ -27,7 +29,7 @@ fn expand_tilde(path: &Path, home: Option<&OsStr>) -> Result<PathBuf, String> {
     })
 }
 
-fn expand_home(path: &Path) -> Result<PathBuf, String> {
+fn expand_home(path: &Path) -> Result<PathBuf, AppError> {
     expand_tilde(path, std::env::var_os("HOME").as_deref())
 }
 
@@ -35,25 +37,27 @@ fn expand_home(path: &Path) -> Result<PathBuf, String> {
 /// rebuilds `path` on top of that canonical root. Every not-yet-existing component
 /// must be `Component::Normal` (rejects `..`, `.`, and root segments), so the only
 /// thing left for the caller to create is a chain of plain directory names.
-fn resolve_missing_ancestor(path: &Path) -> Result<PathBuf, String> {
+fn resolve_missing_ancestor(path: &Path) -> Result<PathBuf, AppError> {
     let mut missing = Vec::new();
     let mut current = path;
     loop {
         let component = current
             .components()
             .next_back()
-            .ok_or_else(|| "Clone destination path is invalid".to_string())?;
+            .ok_or_else(|| AppError::validation("Clone destination path is invalid"))?;
         let Component::Normal(part) = component else {
-            return Err("Clone destination contains an invalid path segment".into());
+            return Err(AppError::validation(
+                "Clone destination contains an invalid path segment",
+            ));
         };
         missing.push(part);
-        let parent = current
-            .parent()
-            .ok_or_else(|| "Clone destination has no existing ancestor directory".to_string())?;
+        let parent = current.parent().ok_or_else(|| {
+            AppError::validation("Clone destination has no existing ancestor directory")
+        })?;
         if parent.exists() {
-            let mut destination = parent
-                .canonicalize()
-                .map_err(|error| format!("Clone destination parent is unavailable: {error}"))?;
+            let mut destination = parent.canonicalize().map_err(|error| {
+                AppError::io(format!("Clone destination parent is unavailable: {error}"))
+            })?;
             missing.reverse();
             for part in missing {
                 destination.push(part);
@@ -64,21 +68,25 @@ fn resolve_missing_ancestor(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn inspect_repository(path: &Path) -> Result<Project, String> {
-    let repository = Repository::open(path)
-        .map_err(|error| format!("Cannot open Git repository at {}: {error}", path.display()))?;
+fn inspect_repository(path: &Path) -> Result<Project, AppError> {
+    let repository = Repository::open(path).map_err(|error| {
+        AppError::not_a_repo(format!(
+            "Cannot open Git repository at {}: {error}",
+            path.display()
+        ))
+    })?;
     let workdir = repository
         .workdir()
-        .ok_or_else(|| "Bare repositories cannot be opened as projects".to_string())?;
+        .ok_or_else(|| AppError::not_a_repo("Bare repositories cannot be opened as projects"))?;
     let canonical = workdir
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve repository path: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve repository path: {error}")))?;
     let local_path = canonical.to_string_lossy().into_owned();
     let name = canonical
         .file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
-        .ok_or_else(|| "Repository path has no valid directory name".to_string())?
+        .ok_or_else(|| AppError::validation("Repository path has no valid directory name"))?
         .to_string();
     Ok(Project {
         id: local_path.clone(),
@@ -89,26 +97,32 @@ fn inspect_repository(path: &Path) -> Result<Project, String> {
     })
 }
 
-fn clone_destination(path: &Path) -> Result<PathBuf, String> {
+fn clone_destination(path: &Path) -> Result<PathBuf, AppError> {
     if !path.is_absolute() {
-        return Err("Clone destination must be an absolute path".into());
+        return Err(AppError::validation(
+            "Clone destination must be an absolute path",
+        ));
     }
     if path.file_name().filter(|name| !name.is_empty()).is_none() {
-        return Err("Clone destination must name a directory".into());
+        return Err(AppError::validation(
+            "Clone destination must name a directory",
+        ));
     }
     let destination = resolve_missing_ancestor(path)?;
     if destination.exists() {
         if !destination.is_dir() {
-            return Err("Clone destination already exists and is not a directory".into());
+            return Err(AppError::validation(
+                "Clone destination already exists and is not a directory",
+            ));
         }
         let mut entries = fs::read_dir(&destination)
-            .map_err(|error| format!("Cannot inspect clone destination: {error}"))?;
+            .map_err(|error| AppError::io(format!("Cannot inspect clone destination: {error}")))?;
         if entries.next().is_some() {
-            return Err("Clone destination must be empty".into());
+            return Err(AppError::validation("Clone destination must be empty"));
         }
         return destination
             .canonicalize()
-            .map_err(|error| format!("Cannot resolve clone destination: {error}"));
+            .map_err(|error| AppError::io(format!("Cannot resolve clone destination: {error}")));
     }
     Ok(destination)
 }
@@ -116,47 +130,44 @@ fn clone_destination(path: &Path) -> Result<PathBuf, String> {
 /// Read-only check: `true` only if `path` itself is a Git repository root/worktree. Uses
 /// `Repository::open` (no parent search), so a subfolder of a repo returns `false`. Never
 /// executes anything from the repository.
-pub fn is_repository(path: &Path) -> Result<bool, String> {
+pub fn is_repository(path: &Path) -> Result<bool, AppError> {
     let path = expand_home(path)?;
     if !path.is_absolute() {
-        return Err("Repository path must be an absolute path".into());
+        return Err(AppError::validation(
+            "Repository path must be an absolute path",
+        ));
     }
     Ok(Repository::open(&path).is_ok())
 }
 
-pub fn open_and_register(path: &Path, store: &Store) -> Result<Project, String> {
+pub fn open_and_register(path: &Path, store: &Store) -> Result<Project, AppError> {
     let path = expand_home(path)?;
     if !path.is_absolute() {
-        return Err("Repository path must be an absolute path".into());
+        return Err(AppError::validation(
+            "Repository path must be an absolute path",
+        ));
     }
     let project = inspect_repository(&path)?;
-    if let Some(existing) = store
-        .project_by_path(&project.local_path)
-        .map_err(|error| error.to_string())?
-    {
+    if let Some(existing) = store.project_by_path(&project.local_path)? {
         return Ok(existing);
     }
-    store
-        .save_project(&project)
-        .map_err(|error| error.to_string())?;
+    store.save_project(&project)?;
     Ok(project)
 }
 
-pub fn clone_and_register(url: &str, path: &Path, store: &Store) -> Result<Project, String> {
+pub fn clone_and_register(url: &str, path: &Path, store: &Store) -> Result<Project, AppError> {
     if url.trim().is_empty() {
-        return Err("Clone source must not be empty".into());
+        return Err(AppError::validation("Clone source must not be empty"));
     }
     let path = expand_home(path)?;
     let destination = clone_destination(&path)?;
     let destination_text = destination
         .to_str()
-        .ok_or_else(|| "Clone destination path is not valid UTF-8".to_string())?;
-    if store
-        .project_by_path(destination_text)
-        .map_err(|error| error.to_string())?
-        .is_some()
-    {
-        return Err("A project is already registered at the clone destination".into());
+        .ok_or_else(|| AppError::validation("Clone destination path is not valid UTF-8"))?;
+    if store.project_by_path(destination_text)?.is_some() {
+        return Err(AppError::validation(
+            "A project is already registered at the clone destination",
+        ));
     }
 
     let output = Command::new("git")
@@ -174,20 +185,18 @@ pub fn clone_and_register(url: &str, path: &Path, store: &Store) -> Result<Proje
             destination_text,
         ])
         .output()
-        .map_err(|error| format!("Could not start Git clone: {error}"))?;
+        .map_err(|error| AppError::io(format!("Could not start Git clone: {error}")))?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if detail.is_empty() {
+        return Err(AppError::internal(if detail.is_empty() {
             format!("Git clone failed with status {}", output.status)
         } else {
             format!("Git clone failed: {detail}")
-        });
+        }));
     }
 
     let project = inspect_repository(&destination)?;
-    store
-        .save_project(&project)
-        .map_err(|error| error.to_string())?;
+    store.save_project(&project)?;
     Ok(project)
 }
 
@@ -256,7 +265,7 @@ mod tests {
         let path = temp.0.join("not-a-repository");
         fs::create_dir(&path).unwrap();
         let error = open_and_register(&path, &Store::in_memory().unwrap()).unwrap_err();
-        assert!(error.contains("Cannot open Git repository"));
+        assert!(error.message.contains("Cannot open Git repository"));
     }
 
     #[test]
@@ -281,6 +290,7 @@ mod tests {
         assert!(
             clone_and_register(source.to_str().unwrap(), &occupied, &store)
                 .unwrap_err()
+                .message
                 .contains("must be empty")
         );
         assert_eq!(
@@ -297,6 +307,7 @@ mod tests {
         assert!(
             clone_and_register(" ", &destination, &store)
                 .unwrap_err()
+                .message
                 .contains("must not be empty")
         );
         assert!(clone_and_register("/not/a/repository", &destination, &store).is_err());
@@ -321,6 +332,7 @@ mod tests {
         assert!(
             expand_tilde(Path::new("~/clients/repo"), None)
                 .unwrap_err()
+                .message
                 .contains("HOME")
         );
     }
@@ -348,6 +360,7 @@ mod tests {
         assert!(
             clone_destination(&destination)
                 .unwrap_err()
+                .message
                 .contains("invalid path segment")
         );
     }
@@ -356,7 +369,7 @@ mod tests {
     fn open_rejects_a_relative_path() {
         let error = open_and_register(Path::new("relative/repo"), &Store::in_memory().unwrap())
             .unwrap_err();
-        assert!(error.contains("absolute path"));
+        assert!(error.message.contains("absolute path"));
     }
 
     #[test]
@@ -365,19 +378,20 @@ mod tests {
         let repo = temp.0.join("repo");
         fs::create_dir(&repo).unwrap();
         init_repository(&repo);
-        assert_eq!(is_repository(&repo).unwrap(), true);
+        assert!(is_repository(&repo).unwrap());
 
         let plain = temp.0.join("plain");
         fs::create_dir(&plain).unwrap();
-        assert_eq!(is_repository(&plain).unwrap(), false);
+        assert!(!is_repository(&plain).unwrap());
 
         let nested = repo.join("src");
         fs::create_dir(&nested).unwrap();
-        assert_eq!(is_repository(&nested).unwrap(), false);
+        assert!(!is_repository(&nested).unwrap());
 
         assert!(
             is_repository(Path::new("relative/repo"))
                 .unwrap_err()
+                .message
                 .contains("absolute path")
         );
     }

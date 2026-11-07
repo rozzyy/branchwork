@@ -11,11 +11,10 @@ import {
   type Group,
   type Project,
 } from "../ipc/catalog";
+import { errorMessage } from "../ipc/errors";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { toast } from "../ui/toast";
 import { t } from "../i18n/t";
-
-const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** What's needed to put a deleted group (and its projects) back. */
 export interface GroupSnapshot {

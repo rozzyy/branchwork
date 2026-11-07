@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function seedWorktreeBackend(page: Page) {
-  await page.addInitScript(() => {
+async function seedWorktreeBackend(page: Page, failWorktreeList = false) {
+  await page.addInitScript((shouldFailWorktreeList) => {
+    if (shouldFailWorktreeList) localStorage.setItem("bw:e2e:worktree-list-error", "true");
     if (!localStorage.getItem("bw:e2e:worktrees")) {
       localStorage.setItem(
         "bw:e2e:worktrees",
@@ -49,6 +50,14 @@ async function seedWorktreeBackend(page: Page) {
             localStorage.setItem("bw:e2e:settings", JSON.stringify(settings));
             return undefined;
           case "worktree_list":
+            if (localStorage.getItem("bw:e2e:worktree-list-error") === "true") {
+              throw {
+                kind: "notFound",
+                message: "Project not found",
+                detail: null,
+                recoverable: false,
+              };
+            }
             return worktrees;
           case "worktree_create": {
             const created = {
@@ -112,7 +121,7 @@ async function seedWorktreeBackend(page: Page) {
       });
       localStorage.setItem("bw:e2e:worktree-created", "true");
     }
-  });
+  }, failWorktreeList);
 }
 
 async function gotoWorktreeApp(page: Page) {
@@ -122,6 +131,13 @@ async function gotoWorktreeApp(page: Page) {
 }
 
 test.describe("M1 Stage 2 worktree sidebar", () => {
+  test("shows the message from a typed backend error", async ({ page }) => {
+    await seedWorktreeBackend(page, true);
+    await page.goto("/");
+
+    await expect(page.getByRole("status")).toContainText("Project not found");
+  });
+
   test("shows a created, auto-pinned worktree and restores selection and pin after reload", async ({ page }) => {
     await gotoWorktreeApp(page);
     const created = page.getByRole("button", { name: "feature/sidebar, 2 changed" });

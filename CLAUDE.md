@@ -11,8 +11,8 @@ Branchwork is a macOS Git client built with Tauri 2 (Rust) and React/TypeScript.
 ## Sources of truth
 
 - Spec: `docs/superpowers/specs/2026-11-06-branchwork-design.md`
-- Active plan: `docs/superpowers/plans/2026-11-06-m0-shell-design-system.md`
-- Task files: `.agent/tasks/m0-task-NN.md` (acceptance criteria, scope, task text)
+- Active plan: `docs/superpowers/plans/2026-11-07-m2-changes-files-editor.md`
+- Task files: `.agent/tasks/m2-task-NN.md` (acceptance criteria, scope, task text)
 - Visual reference: `docs/design/prototype.html`
 
 ## Workflow (per stage)

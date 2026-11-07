@@ -573,7 +573,7 @@ Rules:
 
 ## 7. Error handling
 
-- Every IPC command returns `Result<T, AppError { kind, message, detail?, recoverable }>`. Error kinds: `GitConflict`, `GitAuth`, `GitHook`, `NotARepo`, `Network`, `RateLimited`, `PtySpawn`, `CliMissing`, `ProfileAuth`, `Io`, `Internal`.
+- Every IPC command returns `Result<T, AppError { kind, message, detail?, recoverable }>`. Error kinds: `GitConflict`, `GitAuth`, `GitHook`, `NotARepo`, `Network`, `RateLimited`, `PtySpawn`, `CliMissing`, `ProfileAuth`, `Io`, `Internal`, plus `Validation`, `Conflict` (stale/mtime write) and `NotFound` (unknown id), added in M2 Task 00 for input validation and lookup failures the M2 task files rely on.
 - Git CLI failures surface stderr in an expandable toast ("Show details"). Hook failures show the hook name and output.
 - Authentication failures:
   - Push/pull auth failure offers "Open terminal to authenticate".

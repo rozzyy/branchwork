@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use git2::{BranchType, Oid, Repository, Status, StatusOptions};
 use serde::Serialize;
 use std::{
@@ -12,7 +13,7 @@ type WorktreeRepositories = Vec<(PathBuf, Repository)>;
 type CommitIndex = HashMap<Oid, CommitRecord>;
 type RefIndex = HashMap<Oid, Vec<GraphRef>>;
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum GraphRefKind {
     LocalBranch,
@@ -20,20 +21,20 @@ pub enum GraphRefKind {
     Tag,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphRef {
     pub name: String,
     pub kind: GraphRefKind,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphNode {
     pub lane: usize,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphEdge {
     pub from_lane: usize,
@@ -41,14 +42,14 @@ pub struct GraphEdge {
     pub parent_index: usize,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphWorktreeHead {
     pub path: String,
     pub branch: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphCommit {
     pub sha: String,
@@ -67,7 +68,7 @@ pub struct GraphCommit {
     pub timezone_offset_minutes: i32,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct WipSummary {
     pub worktree_path: String,
@@ -79,7 +80,7 @@ pub struct WipSummary {
     pub conflicted_files: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphPage {
     pub page: usize,
@@ -91,7 +92,7 @@ pub struct GraphPage {
     pub user_email: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphCommitDetail {
     pub sha: String,
@@ -108,16 +109,16 @@ struct CommitRecord {
     timezone_offset_minutes: i32,
 }
 
-pub fn read(project_path: &Path, worktree_path: &Path, page: usize) -> Result<GraphPage, String> {
+pub fn read(project_path: &Path, worktree_path: &Path, page: usize) -> Result<GraphPage, AppError> {
     let start = page
         .checked_mul(GRAPH_PAGE_SIZE)
-        .ok_or_else(|| "Graph page is out of range".to_string())?;
+        .ok_or_else(|| AppError::validation("Graph page is out of range"))?;
     let end = start
         .checked_add(GRAPH_PAGE_SIZE)
-        .ok_or_else(|| "Graph page is out of range".to_string())?;
+        .ok_or_else(|| AppError::validation("Graph page is out of range"))?;
     let lookahead = end
         .checked_add(1)
-        .ok_or_else(|| "Graph page is out of range".to_string())?;
+        .ok_or_else(|| AppError::validation("Graph page is out of range"))?;
 
     let (main_repository, active_repository, worktrees) =
         open_project_worktrees(project_path, worktree_path)?;
@@ -160,8 +161,9 @@ pub fn read_commit_detail(
     project_path: &Path,
     worktree_path: &Path,
     sha: &str,
-) -> Result<GraphCommitDetail, String> {
-    let oid = Oid::from_str(sha).map_err(|error| format!("Invalid commit SHA: {error}"))?;
+) -> Result<GraphCommitDetail, AppError> {
+    let oid = Oid::from_str(sha)
+        .map_err(|error| AppError::validation(format!("Invalid commit SHA: {error}")))?;
     let (repository, _, _) = open_project_worktrees(project_path, worktree_path)?;
     let commit = repository
         .find_commit(oid)
@@ -189,65 +191,78 @@ pub fn read_commit_detail(
 fn open_project_worktrees(
     project_path: &Path,
     active_path: &Path,
-) -> Result<(Repository, Repository, WorktreeRepositories), String> {
+) -> Result<(Repository, Repository, WorktreeRepositories), AppError> {
     if !project_path.is_absolute() || !active_path.is_absolute() {
-        return Err("Project and worktree paths must be absolute".into());
+        return Err(AppError::validation(
+            "Project and worktree paths must be absolute",
+        ));
     }
     let project_path = project_path
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve project path: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve project path: {error}")))?;
     let project_repository = Repository::open(&project_path)
-        .map_err(|error| format!("Invalid registered repository: {error}"))?;
+        .map_err(|error| AppError::not_a_repo(format!("Invalid registered repository: {error}")))?;
     let registered_workdir = project_repository
         .workdir()
-        .ok_or_else(|| "Bare repositories cannot be used for the commit graph".to_string())?
+        .ok_or_else(|| {
+            AppError::not_a_repo("Bare repositories cannot be used for the commit graph")
+        })?
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve registered worktree: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve registered worktree: {error}")))?;
     if registered_workdir != project_path {
-        return Err("Registered project path must be a worktree root".into());
+        return Err(AppError::validation(
+            "Registered project path must be a worktree root",
+        ));
     }
 
     let main_path = if project_repository.is_worktree() {
         project_repository
             .commondir()
             .parent()
-            .ok_or_else(|| "Cannot resolve main worktree path".to_string())?
+            .ok_or_else(|| AppError::internal("Cannot resolve main worktree path"))?
     } else {
-        project_repository
-            .workdir()
-            .ok_or_else(|| "Bare repositories cannot be used for the commit graph".to_string())?
+        project_repository.workdir().ok_or_else(|| {
+            AppError::not_a_repo("Bare repositories cannot be used for the commit graph")
+        })?
     }
     .canonicalize()
-    .map_err(|error| format!("Cannot resolve main worktree path: {error}"))?;
+    .map_err(|error| AppError::io(format!("Cannot resolve main worktree path: {error}")))?;
     let main_repository = Repository::open(&main_path)
-        .map_err(|error| format!("Cannot open main worktree: {error}"))?;
+        .map_err(|error| AppError::not_a_repo(format!("Cannot open main worktree: {error}")))?;
     let common_dir = main_repository
         .commondir()
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve common Git directory: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve common Git directory: {error}")))?;
 
     let active_path = active_path
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve active worktree path: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve active worktree path: {error}")))?;
     let active_repository = Repository::open(&active_path)
-        .map_err(|error| format!("Cannot open active worktree: {error}"))?;
+        .map_err(|error| AppError::not_a_repo(format!("Cannot open active worktree: {error}")))?;
     let active_workdir = active_repository
         .workdir()
-        .ok_or_else(|| "Active worktree is a bare repository".to_string())?
+        .ok_or_else(|| AppError::not_a_repo("Active worktree is a bare repository"))?
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve active worktree: {error}"))?;
+        .map_err(|error| AppError::io(format!("Cannot resolve active worktree: {error}")))?;
     let active_common_dir = active_repository
         .commondir()
         .canonicalize()
-        .map_err(|error| format!("Cannot resolve active worktree Git directory: {error}"))?;
+        .map_err(|error| {
+            AppError::io(format!(
+                "Cannot resolve active worktree Git directory: {error}"
+            ))
+        })?;
     if active_workdir != active_path || active_common_dir != common_dir {
-        return Err("Active worktree does not belong to the registered project".into());
+        return Err(AppError::validation(
+            "Active worktree does not belong to the registered project",
+        ));
     }
 
     let mut worktrees = vec![(
         main_path.clone(),
-        Repository::open(&main_path)
-            .map_err(|error| format!("Cannot reopen main worktree: {error}"))?,
+        Repository::open(&main_path).map_err(|error| {
+            AppError::not_a_repo(format!("Cannot reopen main worktree: {error}"))
+        })?,
     )];
     let names = main_repository
         .worktrees()
@@ -259,23 +274,25 @@ fn open_project_worktrees(
         let worktree = main_repository
             .find_worktree(name)
             .map_err(|error| format!("Cannot find linked worktree {name}: {error}"))?;
-        let path = worktree
-            .path()
-            .canonicalize()
-            .map_err(|error| format!("Cannot resolve linked worktree {name}: {error}"))?;
-        let repository = Repository::open_from_worktree(&worktree)
-            .map_err(|error| format!("Cannot open linked worktree {name}: {error}"))?;
+        let path = worktree.path().canonicalize().map_err(|error| {
+            AppError::io(format!("Cannot resolve linked worktree {name}: {error}"))
+        })?;
+        let repository = Repository::open_from_worktree(&worktree).map_err(|error| {
+            AppError::not_a_repo(format!("Cannot open linked worktree {name}: {error}"))
+        })?;
         worktrees.push((path, repository));
     }
     worktrees.sort_by(|left, right| left.0.cmp(&right.0));
     if !worktrees.iter().any(|(path, _)| path == &active_path) {
-        return Err("Active worktree is not registered with the project".into());
+        return Err(AppError::not_found(
+            "Active worktree is not registered with the project",
+        ));
     }
 
     Ok((main_repository, active_repository, worktrees))
 }
 
-fn collect_roots_and_refs(repository: &Repository) -> Result<(BTreeSet<Oid>, RefIndex), String> {
+fn collect_roots_and_refs(repository: &Repository) -> Result<(BTreeSet<Oid>, RefIndex), AppError> {
     let mut roots = BTreeSet::new();
     let mut refs: HashMap<Oid, Vec<GraphRef>> = HashMap::new();
     for branch in repository
@@ -336,7 +353,7 @@ fn collect_commit_prefix(
     repository: &Repository,
     roots: &BTreeSet<Oid>,
     limit: usize,
-) -> Result<(Vec<Oid>, CommitIndex), String> {
+) -> Result<(Vec<Oid>, CommitIndex), AppError> {
     // ponytail: own newest-first walk. Any libgit2 revwalk sort mode walks the
     // whole history before yielding (8.6 s at 100k commits); this stops at `limit`.
     let find = |oid: Oid| {
@@ -457,7 +474,7 @@ fn topo_order(time_ordered: &[Oid], records: &CommitIndex) -> Vec<Oid> {
 
 fn collect_worktree_heads(
     worktrees: &[(PathBuf, Repository)],
-) -> Result<HashMap<Oid, Vec<GraphWorktreeHead>>, String> {
+) -> Result<HashMap<Oid, Vec<GraphWorktreeHead>>, AppError> {
     let mut heads: HashMap<Oid, Vec<GraphWorktreeHead>> = HashMap::new();
     for (path, repository) in worktrees {
         let Ok(head) = repository.head() else {
@@ -484,7 +501,7 @@ fn layout_commits(
     records: &HashMap<Oid, CommitRecord>,
     refs: &HashMap<Oid, Vec<GraphRef>>,
     worktree_heads: &HashMap<Oid, Vec<GraphWorktreeHead>>,
-) -> Result<Vec<GraphCommit>, String> {
+) -> Result<Vec<GraphCommit>, AppError> {
     let mut active_lanes: Vec<Option<Oid>> = Vec::new();
     let mut commits = Vec::with_capacity(ordered_oids.len());
     for oid in ordered_oids {
@@ -550,7 +567,7 @@ fn layout_commits(
     Ok(commits)
 }
 
-fn read_wip(repository: &Repository, worktree_path: &Path) -> Result<WipSummary, String> {
+fn read_wip(repository: &Repository, worktree_path: &Path) -> Result<WipSummary, AppError> {
     let mut options = StatusOptions::new();
     options
         .include_untracked(true)
@@ -931,7 +948,7 @@ mod tests {
         init_repository(&unrelated);
 
         let error = read(&path, &unrelated, 0).unwrap_err();
-        assert!(error.contains("does not belong"));
+        assert!(error.message.contains("does not belong"));
     }
 
     #[test]

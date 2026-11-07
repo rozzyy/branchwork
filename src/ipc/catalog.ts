@@ -1,25 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { commands, type Group, type Project_Serialize, type WorktreePin } from "./bindings";
 
-export interface Group {
-  id: string;
-  name: string;
-  color: string;
-  clonePathTemplate: string;
-}
-
-export interface Project {
-  id: string;
-  owner: string | null;
-  name: string;
-  localPath: string;
-  groupId: string | null;
-}
-
-export interface WorktreePin {
-  projectId: string;
-  worktreePath: string;
-}
+export type { Group, WorktreePin } from "./bindings";
+export type Project = Project_Serialize;
 
 interface Catalog {
   groups: Group[];
@@ -76,11 +59,11 @@ function updateCatalog(update: (catalog: Catalog) => Catalog): void {
 }
 
 export function listGroups(): Promise<Group[]> {
-  return inTauri() ? invoke("groups_list") : Promise.resolve(readCatalog().groups);
+  return inTauri() ? commands.groupsList() : Promise.resolve(readCatalog().groups);
 }
 
 export function saveGroup(group: Group): Promise<void> {
-  if (inTauri()) return invoke("group_save", { group });
+  if (inTauri()) return commands.groupSave(group).then(() => undefined);
   updateCatalog((catalog) => ({
     ...catalog,
     groups: [...catalog.groups.filter((item) => item.id !== group.id), group],
@@ -89,7 +72,7 @@ export function saveGroup(group: Group): Promise<void> {
 }
 
 export function deleteGroup(id: string): Promise<boolean> {
-  if (inTauri()) return invoke("group_delete", { id });
+  if (inTauri()) return commands.groupDelete(id);
   let deleted = false;
   updateCatalog((catalog) => {
     deleted = catalog.groups.some((group) => group.id === id);
@@ -105,11 +88,11 @@ export function deleteGroup(id: string): Promise<boolean> {
 }
 
 export function listProjects(): Promise<Project[]> {
-  return inTauri() ? invoke("projects_list") : Promise.resolve(readCatalog().projects);
+  return inTauri() ? commands.projectsList() : Promise.resolve(readCatalog().projects);
 }
 
 export function saveProject(project: Project): Promise<void> {
-  if (inTauri()) return invoke("project_save", { project });
+  if (inTauri()) return commands.projectSave(project).then(() => undefined);
   updateCatalog((catalog) => ({
     ...catalog,
     projects: [...catalog.projects.filter((item) => item.id !== project.id), project],
@@ -118,7 +101,7 @@ export function saveProject(project: Project): Promise<void> {
 }
 
 export function deleteProject(id: string): Promise<boolean> {
-  if (inTauri()) return invoke("project_delete", { id });
+  if (inTauri()) return commands.projectDelete(id);
   let deleted = false;
   updateCatalog((catalog) => {
     deleted = catalog.projects.some((project) => project.id === id);
@@ -132,13 +115,13 @@ export function deleteProject(id: string): Promise<boolean> {
 }
 
 export function listPins(projectId?: string): Promise<WorktreePin[]> {
-  if (inTauri()) return invoke("pins_list", { projectId: projectId ?? null });
+  if (inTauri()) return commands.pinsList(projectId ?? null);
   const pins = readCatalog().pins;
   return Promise.resolve(projectId ? pins.filter((pin) => pin.projectId === projectId) : pins);
 }
 
 export function pinWorktree(pin: WorktreePin): Promise<void> {
-  if (inTauri()) return invoke("pin_worktree", { pin });
+  if (inTauri()) return commands.pinWorktree(pin).then(() => undefined);
   updateCatalog((catalog) => ({
     ...catalog,
     pins: catalog.pins.some(
@@ -153,13 +136,13 @@ export function pinWorktree(pin: WorktreePin): Promise<void> {
 /** Opens an existing repository on disk and registers it as a project. No browser fallback: this needs the Rust/libgit2 backend. */
 export function openRepository(path: string): Promise<Project> {
   if (!inTauri()) return Promise.reject(new Error("Opening a repository requires the desktop app"));
-  return invoke("repository_open", { path });
+  return commands.repositoryOpen(path);
 }
 
 /** Read-only check: whether `path` is itself a Git repository root (no parent search). Outside Tauri, resolves `false` (no browser equivalent to check against). */
 export function isRepository(path: string): Promise<boolean> {
   if (!inTauri()) return Promise.resolve(false);
-  return invoke("path_is_repository", { path });
+  return commands.pathIsRepository(path);
 }
 
 /** Shows the native folder picker; resolves to the chosen path, or `null` if cancelled. No browser fallback: needs the desktop app's dialog plugin. */
@@ -171,11 +154,11 @@ export function pickFolder(title: string): Promise<string | null> {
 /** Clones a repository to `destination` and registers it as a project. No browser fallback: this needs the Rust/libgit2 backend. */
 export function cloneRepository(url: string, destination: string): Promise<Project> {
   if (!inTauri()) return Promise.reject(new Error("Cloning a repository requires the desktop app"));
-  return invoke("repository_clone", { url, destination });
+  return commands.repositoryClone(url, destination);
 }
 
 export function unpinWorktree(projectId: string, worktreePath: string): Promise<boolean> {
-  if (inTauri()) return invoke("unpin_worktree", { projectId, worktreePath });
+  if (inTauri()) return commands.unpinWorktree(projectId, worktreePath);
   let removed = false;
   updateCatalog((catalog) => ({
     ...catalog,
