@@ -200,3 +200,81 @@ Expected:
 | M1-S1-11 | | |
 | M1-S1-12 | | |
 | M1-S1-13 | | |
+
+## Stage 3: Commit graph and inspector
+
+Use a local repository with at least two branches, a merge, a tag, and a linked worktree. For the worktree-creation check, use a disposable repository or a branch name that can be removed afterward.
+
+### M1-S3-01 · Browse graph history
+
+1. Select the repository and open **Graph**.
+2. Select **All branches** and inspect the first page.
+3. If the repository has more than 500 commits, scroll through the first page and continue into the next page.
+
+Expected:
+- The working-copy row stays at the top and the active branch/worktree is shown.
+- Commit rows show colored lanes with curved merge edges, author avatar nodes, lane-tinted refs (⌂ worktree head, ☁ remote, ◆ tag), message, author, short relative time (e.g. `5h`, `3y`), and short SHA. Messages line up in one column; the layout matches `docs/design/prototype.html` Graph.
+- Scrolling remains responsive; rows outside the visible window are not all mounted.
+- Sidebar worktree rows show a color stripe, mono branch name, ahead/behind and path tail, and a `Clean` / `n changed` / `conflict` chip; hover swaps the chip for ❯_ and ×. The ☰ picker shows `SHOW IN SIDEBAR`, checkboxes on the left, color dots, and `Active` or a status chip.
+- More history loads near the end of the current page without duplicate or missing commits. The list reports the end of history after the last page.
+
+### M1-S3-02 · Filter commits
+
+1. Select **Worktrees** and inspect the matching worktree-head commits.
+2. Select **Mine** with `user.email` configured in the repository.
+3. If practical, unset `user.email` for a disposable repository and select **Mine** again.
+4. Select **All branches** to restore the complete history.
+
+Expected:
+- Selecting a worktree in the sidebar highlights its branch in Graph: commits reachable from its HEAD stay bright, other rows fade, and its ⌂ ref pill turns solid. Switching worktrees moves the highlight immediately.
+- Filters are pill chips under the toolbar. They highlight rather than hide: non-matching rows stay in place, dimmed.
+- Worktrees highlights commits that are current worktree heads.
+- Mine highlights commits matching the configured Git email (case-insensitive); if no email is configured, the screen explains why nothing matches.
+- Agent commits are visibly unavailable until agent metadata is supported.
+- Returning to All branches restores the ordinary graph.
+
+### M1-S3-03 · Inspect working copy and commits
+
+1. Make one staged edit, one unstaged edit, one untracked file, and (if practical) a conflict in the active worktree.
+2. Select the working-copy row and use **Open in Changes**.
+3. Return to Graph, select a commit, and inspect its details and changed paths.
+
+Expected:
+- The working-copy inspector groups staged, unstaged, untracked, and conflicted paths correctly.
+- Open in Changes navigates to the Changes screen.
+- The commit inspector shows a short-SHA chip (full SHA on hover/copy) with ref chips, the message as a heading, author and relative time, a `FILES · n` list, and disabled Cherry-pick / Revert / Rebase from here buttons.
+- Editing a file in the active worktree refreshes the working-copy row without leaving Graph.
+- Loading and retry states remain contextual if a commit detail read fails.
+
+### M1-S3-04 · Use graph actions
+
+1. Open a commit's context menu and select **Copy SHA**; paste into a text field.
+2. Select **Create worktree here** on a disposable commit, enter a unique branch name, and confirm.
+3. Verify the new worktree appears and is selected in the sidebar, and its HEAD is the selected commit.
+4. Inspect the remaining context-menu actions.
+5. Remove the disposable worktree and branch after the check.
+
+Expected:
+- The copied text is the selected commit's full SHA.
+- The new branch/worktree starts at the selected commit, is pinned/refreshed, and becomes active; invalid or occupied paths produce an explicit error.
+- Later-milestone checkout, branch, cherry-pick, revert, rebase, PR, diff/blame, terminal, and agent actions remain disabled and labeled as deferred.
+
+### M1-S3-05 · Pane and navigation behavior
+
+1. Open Graph in a split pane, resize the divider to make each pane narrow, and change filters.
+2. Use the command palette to navigate away and back to Graph.
+
+Expected:
+- The graph list and inspector remain usable at narrow pane widths; no horizontal overflow blocks row selection.
+- Split layout, pane focus, and palette navigation continue to work.
+- Graph loading or navigation does not change repository or worktree selection unexpectedly.
+
+### Stage 3 results
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M1-S3-01 | | |
+| M1-S3-02 | | |
+| M1-S3-03 | | |
+| M1-S3-04 | | |
+| M1-S3-05 | | |

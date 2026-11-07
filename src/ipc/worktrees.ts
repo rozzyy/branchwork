@@ -35,6 +35,18 @@ export function createWorktree(
   return invoke("worktree_create", { projectId, destination, branch });
 }
 
+export function createWorktreeAtCommit(
+  projectId: string,
+  destination: string,
+  branch: string,
+  commit: string,
+): Promise<Worktree> {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    return Promise.reject(new Error("Creating worktrees requires the desktop app"));
+  }
+  return invoke("worktree_create_at_commit", { projectId, destination, branch, commit });
+}
+
 export function removeWorktree(projectId: string, path: string): Promise<void> {
   if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
     return Promise.reject(new Error("Removing worktrees requires the desktop app"));

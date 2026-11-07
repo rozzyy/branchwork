@@ -771,6 +771,30 @@ pub fn create(
     store: &Store,
     watcher: &WorktreeWatcher,
 ) -> Result<Worktree, String> {
+    create_from(project, destination, branch, None, store, watcher)
+}
+
+pub fn create_at_commit(
+    project: &Project,
+    destination: &Path,
+    branch: &str,
+    commit: &str,
+    store: &Store,
+    watcher: &WorktreeWatcher,
+) -> Result<Worktree, String> {
+    let commit = git2::Oid::from_str(commit)
+        .map_err(|error| format!("Selected commit SHA is invalid: {error}"))?;
+    create_from(project, destination, branch, Some(commit), store, watcher)
+}
+
+fn create_from(
+    project: &Project,
+    destination: &Path,
+    branch: &str,
+    start_point: Option<git2::Oid>,
+    store: &Store,
+    watcher: &WorktreeWatcher,
+) -> Result<Worktree, String> {
     if branch.trim().is_empty() || !git2::Reference::is_valid_name(&format!("refs/heads/{branch}"))
     {
         return Err("Branch name is invalid".into());
@@ -785,6 +809,11 @@ pub fn create(
         return Err("Worktree destination cannot be inside an existing worktree".into());
     }
     let checkout_filters = configured_checkout_filters(&main_path)?;
+    if let Some(start_point) = start_point {
+        repository
+            .find_commit(start_point)
+            .map_err(|error| format!("Cannot use selected commit {start_point}: {error}"))?;
+    }
     let parent = destination
         .parent()
         .ok_or_else(|| "Worktree destination has no parent directory".to_string())?;
@@ -810,18 +839,19 @@ pub fn create(
         .ok_or_else(|| "Worktree destination path is not valid UTF-8".to_string())?;
     let destination_arg = destination.as_os_str();
     let branch_arg = OsStr::new(branch);
-    run_git_write_with_filters(
-        &main_path,
-        &[
-            OsStr::new("worktree"),
-            OsStr::new("add"),
-            OsStr::new("-b"),
-            branch_arg,
-            OsStr::new("--"),
-            destination_arg,
-        ],
-        &checkout_filters,
-    )?;
+    let mut args = vec![
+        OsStr::new("worktree"),
+        OsStr::new("add"),
+        OsStr::new("-b"),
+        branch_arg,
+        OsStr::new("--"),
+        destination_arg,
+    ];
+    let start_point_text = start_point.map(|commit| commit.to_string());
+    if let Some(start_point) = start_point_text.as_deref() {
+        args.push(OsStr::new(start_point));
+    }
+    run_git_write_with_filters(&main_path, &args, &checkout_filters)?;
     let destination = destination
         .canonicalize()
         .map_err(|error| format!("Git created an unresolved worktree path: {error}"))?;
@@ -1207,6 +1237,34 @@ mod tests {
         );
         assert!(repository.find_branch("feature", BranchType::Local).is_ok());
         assert_eq!(list(&main_path, &watcher).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn creates_a_worktree_at_the_selected_commit() {
+        let temp = TestDir::new();
+        let main_path = temp.0.join("main");
+        fs::create_dir(&main_path).unwrap();
+        let repository = init_repository(&main_path);
+        let selected = repository.head().unwrap().peel_to_commit().unwrap();
+        let later = commit_with_parent(&repository, &selected, "later commit", true);
+        let store = Store::in_memory().unwrap();
+        let project = register_project(&main_path, &store);
+        let watcher = WorktreeWatcher::new(|_| {});
+        let destination = temp.0.join("worktrees").join("selected");
+
+        let created = create_at_commit(
+            &project,
+            &destination,
+            "selected-commit",
+            &selected.id().to_string(),
+            &store,
+            &watcher,
+        )
+        .unwrap();
+
+        assert_eq!(created.head, selected.id().to_string());
+        assert_ne!(created.head, later.to_string());
+        assert_eq!(created.branch.as_deref(), Some("selected-commit"));
     }
 
     #[test]

@@ -446,8 +446,8 @@
       "dependencies": [
         "m1-task-08"
       ],
-      "status": "in-progress",
-      "evidence": "Task 08 spec review PASS; code review no significant issues; security re-review confirmed the HIGH checkout-filter finding resolved and no remaining vulnerabilities; focused E2E 1/1 and full E2E 49/49; ./init.sh green. Manual M1 Stage 2 test section added. Awaiting user manual verification and Checkpoint M1.2 approval before the single Stage 2 commit."
+      "status": "done",
+      "evidence": "Task 08 spec review PASS; code review no significant issues; security re-review confirmed the HIGH checkout-filter finding resolved and no remaining vulnerabilities; focused E2E 1/1 and full E2E 49/49; ./init.sh green. Manual M1 Stage 2 test section added. User approved commit and continuation; Stage 2 committed as 415ce65. Status-refresh performance (<200 ms for 10k files) remains unmeasured."
     },
     {
       "id": "m1-task-09",
@@ -457,8 +457,8 @@
       "dependencies": [
         "m1-stage-2-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Spec review PASS; security review found no vulnerabilities. Added typed log_graph IPC/Rust read model with validated active-worktree path, 500-commit pages, deterministic topology/lanes, branch/tag/worktree refs, commit author/message/time fields, and active WIP file summary. Focused graph tests 3/3; IPC tests 2/2; ./init.sh green: 22 Vitest files/131 tests, Clippy clean, Rust 38/38; fmt and diff checks clean. 100k-commit first-page performance budget remains for the Stage 3 gate."
     },
     {
       "id": "m1-task-10",
@@ -468,8 +468,30 @@
       "dependencies": [
         "m1-task-09"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Implemented the Graph toolbar and fixed-row virtualized 500-commit paging, filters, WIP/commit inspectors, changed-path IPC, row context menu, typed create-worktree-at-commit using the existing filter-safe Git path, and disabled/deferred actions. Focused frontend/IPC tests: 3 files/15 tests passed; Graph E2E: 1/1 passed. ./init.sh: typecheck clean, 23 Vitest files/140 tests passed, Clippy clean, Rust 40/40 passed. cargo fmt --manifest-path src-tauri/Cargo.toml --check and git diff --check clean. Stage 3 gate remains pending and is not included in Task 10."
+    },
+    {
+      "id": "m1-task-10b",
+      "stage": 7,
+      "name": "Graph and Worktrees sidebar prototype parity (user report)",
+      "description": ".agent/tasks/m1-task-10b.md",
+      "dependencies": [
+        "m1-task-10"
+      ],
+      "status": "done",
+      "evidence": "Spec review FAIL (AC-10 ring, AC-12 bar) -> fixed -> PASS (.agent/reviews/m1-task-10b-spec.md). Includes code-review I3 (Retry at list end), I4 (git:changed reload) and page SHA dedupe. Sidebar/picker + buttons omitted: no sidebar create flow. ./init.sh green: Vitest 23 files/144 tests, Clippy clean, Rust 42 passed/1 ignored; E2E 50/50; git diff --check and cargo fmt --check clean."
+    },
+    {
+      "id": "m1-task-10c",
+      "stage": 7,
+      "name": "Highlight active worktree branch in Graph (user request)",
+      "description": ".agent/tasks/m1-task-10c.md",
+      "dependencies": [
+        "m1-task-10b"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS. Ancestry of the active worktree HEAD stays full strength, off-branch rows fade (.45; filter dim .3 wins), active worktree ref pill solid. Coordinator: head prefers the worktree store so the switch is instant; screenshots verified main vs feat/auth-oauth. ./init.sh green: Vitest 23 files/145 tests, Clippy clean, Rust 42 passed/1 ignored; E2E 50/50; git diff --check clean."
     },
     {
       "id": "m1-stage-3-review",
@@ -477,10 +499,10 @@
       "name": "M1 Stage 3 review and completion checkpoint",
       "description": "Review graph implementation, verify performance, update manual test spec, and stop at Checkpoint M1.3",
       "dependencies": [
-        "m1-task-10"
+        "m1-task-10c"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "User approved Checkpoint M1.3 and authorized the Stage 3 commit. Code review With fixes (.agent/reviews/m1-stage-3-code.md): I1 page-boundary dup/miss fixed with paged topo order + regression test (fails on old code: 1201/1202 unique); I2 partly fixed (one read per commit, log_graph async; deep pages still re-walk, ponytail-noted); I3/I4 fixed in 10b. Security review no vulnerabilities. Perf: first page 100k commits 38.3 ms release (budget <300 ms; was 11.19 s due to libgit2 revwalk sort walking full history), Intel i5-1038NG7, 100k loose objects. Virtualization bounded (<80 mounted rows test). ./init.sh green (Vitest 145/145, Rust 42/1 ignored); E2E 50/50."
     }
   ]
 }

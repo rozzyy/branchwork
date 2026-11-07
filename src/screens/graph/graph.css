@@ -1,0 +1,110 @@
+.pane-view:has(.graph-screen) { overflow: hidden; }
+.graph-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 30%);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surf);
+}
+.graph-subtitle { margin-left: 8px; color: var(--fg3); font-weight: 400; font-size: 12.5px; }
+.graph-list-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+.graph-filter-bar { display: flex; align-items: center; gap: 6px; flex: none; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surf); }
+.graph-filter-chips { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.graph-filter { padding: 3px 10px; border: 0; border-radius: 999px; background: var(--s3); color: var(--fg2); font-size: 11.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.graph-filter:hover:not(:disabled) { color: var(--fg); background: var(--s4); }
+.graph-filter.on { color: var(--acc); background: var(--accs); }
+.graph-filter:disabled { opacity: .45; cursor: not-allowed; }
+.graph-filter-hint { margin-left: auto; overflow: hidden; color: var(--fg3); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.graph-toolbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.graph-toolbar-actions .btn { padding-inline: 8px; font-size: 11px; }
+.graph-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.graph-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+.graph-row:hover { background: color-mix(in oklch, var(--s3) 68%, transparent); }
+.graph-row.selected { position: relative; background: var(--accs); }
+.graph-row.selected::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--acc); }
+.graph-row.dim { opacity: .3; }
+/* Active worktree's branch ancestry highlight (GitKraken-style): subtler than the filter dim;
+ * the stronger fade wins when both a filter and the off-branch fade apply to the same row. */
+.graph-row.off-branch { opacity: .45; }
+.graph-row.dim.off-branch { opacity: .3; }
+.graph-lanes { display: block; flex: none; height: 38px; min-width: 100px; text-align: center; }
+.graph-lanes svg { display: block; overflow: visible; }
+.graph-lane { stroke-width: 2; fill: none; opacity: .8; }
+.lane-0 { stroke: var(--acc); }
+.lane-1 { stroke: var(--grn); }
+.lane-2 { stroke: var(--yel); }
+.lane-3 { stroke: var(--pur); }
+.lane-4 { stroke: var(--blu); }
+.graph-node-initial { fill: #fff; font: 700 9.5px var(--font-ui); text-anchor: middle; pointer-events: none; }
+.graph-message-cell { display: flex; align-items: center; gap: 4px; min-width: 80px; flex: 1; overflow: hidden; }
+.graph-message-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.graph-ref { flex: none; max-width: 130px; overflow: hidden; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklch, var(--ref-c) 18%, transparent); color: var(--ref-c); font-size: 10.5px; font-weight: 650; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.graph-ref.worktree { box-shadow: inset 0 0 0 1px currentColor; }
+.graph-ref.worktree.active { background: var(--ref-c); box-shadow: none; color: #fff; }
+.graph-row-ref { color: var(--fg2); font-size: 11px; white-space: nowrap; }
+.graph-author { display: flex; align-items: center; gap: 5px; flex: 0 1 105px; overflow: hidden; color: var(--fg2); font-size: 11px; }
+.graph-author-avatar { display: inline-grid; flex: none; width: 16px; height: 16px; place-items: center; border-radius: 50%; color: #fff; font-size: 8px; font-weight: 700; }
+.graph-author-avatar.lg { width: 22px; height: 22px; font-size: 10px; }
+.graph-author-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graph-time { flex: 0 0 70px; color: var(--fg3); font-size: 10.5px; text-align: right; white-space: nowrap; }
+.graph-sha { flex: 0 0 58px; color: var(--fg3); font: 10.5px var(--font-mono); text-align: right; }
+.wip-row { background: color-mix(in oklch, var(--accs) 45%, transparent); }
+.wip-row .graph-lanes { display: grid; place-items: center; }
+.graph-inspector { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid var(--line); background: color-mix(in oklch, var(--s2) 32%, transparent); }
+.graph-inspector-content { padding: 16px 14px 24px; }
+.graph-commit-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.graph-wip-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.graph-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 0; border-radius: 999px; background: var(--s3); color: var(--fg2); font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+.graph-chip.mono { font-family: var(--font-mono); }
+button.graph-chip { cursor: pointer; }
+button.graph-chip:hover { background: var(--s4); color: var(--fg); }
+.graph-commit-heading { margin: 0 0 12px; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.graph-commit-author { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--fg2); font-size: 12px; }
+.graph-commit-author b { color: var(--fg); }
+.graph-file-group { margin-top: 14px; }
+.graph-file-group h3 { display: flex; justify-content: space-between; margin: 0 0 6px; color: var(--fg2); font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; }
+.graph-file-group ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.graph-file-row { display: flex; align-items: center; min-width: 0; padding: 6px 4px; border-radius: 7px; font-size: 12px; overflow: hidden; }
+.graph-file-row:hover { background: var(--s2); }
+.graph-file-row code { overflow: hidden; color: var(--fg); text-overflow: ellipsis; white-space: nowrap; font: 11px var(--font-mono); }
+.graph-wip-file { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 0; overflow: hidden; }
+.graph-wip-file code { overflow: hidden; color: var(--fg); text-overflow: ellipsis; white-space: nowrap; font: 11px var(--font-mono); }
+.graph-status-badge { display: inline-grid; flex: none; width: 16px; height: 16px; place-items: center; border-radius: 4px; background: var(--s3); color: var(--fg2); font: 700 9.5px var(--font-mono); }
+.graph-muted { margin: 0; color: var(--fg3); font-size: 11px; }
+.graph-commit-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.graph-inspector-empty { display: grid; height: 100%; place-items: center; padding: 20px; color: var(--fg3); font-size: 12px; text-align: center; }
+.graph-state, .graph-empty { display: grid; min-height: 150px; place-content: center; gap: 10px; padding: 24px; color: var(--fg2); text-align: center; }
+.graph-state p, .graph-empty { margin: 0; }
+.graph-state[role="alert"] { color: var(--red); }
+.graph-notice { padding: 8px 12px; background: color-mix(in oklch, var(--yel) 10%, transparent); color: var(--yel); font-size: 11px; }
+.graph-inline-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; color: var(--red); font-size: 11px; }
+.graph-list-status { display: flex; justify-content: center; padding: 10px; color: var(--fg3); font-size: 11px; }
+
+@container (max-width: 800px) {
+  .graph-filter-bar { padding-inline: 8px; }
+  .graph-filter { padding-inline: 5px; font-size: 10.5px; }
+  .graph-filter-hint { display: none; }
+  .graph-toolbar-actions .btn { padding-inline: 5px; }
+  .graph-deferred-action { display: none; }
+  .graph-author { display: none; }
+}
+@container (max-width: 620px) {
+  .graph-screen { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(175px, 38%); }
+  .graph-inspector { border-top: 1px solid var(--line); border-left: 0; }
+  .graph-inspector-content { padding: 10px 12px 18px; }
+}

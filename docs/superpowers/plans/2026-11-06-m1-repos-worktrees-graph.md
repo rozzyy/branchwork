@@ -107,23 +107,53 @@ Replace the M0 empty state with pinned worktrees plus the active worktree, the `
 - [x] Run `./init.sh`, focused worktree E2E, and full E2E.
 - [x] Commit _(skipped: no-commit rule)_
 
-**Stage 2 gate:** Complete — `./init.sh` green (21 Vitest files/129 tests; Clippy clean; Rust 35/35), focused worktree E2E 1/1, full E2E 49/49, code review no significant issues, security re-review no remaining vulnerabilities. Manual test spec updated. Awaiting Checkpoint M1.2; status-refresh performance (<200 ms for 10k files) remains for the manual checkpoint.
+**Stage 2 gate:** Complete — `./init.sh` green (21 Vitest files/129 tests; Clippy clean; Rust 35/35), focused worktree E2E 1/1, full E2E 49/49, code review no significant issues, security re-review no remaining vulnerabilities. Manual test spec updated. User authorized the Stage 2 commit and continuation; status-refresh performance (<200 ms for 10k files) remains unmeasured. Stage commit: `415ce65`.
 
 ## Stage 3: Commit graph
 
-### Task 09 — Paged graph read model
+### Task 09 — Paged graph read model ✅
 
 Implement a Rust graph query that returns 500 commits per page with stable lane layout, refs, author, message, relative-time source fields, short SHA, and worktree-head markers. Include an active-worktree WIP summary. Avoid loading the full history into the UI.
 
 **Tests:** generated temporary repositories cover branches, merges, tags, worktree heads, pagination, and stable lane assignments.
 
-### Task 10 — Graph screen and inspector
+- [x] Add the typed, read-only Rust graph query and active-worktree WIP summary.
+- [x] Return deterministic 500-commit pages with refs, metadata, worktree heads, and stable lane edges.
+- [x] Cover branches, merges, tags, linked-worktree heads, WIP, pagination, and lane stability with temporary repositories.
+- [x] Add the typed frontend IPC wrapper and contract tests.
+- [x] Pass Task 09 spec review and security review.
+- [x] Run focused graph tests and `./init.sh`; formatting and diff checks pass.
+- [x] Commit _(skipped: stage commit only)_
+
+### Task 10 — Graph screen and inspector ✅
 
 Replace the Graph placeholder with a virtualized commit list, All branches/Worktrees/Mine filters, WIP row, commit/WIP inspector, and a context menu. Implement actions supported by M1; expose later-milestone GitHub, diff, and agent actions only as disabled or clearly deferred entries. Preserve keyboard, split, and palette navigation.
 
 **Tests:** frontend tests cover paging, filters, selection, WIP/commit inspector, and action availability; E2E covers graph browsing and inspector interactions.
 
+- [x] Replace the Graph placeholder with a dedicated toolbar and a 500-row paged, fixed-height virtual list.
+- [x] Add All branches, Worktrees, and configured-email Mine filters; report missing Git email and unavailable Agent metadata.
+- [x] Add WIP and commit inspectors, including changed paths from typed graph IPC.
+- [x] Add the row context menu, typed copy-SHA and create-worktree-at-commit actions; retain existing Git filter protections and disable deferred actions.
+- [x] Cover paging, virtualization, filters, inspector, retry, and action availability with focused frontend tests; cover graph browsing and inspection with E2E.
+- [x] Run `./init.sh`, focused graph tests, focused graph E2E, Rust formatting check, and `git diff --check`.
+- [x] Commit _(skipped: stage commit only)_
+
+**Status:** Task implementation complete. `./init.sh` green (23 Vitest files/140 tests, Clippy clean, Rust 40/40); focused Graph frontend/IPC tests 15/15; focused Graph E2E 1/1; Rust formatting and diff checks clean. Stage 3 review, performance measurement, full E2E, manual spec update, and checkpoint remain outside this task.
+
+### Stage 3 follow-ups ✅
+
+Added after the Stage 3 review and user requests:
+- Graph read performance fix: a newest-first heap walk that stops at the page, a per-page topological order, and a fixed short SHA. First page at 100k commits went from 11.19 s to 38.3 ms.
+- Code-review fixes I1–I4: consistent page boundaries, `log_graph` off the main thread, Retry at the list end, and `git:changed` reload.
+- 10b: Graph and Worktrees sidebar prototype parity.
+- 10c: GitKraken-style highlight of the active worktree's branch.
+
+Task files: `.agent/tasks/m1-task-10b.md`, `.agent/tasks/m1-task-10c.md`.
+
 **Stage 3 gate:** `./init.sh`, full E2E, code and security review, performance check against the graph budget, final manual spec update, and stop at Checkpoint M1.3.
+
+**Status:** Complete — user approved Checkpoint M1.3. Code review findings fixed (I2 partially: deep pages still re-walk); security review found no vulnerabilities; spec reviews PASS; `./init.sh` green (145 Vitest, Rust 42 passed/1 ignored); E2E 50/50.
 
 ## Scope deferred beyond M1
 

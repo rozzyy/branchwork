@@ -28,6 +28,8 @@
 .menu-item:hover .kbd { background: oklch(1 0 0 / .2); color: #fff; }
 .menu-item.danger { color: var(--red); }
 .menu-item.danger:hover { background: var(--red); color: #fff; }
+.menu-item:disabled { color: var(--fg3); opacity: .55; cursor: not-allowed; }
+.menu-item:disabled:hover { background: none; color: var(--fg3); }
 .menu-ic { width: 18px; text-align: center; }
 .menu-label { flex: 1; }
 .menu-h { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; color: var(--fg3); text-transform: uppercase; letter-spacing: .03em; }

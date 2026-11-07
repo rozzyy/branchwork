@@ -10,6 +10,21 @@ import { t } from "../i18n/t";
 import { onGitChanged, type Worktree } from "../ipc/worktrees";
 import { toast } from "../ui/toast";
 
+// Deterministic color stripe/dot per worktree path, picked from a small token palette.
+// Ordered so adjacent hashes don't land on near-identical hues (--acc and --blu are both blue-ish).
+const WORKTREE_COLORS = ["var(--acc)", "var(--grn)", "var(--yel)", "var(--pur)", "var(--blu)", "var(--red)"];
+
+function worktreeColor(path: string): string {
+  // djb2-ish hash: a plain polynomial hash clusters short, similar paths into the same bucket.
+  let hash = 5381;
+  for (let index = 0; index < path.length; index++) hash = ((hash * 33) ^ path.charCodeAt(index)) | 0;
+  return WORKTREE_COLORS[Math.abs(hash) % WORKTREE_COLORS.length];
+}
+
+function pathTail(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path;
+}
+
 function branchName(worktree: Worktree): string {
   return worktree.branch ?? t("sidebar.detached");
 }
@@ -89,6 +104,7 @@ function WorktreePicker({
       aria-label={t("sidebar.pickerTitle")}
       style={{ left: position.left, top: position.top }}
     >
+      <div className="worktree-picker-head">{t("sidebar.pickerHeader")}</div>
       <input
         ref={searchRef}
         className="input worktree-picker-search"
@@ -100,30 +116,37 @@ function WorktreePicker({
       <div className="worktree-picker-list">
         {filtered.map((worktree) => {
           const branch = branchName(worktree);
-          const checked = pinnedPaths.includes(worktree.path);
+          const active = activePath === worktree.path;
+          const checked = active || pinnedPaths.includes(worktree.path);
           return (
             <div className="worktree-picker-row" key={worktree.path}>
-              <button
-                type="button"
-                className="worktree-picker-select"
-                aria-current={activePath === worktree.path ? "true" : undefined}
-                aria-label={t("sidebar.selectWorktree", { branch })}
-                title={worktree.path}
-                onClick={() => useWorktrees.getState().select(worktree.path)}
-              >
-                <span className="worktree-row-label">{branch}</span>
-                <span className="worktree-row-meta">{statusLabel(worktree)}</span>
-              </button>
               <label className="worktree-pin-check">
                 <input
                   type="checkbox"
                   checked={checked}
+                  disabled={active}
                   aria-label={t(checked ? "sidebar.unpinCheckbox" : "sidebar.pinCheckbox", { branch })}
                   onChange={(event) =>
                     void useWorktrees.getState().setPinned(projectId, worktree.path, event.currentTarget.checked)
                   }
                 />
               </label>
+              <span className="worktree-dot" style={{ background: worktreeColor(worktree.path) }} aria-hidden />
+              <button
+                type="button"
+                className="worktree-picker-select mono"
+                aria-current={active ? "true" : undefined}
+                aria-label={t("sidebar.selectWorktree", { branch })}
+                title={worktree.path}
+                onClick={() => useWorktrees.getState().select(worktree.path)}
+              >
+                {branch}
+              </button>
+              {active ? (
+                <span className="worktree-picker-active">{t("sidebar.active")}</span>
+              ) : (
+                <span className="worktree-status-chip" data-state={worktree.state}>{statusLabel(worktree)}</span>
+              )}
             </div>
           );
         })}
@@ -245,16 +268,18 @@ function WorktreeSection() {
                     title={`${branch} · ${statusLabel(worktree)} · ${worktree.path}`}
                     onClick={() => useWorktrees.getState().select(worktree.path)}
                   >
-                    <span className="worktree-row-icon" aria-hidden>⑂</span>
+                    <span className="worktree-row-stripe" aria-hidden style={{ background: worktreeColor(worktree.path) }} />
                     <span className="worktree-row-detail">
                       <span className="worktree-row-label">{branch}</span>
                       <span className="worktree-row-meta">
-                        {statusLabel(worktree)}
-                        {(worktree.ahead > 0 || worktree.behind > 0) &&
-                          ` · ${t("sidebar.aheadBehind", { ahead: worktree.ahead, behind: worktree.behind })}`}
+                        {(worktree.ahead > 0 || worktree.behind > 0) && (
+                          <span>{t("sidebar.aheadBehind", { ahead: worktree.ahead, behind: worktree.behind })}</span>
+                        )}
+                        <span>{pathTail(worktree.path)}</span>
                       </span>
                     </span>
                   </button>
+                  <span className="worktree-status-chip" data-state={worktree.state} aria-hidden>{statusLabel(worktree)}</span>
                   <span className="worktree-row-actions">
                     <button
                       type="button"

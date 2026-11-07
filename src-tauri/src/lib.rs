@@ -1,3 +1,4 @@
+mod graph;
 mod repository;
 mod store;
 mod worktree;
@@ -181,6 +182,27 @@ fn worktree_create(
 }
 
 #[tauri::command]
+fn worktree_create_at_commit(
+    store: State<'_, Store>,
+    watcher: State<'_, worktree::WorktreeWatcher>,
+    project_id: String,
+    destination: String,
+    branch: String,
+    commit: String,
+) -> Result<worktree::Worktree, String> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    worktree::create_at_commit(
+        &project,
+        Path::new(&destination),
+        &branch,
+        &commit,
+        &store,
+        &watcher,
+    )
+}
+
+#[tauri::command]
 fn worktree_remove(
     store: State<'_, Store>,
     project_id: String,
@@ -196,6 +218,39 @@ fn worktree_prune(store: State<'_, Store>, project_id: String) -> Result<(), Str
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
     worktree::prune(&project)
+}
+
+// Runs off the main thread: deep pages re-walk history and must not freeze the window.
+#[tauri::command(async)]
+fn log_graph(
+    store: State<'_, Store>,
+    project_id: String,
+    worktree_path: String,
+    page: usize,
+) -> Result<graph::GraphPage, String> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    graph::read(
+        Path::new(&project.local_path),
+        Path::new(&worktree_path),
+        page,
+    )
+}
+
+#[tauri::command]
+fn graph_commit_detail(
+    store: State<'_, Store>,
+    project_id: String,
+    worktree_path: String,
+    sha: String,
+) -> Result<graph::GraphCommitDetail, String> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    graph::read_commit_detail(
+        Path::new(&project.local_path),
+        Path::new(&worktree_path),
+        &sha,
+    )
 }
 
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
@@ -245,8 +300,11 @@ pub fn run() {
             path_is_repository,
             worktree_list,
             worktree_create,
+            worktree_create_at_commit,
             worktree_remove,
-            worktree_prune
+            worktree_prune,
+            log_graph,
+            graph_commit_detail
         ])
         .run(tauri::generate_context!())
         .expect("error while running Branchwork");

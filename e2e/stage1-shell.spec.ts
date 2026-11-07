@@ -34,13 +34,17 @@ test.describe("M0 Stage 1 shell", () => {
     }
   });
 
-  test("clicking each nav item shows its placeholder and marks it active", async ({ page }) => {
+  test("clicking each nav item opens its screen and marks it active", async ({ page }) => {
     await page.goto("/");
     for (const label of [...NAV_ITEMS, ...TOOLS_ITEMS]) {
       const navButton = page.getByRole("button", { name: label, exact: true });
       await navButton.click();
-      await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
-      await expect(page.getByText(PLACEHOLDER_BODY)).toBeVisible();
+      if (label === "Graph") {
+        await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+      } else {
+        await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
+        await expect(page.getByText(PLACEHOLDER_BODY)).toBeVisible();
+      }
       await expect(navButton).toHaveClass(/\bon\b/);
     }
 

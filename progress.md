@@ -2,6 +2,54 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-07: M1 Stage 3 committed — M1 complete
+
+- The user approved Checkpoint M1.3 and authorized the commit. Single Stage 3 commit (Tasks 09, 10, 10b, 10c and the review/performance fixes); local `.claude/` excluded.
+- M1 is complete. Next: plan M2 (Changes, files, editor) — no plan exists yet.
+
+## 2026-11-07: M1 Task 10c — highlight active worktree branch (user request)
+
+- Graph now highlights the active worktree's branch, GitKraken-style. Commits reachable from its HEAD (full ancestry, plus the WIP row) stay full strength; other rows fade to .45 (filter dim .3 wins when both apply). The active worktree's ⌂ ref pill is solid in its lane color. Switching worktrees in the sidebar moves the highlight immediately (the head comes from the worktree store first, then the page's WIP).
+- **Verification:** spec review PASS; one focused unit test (two branches, flips on switch); screenshots verified for main vs feat/auth-oauth. `./init.sh` — `Tests 145 passed (145)`, Clippy clean, Rust `42 passed; 0 failed; 1 ignored`; `pnpm test:e2e` — `50 passed`; `git diff --check` clean.
+
+## 2026-11-07: M1 Stage 3 ready for Checkpoint M1.3
+
+- **Graph performance:** the first page at 100k commits took 11.19 s. libgit2's revwalk walks the whole history before yielding under any sort mode (8.6 s), and `short_id()` added ~2 s. Replaced both: a newest-first heap walk that stops at the page lookahead, topologically ordered per page, and a fixed 7-char short SHA. **Measured: 38.3 ms** (release build, 100k loose commits, Intel i5-1038NG7; budget <300 ms). Virtualization stays bounded (test asserts <80 mounted rows).
+- **Stage 3 code review:** "With fixes", 0 critical / 4 important (`.agent/reviews/m1-stage-3-code.md`).
+  - I1: page boundaries could repeat or drop a commit under clock skew. Fixed with a per-page topo order; regression test `keeps_pages_consistent_when_a_skewed_child_is_past_the_page_cut` fails on the old code (1201/1202 unique) and passes now.
+  - I2: deep pages were slow and blocked the main thread. Partly fixed: each commit is read once and `log_graph` runs as `command(async)`. Deep pages still re-walk from the tips (marked with a `ponytail:` comment).
+  - I3/I4: fixed in Task 10b.
+- **Task 10b (user report: Graph/Worktrees didn't match the prototype):**
+  - Sidebar rows now have a color stripe and a status chip; the picker has its header, left checkboxes and color dots.
+  - Graph: filter pill chips that dim instead of hide, author avatar nodes, lane colors with curved edges, lane-tinted refs, short relative time, aligned messages, and prototype inspectors.
+  - Also: Retry shown at the list end, `git:changed` reloads the graph, and appended pages are deduped by SHA.
+  - Spec review FAIL (2) → fixed → PASS. The sidebar/picker ＋ buttons are omitted because no sidebar create flow exists.
+- **Verification:** `./init.sh` — `Test Files 23 passed (23)`, `Tests 144 passed (144)`, Clippy clean, Rust `42 passed; 0 failed; 1 ignored`. `pnpm test:e2e` — `50 passed`. `git diff --check` and `cargo fmt --check` clean. Security review: no vulnerabilities.
+- **Manual spec:** Stage 3 checks in `docs/testing/m1-manual-e2e.md` were updated for the new visuals and filter behavior. They have not been run.
+- **Next:** 🛑 Checkpoint M1.3. The user runs the manual checks; on approval, make one Stage 3 commit (exclude `.claude/`).
+
+## 2026-11-06: M1 Task 10 complete — Graph screen and inspector
+
+- Replaced the Graph placeholder with a dedicated toolbar and fixed-row virtual list that reads typed 500-commit pages, prefetches near the loaded-list end, and shows loading, empty, retry, and end-of-history states. Added All branches, Worktrees, and Mine; Mine uses configured Git email and clearly reports when none is set. Agent commits remain unavailable until metadata exists.
+- Added the WIP inspector and Open in Changes, commit metadata/refs/parents/changed-path inspector, and row context menu. Copy SHA and creating a worktree at the selected commit are enabled; all later-milestone actions are visibly disabled. Added narrow commit-detail IPC and commit-based worktree IPC, reusing the existing path validation and checkout-filter isolation.
+- **Verification:** `./init.sh` — typecheck clean, `Test Files 23 passed (23)`, `Tests 140 passed (140)`, Clippy clean, Rust `40 passed; 0 failed`. Focused graph UI/IPC tests — 3 files, 15 tests passed. Focused graph E2E — 1 passed. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` and `git diff --check` clean.
+- Task 10 only. No commit/push, full Stage 3 review, performance measurement, full E2E, manual-spec update, or checkpoint was performed; those remain pending outside this request.
+
+## 2026-11-06: M1 Task 09 complete — paged graph read model
+
+- Added the read-only `log_graph` Tauri command, a typed Rust/libgit2 graph model, and a TypeScript IPC wrapper. It returns 500-commit pages with deterministic topological ordering and lane layout, branch/tag refs, linked-worktree head markers, commit metadata/timezone source fields, and the active worktree's staged/unstaged/untracked/conflict summary.
+- Temporary-repository tests cover branches, merge lanes, local/remote refs, tags, linked-worktree heads, WIP data, pagination, repeated lane stability, and rejection of an unrelated worktree. **Spec review:** PASS. **Security review:** no vulnerabilities.
+- **Verification:** focused graph tests 3/3; graph IPC tests 2/2; `./init.sh` — typecheck clean, 22 Vitest files/131 tests, Clippy clean, Rust 38/38. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` and `git diff --check` clean.
+- First-page performance against the 100k-commit/<300 ms budget remains for the Stage 3 gate.
+- **Next:** Task 10 — Graph screen and inspector. Stage 3 remains uncommitted pending Checkpoint M1.3.
+
+## 2026-11-06: M1 Stage 2 committed; Task 09 started
+
+- **Stage 2 commit:** `415ce65 feat(m1): complete worktree integration stage 2` (single stage commit; local `.claude/` excluded).
+- The user authorized the commit and continuation to the next stage. Stage 2's security finding was resolved and re-reviewed; spec/code/E2E review and automated gates passed.
+- **Unverified:** the manual UI checks were not recorded, and the spec §9 status-refresh measurement (<200 ms for about 10,000 files) remains outstanding.
+- **Started Task 09:** created `.agent/tasks/m1-task-09.md` from the active plan/spec; implement the paged Rust graph read model and its specified tests only.
+
 ## 2026-11-06: M1 Stage 2 ready for Checkpoint M1.2
 
 - **Task 08:** completed the worktree sidebar/picker, matching-path `git:changed` refresh, and create/pin/select/restore E2E. Task 08 spec review PASS.
