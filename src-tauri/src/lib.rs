@@ -1,7 +1,11 @@
+mod commit;
 mod diff;
 mod error;
 mod graph;
+mod oplog;
 mod repository;
+mod stage;
+mod stash;
 mod status;
 mod store;
 mod worktree;
@@ -296,6 +300,177 @@ fn diff_file(
     diff::read(&worktree_path, &path, area)
 }
 
+#[tauri::command(async)]
+#[specta::specta]
+fn commit(
+    store: State<'_, Store>,
+    worktree_path: String,
+    options: commit::CommitOptions,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    commit::commit(&worktree_path, &options)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn commit_and_push(
+    store: State<'_, Store>,
+    worktree_path: String,
+    options: commit::CommitOptions,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    commit::commit_and_push(&worktree_path, &options)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn commit_and_sync(
+    store: State<'_, Store>,
+    worktree_path: String,
+    options: commit::CommitOptions,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    commit::commit_and_sync(&worktree_path, &options)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stash_list(
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<Vec<stash::StashEntry>, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stash::stash_list(&worktree_path)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stash_push(
+    store: State<'_, Store>,
+    worktree_path: String,
+    options: stash::StashPushOptions,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stash::stash_push(&worktree_path, &options)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stash_apply(
+    store: State<'_, Store>,
+    worktree_path: String,
+    index: usize,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stash::stash_apply(&worktree_path, index)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stash_pop(
+    store: State<'_, Store>,
+    worktree_path: String,
+    index: usize,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stash::stash_pop(&worktree_path, index)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stash_drop(
+    store: State<'_, Store>,
+    worktree_path: String,
+    index: usize,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stash::stash_drop(&worktree_path, index)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stage_paths(
+    store: State<'_, Store>,
+    worktree_path: String,
+    paths: Vec<String>,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stage::stage_paths(&worktree_path, &paths)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn unstage_paths(
+    store: State<'_, Store>,
+    worktree_path: String,
+    paths: Vec<String>,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stage::unstage_paths(&worktree_path, &paths)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn discard_paths(
+    store: State<'_, Store>,
+    worktree_path: String,
+    paths: Vec<String>,
+    discard_untracked: bool,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stage::discard_paths(&worktree_path, &paths, discard_untracked)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stage_hunks(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    hunk_indices: Vec<usize>,
+    area: diff::DiffArea,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stage::stage_hunks(&worktree_path, &path, &hunk_indices, area)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn unstage_hunks(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    hunk_indices: Vec<usize>,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stage::unstage_hunks(&worktree_path, &path, &hunk_indices)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn stage_lines(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    line_ids: Vec<String>,
+    area: diff::DiffArea,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stage::stage_lines(&worktree_path, &path, &line_ids, area)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn revert_hunk(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    hunk_index: usize,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    stage::revert_hunk(&worktree_path, &path, hunk_index)
+}
+
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
 // one async worker, not a blocking-threadpool thread), which frees the main thread. A true
 // `spawn_blocking` move is deferred to the cancellable-clone work (spec §7).
@@ -340,7 +515,22 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             log_graph,
             graph_commit_detail,
             status,
-            diff_file
+            diff_file,
+            commit,
+            commit_and_push,
+            commit_and_sync,
+            stash_list,
+            stash_push,
+            stash_apply,
+            stash_pop,
+            stash_drop,
+            stage_paths,
+            unstage_paths,
+            discard_paths,
+            stage_hunks,
+            unstage_hunks,
+            stage_lines,
+            revert_hunk
         ])
         // `git:changed` (emitted in `run()`'s setup below) carries this payload; registering it
         // here (rather than as a tauri-specta `Event`) exports its TS type without changing how

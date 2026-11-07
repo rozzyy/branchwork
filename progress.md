@@ -2,6 +2,46 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-07: M2 Stage 2 gate → 🛑 Checkpoint M2.2
+
+- **Code review** (`.agent/reviews/m2-stage-2-code.md`): APPROVE WITH NITS. All Task 05–08 AC met. Clippy lifetime elision warning in `diff.rs` fixed. N-1 oplog blob cap deferred to Task 14.
+- **Security review** (`.agent/reviews/m2-stage-2-security.md`): APPROVE. No vulnerabilities. Minor-1 oplog blob cap (deferred T14); Minor-2 rebase abort error leaks internal path (nit).
+- **§9 perf check:** `status::read` on 10k files (200 dirty), 5 runs, median **72.7 ms**, max 73.3 ms — well under 200 ms budget. Test added as `#[ignore]` to `status.rs` (run with `cargo test --release -- --ignored`).
+- **E2E:** `e2e/m2-stage2-changes.spec.ts` written (17 tests): stage/unstage/discard, commit/amend/commit-all, stash push/apply/pop/drop, stash@{N} rendering, counter colors, perf proxy. Full suite: **70/70 passed**.
+- **Manual doc:** `docs/testing/m2-manual-e2e.md` Stage 2 section added: M2-S2-01 through M2-S2-16.
+- **Gate:** `./init.sh` — `Test Files 28 passed (28)`, `Tests 193 passed (193)`, Clippy clean, Rust `84 passed; 0 failed; 3 ignored`. `pnpm test:e2e` — 70/70 passed.
+- **Next:** M2 Stage 3 — Files & editor (Task 09, filesystem IPC). Single Stage 2 commit created.
+
+## 2026-11-07: M2 Task 07 — Commit variants and message validator
+
+- Added Rust `commit` / `commit_and_push` / `commit_and_sync` IPC over the user's `git` CLI with argument arrays. Each records the pre-write `HEAD` SHA into the in-process oplog. Empty messages are rejected unless amending; amend with no message uses `--amend --no-edit`; `stage_all` runs `git add -A` first. Sync = `fetch --prune → rebase → optional commit → push` and aborts the rebase on conflict.
+- Added `AppError::git_hook` / `git_auth` / `git_conflict`; failures classify hook output, auth errors, and conflicts. Because git hides the failing hook's name when the hook exits silently, classification falls back to the repository's executable hook set.
+- Wired `src/ipc/changes.ts` + regenerated Specta bindings. Extended `useChanges.dispatch` with the three commit commands (returns success), and wired the commit box, primary Commit button, ⌘↵, the six-item split-button menu, Commit & Sync, and the branch-line Sync (no new message, draft preserved). `✦ Generate` is disabled with `ui.deferred_m6`; Undo Last Commit shows a deferred toast because `undo_last` is Task 14.
+- **Verification:** `./init.sh` — `Test Files 28 passed (28)`, `Tests 186 passed (186)`, Clippy clean, Rust `78 passed; 0 failed; 2 ignored`; `cargo fmt --manifest-path src-tauri/Cargo.toml --check` clean. `src/ipc/bindings.ts` keeps the generator's extra trailing newline so the drift test passes.
+- **Next:** M2 Task 08 (stashes). No per-task commit; Stage 2 stops at Checkpoint M2.2 after Tasks 05–08 + review gate.
+
+## 2026-11-07: M2 Task 06 — Stage, unstage, and discard
+
+- Added Rust `stage`/`oplog` modules and IPC: full-file stage/unstage via `git2::Index`, partial hunk/line ops via synthesized unified patches + `git apply --cached --unidiff-zero` under M1 filter isolation, discard with preimage oplog snapshots, path-escape refusal, and deferred untracked Trash branch.
+- Wired `src/ipc/changes.ts` + regenerated Specta bindings; widened `useChanges.dispatch` with success/failure toasts; connected Changes file-row/section actions and DiffRenderer hunk/line/stage-selected actions. Kept row-level windowing for a single huge hunk (user-approved N-4).
+- **Verification:** `./init.sh` — `Test Files 28 passed (28)`, `Tests 177 passed (177)`, Clippy clean, Rust `71 passed; 0 failed; 2 ignored`; `cargo fmt --manifest-path src-tauri/Cargo.toml --check` clean.
+- **Next:** M2 Task 07 (commit variants). No per-task commit; Stage 2 stops at Checkpoint M2.2 after Tasks 05–08 + review gate.
+
+## 2026-11-07: M2 Task 05 — Changes screen scaffold
+
+- Matched the Changes scaffold to the prototype: working list/tree toggle, six commit-menu actions, More placeholder, stubbed row/section actions, status classes/deletion styling, and grouped tree rows. Double-click and Open file dispatch the typed `files.open` intent and route to Files.
+- Added `ChangesScreen.test.tsx` coverage for list/tree rendering, 50/51/72/73 counter boundaries, status/deletion styling, file-open intent, six menu entries, and the empty stash count.
+- **Acceptance review:** PASS. No real Git write was added.
+- **Verification:** `./init.sh` — `Test Files 28 passed (28)`, `Tests 172 passed (172)`, Clippy clean, Rust `60 passed; 0 failed; 2 ignored`; `=== Verification Complete ===`.
+- **Next:** Ask the user about N-4 (windowing rows inside a single huge hunk) before Task 06. No Task 05 commit.
+
+## 2026-11-07: M2 Stage 1 approved; Task 05 started
+
+- User approved Checkpoint M2.1 after visual feedback on the Changes screen.
+- Created the single Stage 1 commit: `b55d62c feat: add M2 status and diff foundation` (local `.claude/` and `node-compile-cache/` excluded).
+- `./init.sh` passed before the commit: Vitest 27 files/166 tests; Clippy clean; Rust 60 passed/2 ignored. `git diff --cached --check` clean.
+- Started only M2 Task 05; all Git writes remain stubbed. Next: finish the Changes screen scaffold and its focused tests.
+
 ## 2026-11-07: M2 Stage 1 review gate → 🛑 Checkpoint M2.1
 
 - **Changes stub:** `src/screens/changes/ChangesScreen.tsx` shows Staged/Unstaged lists and the selected file's diff through `DiffRenderer`, with live `git:changed` refresh. Read-only.

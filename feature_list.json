@@ -578,8 +578,8 @@
       "dependencies": [
         "m2-stage-1-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Changes scaffold matches the prototype interactions: list/tree rendering, stub menus/actions, counter boundaries, status styling, Files open intent, and stash count. Acceptance review: PASS. ./init.sh: Test Files 28 passed (28); Tests 172 passed (172); Rust 60 passed, 0 failed, 2 ignored; Clippy clean."
     },
     {
       "id": "m2-task-06",
@@ -589,8 +589,8 @@
       "dependencies": [
         "m2-task-05"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Rust IPC for stage/unstage/discard/hunk/line + oplog bridge + filter-sentinel; Changes dispatch wired to file-row/section/diff actions with toasts. Acceptance self-check vs .agent/tasks/m2-task-06.md AC 1–8. ./init.sh: Test Files 28 passed (28); Tests 177 passed (177); Rust 71 passed, 0 failed, 2 ignored; Clippy clean; cargo fmt --check clean. Untracked discard-to-Trash deferred to Task 09 as specified."
     },
     {
       "id": "m2-task-07",
@@ -600,8 +600,8 @@
       "dependencies": [
         "m2-task-06"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Commit / commit-and-push / commit-and-sync IPC with pre-write HEAD oplog rows, GitHook/GitAuth/GitConflict classification, and the full Changes commit UI (split-button menu, ⌘↵, Sync, disabled Generate). Acceptance self-check vs .agent/tasks/m2-task-07.md AC 1-8. ./init.sh: Test Files 28 passed (28); Tests 186 passed (186); Rust 78 passed, 0 failed, 2 ignored; Clippy clean; cargo fmt --check clean. Undo Last Commit remains a deferred toast; undo_last wiring is Task 14 per the task's out-of-scope note."
     },
     {
       "id": "m2-task-08",

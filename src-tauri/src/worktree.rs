@@ -670,7 +670,9 @@ fn git_command(repository_path: &Path) -> Command {
     command
 }
 
-fn configured_checkout_filters(repository_path: &Path) -> Result<HashSet<String>, AppError> {
+pub(crate) fn configured_checkout_filters(
+    repository_path: &Path,
+) -> Result<HashSet<String>, AppError> {
     let mut filters = HashSet::new();
     let worktree_config = git_command(repository_path)
         .args([
@@ -752,34 +754,12 @@ fn configured_checkout_filters(repository_path: &Path) -> Result<HashSet<String>
     Ok(filters)
 }
 
-fn run_git_write_with_filters(
+pub(crate) fn run_git_write_with_filters(
     repository_path: &Path,
     args: &[&OsStr],
     filters: &HashSet<String>,
 ) -> Result<Output, AppError> {
-    let mut command = git_command(repository_path);
-    command
-        .env("GIT_CONFIG_COUNT", (filters.len() * 2).to_string())
-        .args([
-            "-c",
-            "core.hooksPath=/dev/null",
-            "-c",
-            "core.fsmonitor=false",
-        ]);
-    for (index, filter) in filters.iter().enumerate() {
-        for (offset, operation) in ["smudge", "process"].iter().enumerate() {
-            let config_index = index * 2 + offset;
-            command
-                .env(
-                    format!("GIT_CONFIG_KEY_{config_index}"),
-                    format!("filter.{filter}.{operation}"),
-                )
-                .env(format!("GIT_CONFIG_VALUE_{config_index}"), "");
-        }
-    }
-    let output = command.args(args).output().map_err(|error| {
-        AppError::io(format!("Could not start Git worktree operation: {error}"))
-    })?;
+    let output = invoke_git_with_filters(repository_path, args, filters, true)?;
     if output.status.success() {
         return Ok(output);
     }
@@ -792,6 +772,47 @@ fn run_git_write_with_filters(
     } else {
         format!("Git worktree operation failed: {detail}")
     }))
+}
+
+/// Like [`run_git_write_with_filters`], but keeps the user's hooks enabled and returns the raw
+/// process output even on non-zero exit so callers can classify hook/auth/conflict failures.
+pub(crate) fn invoke_git_allowing_hooks(
+    repository_path: &Path,
+    args: &[&OsStr],
+    filters: &HashSet<String>,
+) -> Result<Output, AppError> {
+    invoke_git_with_filters(repository_path, args, filters, false)
+}
+
+fn invoke_git_with_filters(
+    repository_path: &Path,
+    args: &[&OsStr],
+    filters: &HashSet<String>,
+    disable_hooks: bool,
+) -> Result<Output, AppError> {
+    let mut command = git_command(repository_path);
+    command
+        .env("GIT_CONFIG_COUNT", (filters.len() * 2).to_string())
+        .arg("-c")
+        .arg("core.fsmonitor=false");
+    if disable_hooks {
+        command.arg("-c").arg("core.hooksPath=/dev/null");
+    }
+    for (index, filter) in filters.iter().enumerate() {
+        for (offset, operation) in ["smudge", "process"].iter().enumerate() {
+            let config_index = index * 2 + offset;
+            command
+                .env(
+                    format!("GIT_CONFIG_KEY_{config_index}"),
+                    format!("filter.{filter}.{operation}"),
+                )
+                .env(format!("GIT_CONFIG_VALUE_{config_index}"), "");
+        }
+    }
+    command
+        .args(args)
+        .output()
+        .map_err(|error| AppError::io(format!("Could not start Git worktree operation: {error}")))
 }
 
 fn run_git_write(repository_path: &Path, args: &[&OsStr]) -> Result<Output, AppError> {

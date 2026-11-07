@@ -1,6 +1,6 @@
 # M2 — Changes, files, and editor
 
-**Status:** Not started
+**Status:** Stage 2 in progress
 **Depends on:** M1 — Repositories, groups, worktrees, and graph (HEAD `955d888`)
 **Source of truth:** `docs/superpowers/specs/2026-11-06-branchwork-design.md`, especially §§3.3, 3.4, 4, 6.3, 6.4, 7, 8, 9.
 **Visual reference:** `docs/design/prototype.html` (Changes, Files & editor, and Blame sections).
@@ -86,7 +86,7 @@ Add `src/state/changes.ts` Zustand store: `{ entries, loading, error, selection:
 
 ## Stage 2: Changes screen — staging, commit, stashes
 
-### Task 05 — Changes screen scaffold
+### Task 05 — Changes screen scaffold ✅
 
 Replace the Changes placeholder with a two-pane layout: left source-control panel (header with list/tree toggle, refresh button, ⋯ menu placeholder; commit message box with 50/72 counter; commit split-button placeholder; Staged Changes / Changes / Stashes sections; file rows with status letter, strike-through for `D`, hover actions open/discard/stage/unstage; double-click opens Files), right diff pane wired to the shared renderer, with side-by-side/inline toggle in the toolbar. No commit, no stage operations yet; the hover actions dispatch into the Stage 2 Tasks 06–08 reducers.
 
@@ -94,7 +94,12 @@ Replace the Changes placeholder with a two-pane layout: left source-control pane
 
 **Security-relevant surfaces:** none (UI only; wiring arrives in later tasks).
 
-### Task 06 — Stage / unstage / discard IPC and reducers
+- [x] Implement the Changes toolbar, source-control panel, tree/list toggle, stub actions, and Files open intent.
+- [x] Add focused Vitest coverage for the Task 05 acceptance cases.
+- [x] `./init.sh` — Test Files 28 passed (28), Tests 172 passed (172), Rust 60 passed/0 failed/2 ignored.
+- Commit step _(skipped: no-commit rule)_.
+
+### Task 06 — Stage / unstage / discard IPC and reducers ✅
 
 Add Rust IPC: `stage_paths(worktree, paths)`, `unstage_paths(worktree, paths)`, `discard_paths(worktree, paths)`, `stage_hunks(worktree, path, hunk_indices, area)`, `unstage_hunks(worktree, path, hunk_indices)`, `stage_lines(worktree, path, line_ids, area)`, `revert_hunk(worktree, path, hunk_index)`. Implementation: build the index via `git2` where possible (`stage_paths`/`unstage_paths`/whole-file hunk-mode); for partial hunks and line-level staging, synthesize a unified patch from the cached `DiffModel`, write it to a temp file, and invoke `git apply --cached --unidiff-zero --whitespace=nowarn -- <patch>` using argument arrays, inside the M1 filter-isolation pattern (local checkout filters neutralized; `GIT_CONFIG_GLOBAL=/dev/null`). Record every destructive change into the new `oplog` table before applying (file blob snapshot for discard; previous index blob for unstage/stage). Discard refuses untracked files unless an explicit "discard untracked" flag is set (that flag deletes to Trash, not `unlink`). Wire the new IPC into the `changes` store.
 
@@ -102,13 +107,29 @@ Add Rust IPC: `stage_paths(worktree, paths)`, `unstage_paths(worktree, paths)`, 
 
 **Security-relevant surfaces:** index writes and `git apply --cached` CLI path with argument arrays and isolated config. Path validation refuses paths outside the active worktree and anything under `.git/`.
 
-### Task 07 — Commit variants and message validator
+- [x] Rust stage/unstage/discard/hunk/line IPC + in-process oplog bridge + filter isolation.
+- [x] Diff row-level windowing for a single very large hunk (user-approved N-4).
+- [x] Changes store dispatch + file-row/section/diff actions + toast/i18n.
+- [x] Rust + Vitest coverage for the Task 06 acceptance cases.
+- [x] `./init.sh` — Test Files 28 passed (28), Tests 177 passed (177), Rust 71 passed/0 failed/2 ignored; `cargo fmt --check` clean.
+- Commit step _(skipped: no-commit rule)_.
+
+### Task 07 — Commit variants and message validator ✅
 
 Add Rust IPC: `commit({ worktree, message, amend, stage_all })`, `commit_and_push({ … })`, `commit_and_sync({ … })`. Writes go through the `git` CLI with argument arrays; stderr is forwarded verbatim into `AppError::GitHook` (hook failures) or `AppError::GitAuth` (push/sync auth). Soft-reset undo path: `commit` records the previous `HEAD` SHA into the `oplog` so `undo_last` can `git reset --soft HEAD@{1}`. Add the UI: commit message box with a split button (Commit ⌘↵, Amend, Commit & Push, Commit & Sync, Commit All, Undo Last Commit — the last entry is wired to the oplog undo path), the branch line (ahead/behind from M1 worktree metadata), a disabled `✦ Generate` with a `deferred_m6` tooltip.
 
 **Tests:** Rust tests for commit, amend (reuses previous message when message is empty), stage-all, commit-and-push error path (mock remote), `undo_last` restoring working-tree + index state after a plain commit. Vitest for the split-button menu, 50/72 counter integration, disabled-state wiring.
 
 **Security-relevant surfaces:** Git CLI writes (commit, push), hook execution via the user's `git` (hooks are the user's own configuration, not repo-injected), argument arrays only.
+
+- [x] Rust `commit` / `commit_and_push` / `commit_and_sync` IPC with pre-write HEAD oplog rows.
+- [x] Git CLI argument arrays: `-m`, `--amend --no-edit`, `add -A`, `push`, `fetch --prune`, `rebase` (+ `--abort` on conflict).
+- [x] `AppError` classification: `GitHook` (installed-hook fallback when git hides the hook name), `GitAuth`, `GitConflict`; validation for empty messages.
+- [x] Changes UI: commit box, split-button and six-item menu, ⌘↵, branch line, Sync without a new message, disabled `✦` with `ui.deferred_m6`.
+- [x] Temporary-repository Rust tests for plain commit, amend reuse, stage-all, hook failure, bare-remote push, auth failure, and the `beforeHead` oplog shape.
+- [x] Vitest for commit dispatch, menu actions, Sync draft preservation, counter boundaries, and the disabled Generate tooltip.
+- [x] `./init.sh` — Test Files 28 passed (28), Tests 186 passed (186), Rust 78 passed/0 failed/2 ignored; Clippy and `cargo fmt --check` clean.
+- Commit step _(skipped: no-commit rule)_.
 
 ### Task 08 — Stashes
 

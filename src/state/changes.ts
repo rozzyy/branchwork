@@ -1,12 +1,50 @@
 import { create } from "zustand";
 import { readStatus, type StatusEntry } from "../ipc/status";
 import { readDiff, type DiffArea, type DiffModel } from "../ipc/diff";
+import {
+  commit,
+  commitAndPush,
+  commitAndSync,
+  discardPaths,
+  revertHunk,
+  stageHunks,
+  stageLines,
+  stagePaths,
+  unstageHunks,
+  unstagePaths,
+  type CommitOptions,
+} from "../ipc/changes";
+import {
+  stashApply,
+  stashDrop,
+  stashList,
+  stashPop,
+  stashPush,
+  type StashEntry,
+  type StashPushOptions,
+} from "../ipc/stash";
 import { errorMessage } from "../ipc/errors";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { useWorktrees } from "./worktrees";
+import { undoLast } from "./undoIntents";
+import { toast } from "../ui/toast";
+import { t } from "../i18n/t";
 
-/** Widened by Tasks 06-08 (stage/unstage/discard/commit/stash); this task adds no variants. */
-export type ChangesCommand = never;
+export type ChangesCommand =
+  | { type: "stage-paths"; paths: string[] }
+  | { type: "unstage-paths"; paths: string[] }
+  | { type: "discard-paths"; paths: string[]; discardUntracked: boolean }
+  | { type: "stage-hunks"; path: string; hunkIndices: number[]; area: DiffArea }
+  | { type: "unstage-hunks"; path: string; hunkIndices: number[] }
+  | { type: "stage-lines"; path: string; lineIds: string[]; area: DiffArea }
+  | { type: "revert-hunk"; path: string; hunkIndex: number }
+  | { type: "commit"; options: CommitOptions }
+  | { type: "commit-and-push"; options: CommitOptions }
+  | { type: "commit-and-sync"; options: CommitOptions }
+  | { type: "stash-push"; options: StashPushOptions }
+  | { type: "stash-apply"; index: number }
+  | { type: "stash-pop"; index: number }
+  | { type: "stash-drop"; index: number };
 
 export type DiffMode = "split" | "inline";
 
@@ -18,10 +56,12 @@ export interface ChangesSelection {
 interface ChangesStore {
   worktree: string | null;
   entries: { staged: StatusEntry[]; unstaged: StatusEntry[] };
+  stashes: StashEntry[];
   loading: boolean;
   error: string | null;
   selection: ChangesSelection | null;
   diff: DiffModel | null;
+  selectedLineIds: string[];
   dmode: DiffMode;
   /** Fetches status (and the diff for the current selection, if any) for `worktreePath`.
    * Clears entries/selection/diff first when `worktreePath` differs from the tracked worktree. */
@@ -31,7 +71,9 @@ interface ChangesStore {
   handleGitChanged(worktreePath: string): void;
   select(selection: ChangesSelection | null): void;
   setDiffMode(mode: DiffMode): void;
-  dispatch(command: ChangesCommand): void;
+  /** Runs a write command, toasts success/failure, refreshes status, and reports success. */
+  dispatch(command: ChangesCommand): Promise<boolean>;
+  toggleLine(lineId: string): void;
   /** Restores the persisted `dmode`, mirroring `useStage`'s load(). */
   load(): Promise<void>;
 }
@@ -45,6 +87,7 @@ const pendingRefresh = new Map<string, ReturnType<typeof setTimeout>>();
 // whichever diff fetch (from select() or refresh()) is the most recent for the current selection.
 let statusRevision = 0;
 let diffRevision = 0;
+let stashRevision = 0;
 
 function entryExists(entries: StatusEntry[], path: string): boolean {
   return entries.some((entry) => entry.path === path);
@@ -53,18 +96,40 @@ function entryExists(entries: StatusEntry[], path: string): boolean {
 export const useChanges = create<ChangesStore>((set, get) => ({
   worktree: null,
   entries: { staged: [], unstaged: [] },
+  stashes: [],
   loading: false,
   error: null,
   selection: null,
   diff: null,
+  selectedLineIds: [],
   dmode: "split",
   async refresh(worktreePath) {
     statusRevision++;
     const requestId = statusRevision;
     if (get().worktree !== worktreePath) {
-      set({ worktree: worktreePath, entries: { staged: [], unstaged: [] }, selection: null, diff: null });
+      set({
+        worktree: worktreePath,
+        entries: { staged: [], unstaged: [] },
+        stashes: [],
+        selection: null,
+        diff: null,
+        selectedLineIds: [],
+      });
     }
     set({ loading: true, error: null });
+    stashRevision++;
+    const stashRequestId = stashRevision;
+    void stashList(worktreePath)
+      .then((stashes) => {
+        if (stashRevision === stashRequestId && get().worktree === worktreePath) {
+          set({ stashes });
+        }
+      })
+      .catch(() => {
+        if (stashRevision === stashRequestId && get().worktree === worktreePath) {
+          set({ stashes: [] });
+        }
+      });
     try {
       const status = await readStatus(worktreePath);
       if (statusRevision !== requestId) return; // a newer refresh/worktree-switch wins instead
@@ -77,6 +142,7 @@ export const useChanges = create<ChangesStore>((set, get) => ({
         entries: { staged: status.staged, unstaged: status.unstaged },
         selection: nextSelection,
         diff: nextSelection ? get().diff : null,
+        selectedLineIds: [],
         loading: false,
         error: null,
       });
@@ -108,7 +174,7 @@ export const useChanges = create<ChangesStore>((set, get) => ({
     );
   },
   select(selection) {
-    set({ selection, diff: null });
+    set({ selection, diff: null, selectedLineIds: [] });
     const worktree = get().worktree;
     if (!selection || !worktree) return;
     diffRevision++;
@@ -125,8 +191,87 @@ export const useChanges = create<ChangesStore>((set, get) => ({
     set({ dmode: mode });
     void saveSetting("changesDmode", mode);
   },
-  dispatch() {
-    // ponytail: ChangesCommand is `never` -- no variants to handle until Tasks 06-08 widen it.
+  async dispatch(command) {
+    const worktree = get().worktree;
+    if (!worktree) {
+      toast({ title: t("changes.worktreeRequired"), icon: "!" });
+      return false;
+    }
+
+    const action = commandAction(command);
+    try {
+      switch (command.type) {
+        case "commit":
+          await commit(worktree, command.options);
+          break;
+        case "commit-and-push":
+          await commitAndPush(worktree, command.options);
+          break;
+        case "commit-and-sync":
+          await commitAndSync(worktree, command.options);
+          break;
+        case "stash-push":
+          await stashPush(worktree, command.options);
+          break;
+        case "stash-apply":
+          await stashApply(worktree, command.index);
+          break;
+        case "stash-pop":
+          await stashPop(worktree, command.index);
+          break;
+        case "stash-drop":
+          await stashDrop(worktree, command.index);
+          break;
+        case "stage-paths":
+          await stagePaths(worktree, command.paths);
+          break;
+        case "unstage-paths":
+          await unstagePaths(worktree, command.paths);
+          break;
+        case "discard-paths":
+          await discardPaths(worktree, command.paths, command.discardUntracked);
+          break;
+        case "stage-hunks":
+          await stageHunks(worktree, command.path, command.hunkIndices, command.area);
+          break;
+        case "unstage-hunks":
+          await unstageHunks(worktree, command.path, command.hunkIndices);
+          break;
+        case "stage-lines":
+          await stageLines(worktree, command.path, command.lineIds, command.area);
+          break;
+        case "revert-hunk":
+          await revertHunk(worktree, command.path, command.hunkIndex);
+          break;
+      }
+      if (command.type === "stash-drop") {
+        toast({
+          title: t("changes.stashDropped"),
+          detail: `stash@{${command.index}}`,
+          icon: "🗑",
+          action: { label: t("toast.undo"), run: () => undoLast(worktree) },
+        });
+      } else {
+        toast({ title: t("changes.actionDone", { action }), icon: "✓" });
+      }
+      if (get().worktree === worktree) set({ selectedLineIds: [] });
+      return true;
+    } catch (error) {
+      toast({
+        title: t("changes.actionFailed", { action: action.toLowerCase(), message: errorMessage(error) }),
+        icon: "!",
+      });
+      return false;
+    } finally {
+      if (get().worktree === worktree) await get().refresh(worktree);
+    }
+  },
+  toggleLine(lineId) {
+    set((state) => ({
+      selectedLineIds: state.selectedLineIds.includes(lineId)
+        ? state.selectedLineIds.filter((selected) => selected !== lineId)
+        : [...state.selectedLineIds, lineId],
+    }));
   },
   async load() {
     const saved = await loadSetting<DiffMode>("changesDmode");
@@ -144,10 +289,45 @@ useWorktrees.subscribe((state, previousState) => {
   pendingRefresh.clear();
   statusRevision++;
   diffRevision++;
+  stashRevision++;
   useChanges.setState({
     worktree: state.activePath,
     entries: { staged: [], unstaged: [] },
+    stashes: [],
     selection: null,
     diff: null,
+    selectedLineIds: [],
   });
 });
+
+function commandAction(command: ChangesCommand): string {
+  switch (command.type) {
+    case "commit":
+      return t("changes.commit");
+    case "commit-and-push":
+      return t("changes.commitPush");
+    case "commit-and-sync":
+      return command.options.message.trim() || command.options.amend
+        ? t("changes.commitSync")
+        : t("changes.sync");
+    case "stash-push":
+      return t("changes.stash");
+    case "stash-apply":
+      return t("changes.stashApply");
+    case "stash-pop":
+      return t("changes.stashPop");
+    case "stash-drop":
+      return t("changes.stashDrop");
+    case "stage-paths":
+    case "stage-hunks":
+    case "stage-lines":
+      return t("changes.stage");
+    case "unstage-paths":
+    case "unstage-hunks":
+      return t("changes.unstage");
+    case "discard-paths":
+      return t("changes.discard");
+    case "revert-hunk":
+      return t("diff.action.revert");
+  }
+}

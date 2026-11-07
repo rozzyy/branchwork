@@ -156,6 +156,30 @@ describe("DiffRenderer", () => {
     vi.unstubAllGlobals();
   });
 
+  it("windows rows inside a single very large hunk and follows the scroller", () => {
+    const lines = Array.from({ length: 1_000 }, (_, index) => ({
+      kind: "add" as const,
+      old: null,
+      new: index + 1,
+      text: `added line ${index + 1}`,
+      intra: null,
+    }));
+    const { container } = render(
+      <DiffRenderer area="unstaged" mode="inline" model={model([hunk(1, lines)])} />,
+    );
+    const scroller = container.querySelector(".diff-hunks") as HTMLDivElement;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 600 });
+    expect(container.querySelectorAll(".diff-line").length).toBeLessThan(100);
+
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 20 * 800 });
+    fireEvent.scroll(scroller);
+
+    expect(container.querySelectorAll(".diff-line").length).toBeLessThan(150);
+    const numbers = [...container.querySelectorAll(".diff-line-number")].map((node) => node.textContent);
+    expect(numbers).toContain("801");
+    expect(numbers).not.toContain("1");
+  });
+
   it("dispatches hunk and line actions with stable identifiers", () => {
     const onRequestHunkAction = vi.fn();
     const onToggleLine = vi.fn();
@@ -170,7 +194,7 @@ describe("DiffRenderer", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "＋ Stage hunk" }));
     fireEvent.click(screen.getByRole("button", { name: "Toggle changed line 1" }));
-    expect(onRequestHunkAction).toHaveBeenCalledWith(changedHunk, "stage");
+    expect(onRequestHunkAction).toHaveBeenCalledWith(changedHunk, "stage", 0);
     expect(onToggleLine).toHaveBeenCalledWith(changedHunk, "0:0");
   });
 });

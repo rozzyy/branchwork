@@ -373,4 +373,70 @@ mod tests {
         let error = read(&dir.0.join("missing")).unwrap_err();
         assert_eq!(error.kind, ErrorKind::Io);
     }
+
+    /// §9 perf gate — M2 Stage 2: `status::read` on a 10 000-file worktree (200 dirty) must
+    /// complete in under 200 ms (wall clock, median over 5 runs). This is a release-mode test;
+    /// run with `cargo test --release status::tests::status_refresh_is_under_200ms_for_10k_files`.
+    ///
+    /// Kept `#[ignore]` so it does not slow the default `./init.sh` loop.  The M2.2 gate
+    /// runs it explicitly via `cargo test --release -- --ignored status::tests::status_refresh`.
+    #[test]
+    #[ignore = "perf gate: run with cargo test --release -- --ignored"]
+    fn status_refresh_is_under_200ms_for_10k_files() {
+        use git2::Signature;
+        use std::time::Instant;
+
+        let dir = TestDir::new();
+        let repository = git2::Repository::init(&dir.0).unwrap();
+        let mut index = repository.index().unwrap();
+
+        // Create and commit 10 000 files.
+        for i in 0u32..10_000 {
+            let name = format!("file_{i:05}.txt");
+            fs::write(dir.0.join(&name), format!("line1\nline2\nfile {i}\n")).unwrap();
+            index.add_path(std::path::Path::new(&name)).unwrap();
+        }
+        let tree_id = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let sig = Signature::now("Perf Test", "perf@test.com").unwrap();
+        repository
+            .commit(Some("HEAD"), &sig, &sig, "initial 10k files", &tree, &[])
+            .unwrap();
+        drop(tree);
+
+        // Dirty 200 of the files (every 50th).
+        for i in (0u32..10_000).step_by(50) {
+            let name = format!("file_{i:05}.txt");
+            fs::write(dir.0.join(&name), format!("modified\nline2\nfile {i}\n")).unwrap();
+        }
+
+        const RUNS: usize = 5;
+        let mut durations = Vec::with_capacity(RUNS);
+        for _ in 0..RUNS {
+            let t = Instant::now();
+            let summary = read(&dir.0).unwrap();
+            durations.push(t.elapsed());
+            // Sanity: 200 files dirtied → 200 unstaged entries.
+            assert_eq!(summary.unstaged.len(), 200);
+            assert!(summary.staged.is_empty());
+        }
+        durations.sort();
+        let median_ms = durations[RUNS / 2].as_secs_f64() * 1000.0;
+        let max_ms = durations.last().unwrap().as_secs_f64() * 1000.0;
+        println!(
+            "[m2-stage2-perf] status::read 10k files (200 dirty), {RUNS} runs: \
+             samples={} ms  median={median_ms:.1} ms  max={max_ms:.1} ms",
+            durations
+                .iter()
+                .map(|d| format!("{:.1}", d.as_secs_f64() * 1000.0))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        // §9 budget: median must be under 200 ms on the baseline Intel i5-1038NG7.
+        assert!(
+            median_ms < 200.0,
+            "status::read median {median_ms:.1} ms exceeds the 200 ms §9 budget"
+        );
+    }
 }

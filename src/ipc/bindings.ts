@@ -28,6 +28,21 @@ export const commands = {
 	graphCommitDetail: (projectId: string, worktreePath: string, sha: string) => __TAURI_INVOKE<GraphCommitDetail>("graph_commit_detail", { projectId, worktreePath, sha }),
 	status: (worktreePath: string) => __TAURI_INVOKE<StatusSummary_Serialize>("status", { worktreePath }),
 	diffFile: (worktreePath: string, path: string, area: DiffArea) => __TAURI_INVOKE<DiffModel_Serialize>("diff_file", { worktreePath, path, area }),
+	commit: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<null>("commit", { worktreePath, options }),
+	commitAndPush: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<null>("commit_and_push", { worktreePath, options }),
+	commitAndSync: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<null>("commit_and_sync", { worktreePath, options }),
+	stashList: (worktreePath: string) => __TAURI_INVOKE<StashEntry[]>("stash_list", { worktreePath }),
+	stashPush: (worktreePath: string, options: StashPushOptions_Deserialize) => __TAURI_INVOKE<null>("stash_push", { worktreePath, options }),
+	stashApply: (worktreePath: string, index: number) => __TAURI_INVOKE<null>("stash_apply", { worktreePath, index }),
+	stashPop: (worktreePath: string, index: number) => __TAURI_INVOKE<null>("stash_pop", { worktreePath, index }),
+	stashDrop: (worktreePath: string, index: number) => __TAURI_INVOKE<null>("stash_drop", { worktreePath, index }),
+	stagePaths: (worktreePath: string, paths: string[]) => __TAURI_INVOKE<null>("stage_paths", { worktreePath, paths }),
+	unstagePaths: (worktreePath: string, paths: string[]) => __TAURI_INVOKE<null>("unstage_paths", { worktreePath, paths }),
+	discardPaths: (worktreePath: string, paths: string[], discardUntracked: boolean) => __TAURI_INVOKE<null>("discard_paths", { worktreePath, paths, discardUntracked }),
+	stageHunks: (worktreePath: string, path: string, hunkIndices: number[], area: DiffArea) => __TAURI_INVOKE<null>("stage_hunks", { worktreePath, path, hunkIndices, area }),
+	unstageHunks: (worktreePath: string, path: string, hunkIndices: number[]) => __TAURI_INVOKE<null>("unstage_hunks", { worktreePath, path, hunkIndices }),
+	stageLines: (worktreePath: string, path: string, lineIds: string[], area: DiffArea) => __TAURI_INVOKE<null>("stage_lines", { worktreePath, path, lineIds, area }),
+	revertHunk: (worktreePath: string, path: string, hunkIndex: number) => __TAURI_INVOKE<null>("revert_hunk", { worktreePath, path, hunkIndex }),
 };
 
 /* Types */
@@ -45,6 +60,12 @@ export type AppError_Serialize = {
 	message: string,
 	detail: string | null,
 	recoverable: boolean,
+};
+
+export type CommitOptions = {
+	message: string,
+	amend: boolean,
+	stageAll: boolean,
 };
 
 export type DiffArea = "staged" | "unstaged";
@@ -232,6 +253,25 @@ export type Project_Serialize = {
 	name: string,
 	localPath: string,
 	groupId: string | null,
+};
+
+export type StashEntry = {
+	index: number,
+	message: string,
+	time: number,
+	branch: string,
+};
+
+export type StashPushOptions = StashPushOptions_Serialize | StashPushOptions_Deserialize;
+
+export type StashPushOptions_Deserialize = {
+	message?: string | null,
+	includeUntracked: boolean,
+};
+
+export type StashPushOptions_Serialize = {
+	message: string | null,
+	includeUntracked: boolean,
 };
 
 export type StatusEntry = StatusEntry_Serialize | StatusEntry_Deserialize;

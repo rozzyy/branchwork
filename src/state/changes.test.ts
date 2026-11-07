@@ -1,10 +1,50 @@
 import { readStatus, type StatusSummary } from "../ipc/status";
 import { readDiff } from "../ipc/diff";
+import {
+  commit,
+  commitAndPush,
+  commitAndSync,
+  discardPaths,
+  revertHunk,
+  stageHunks,
+  stageLines,
+  stagePaths,
+  unstageHunks,
+  unstagePaths,
+} from "../ipc/changes";
+import {
+  stashApply,
+  stashDrop,
+  stashList,
+  stashPop,
+  stashPush,
+} from "../ipc/stash";
+import { toast } from "../ui/toast";
 import { useChanges } from "./changes";
 import { useWorktrees } from "./worktrees";
 
 vi.mock("../ipc/status", () => ({ readStatus: vi.fn() }));
 vi.mock("../ipc/diff", () => ({ readDiff: vi.fn() }));
+vi.mock("../ipc/changes", () => ({
+  commit: vi.fn(),
+  commitAndPush: vi.fn(),
+  commitAndSync: vi.fn(),
+  stagePaths: vi.fn(),
+  unstagePaths: vi.fn(),
+  discardPaths: vi.fn(),
+  stageHunks: vi.fn(),
+  unstageHunks: vi.fn(),
+  stageLines: vi.fn(),
+  revertHunk: vi.fn(),
+}));
+vi.mock("../ipc/stash", () => ({
+  stashList: vi.fn(),
+  stashPush: vi.fn(),
+  stashApply: vi.fn(),
+  stashPop: vi.fn(),
+  stashDrop: vi.fn(),
+}));
+vi.mock("../ui/toast", () => ({ toast: vi.fn() }));
 
 const stagedEntry = { path: "a.ts", oldPath: null, indexStatus: "M", worktreeStatus: "", bytes: 1, large: false };
 const unstagedEntry = { path: "b.ts", oldPath: null, indexStatus: "", worktreeStatus: "M", bytes: 2, large: false };
@@ -16,13 +56,34 @@ function summary(overrides: Partial<StatusSummary> = {}): StatusSummary {
 beforeEach(() => {
   vi.mocked(readStatus).mockReset().mockResolvedValue(summary());
   vi.mocked(readDiff).mockReset();
+  for (const fn of [
+    commit,
+    commitAndPush,
+    commitAndSync,
+    stagePaths,
+    unstagePaths,
+    discardPaths,
+    stageHunks,
+    unstageHunks,
+    stageLines,
+    revertHunk,
+  ]) {
+    vi.mocked(fn).mockReset().mockResolvedValue(undefined);
+  }
+  vi.mocked(stashList).mockReset().mockResolvedValue([]);
+  for (const fn of [stashPush, stashApply, stashPop, stashDrop]) {
+    vi.mocked(fn).mockReset().mockResolvedValue(undefined);
+  }
+  vi.mocked(toast).mockReset();
   useChanges.setState({
     worktree: null,
     entries: { staged: [], unstaged: [] },
+    stashes: [],
     loading: false,
     error: null,
     selection: null,
     diff: null,
+    selectedLineIds: [],
     dmode: "split",
   });
   useWorktrees.setState({ activePath: null });
@@ -121,4 +182,148 @@ it("clears entries and selection when the active worktree changes in the worktre
     selection: null,
     diff: null,
   });
+});
+
+it("dispatch stages paths, refreshes, and toasts success", async () => {
+  await useChanges.getState().refresh("/repos/main");
+  vi.mocked(readStatus).mockClear();
+
+  await useChanges.getState().dispatch({ type: "stage-paths", paths: ["b.ts"] });
+
+  expect(stagePaths).toHaveBeenCalledWith("/repos/main", ["b.ts"]);
+  expect(readStatus).toHaveBeenCalledWith("/repos/main");
+  expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Stage complete", icon: "✓" }));
+});
+
+it("dispatch toasts failures without dropping the worktree", async () => {
+  await useChanges.getState().refresh("/repos/main");
+  vi.mocked(stagePaths).mockRejectedValueOnce({ kind: "Validation", message: "path escapes worktree" });
+
+  await useChanges.getState().dispatch({ type: "stage-paths", paths: ["../x"] });
+
+  expect(toast).toHaveBeenCalledWith(
+    expect.objectContaining({ title: "Couldn't stage: path escapes worktree", icon: "!" }),
+  );
+  expect(useChanges.getState().worktree).toBe("/repos/main");
+});
+
+it("dispatch stages selected lines and clears the selection afterward", async () => {
+  await useChanges.getState().refresh("/repos/main");
+  useChanges.setState({ selectedLineIds: ["0:1", "1:0"] });
+
+  await useChanges.getState().dispatch({
+    type: "stage-lines",
+    path: "b.ts",
+    lineIds: ["0:1", "1:0"],
+    area: "unstaged",
+  });
+
+  expect(stageLines).toHaveBeenCalledWith("/repos/main", "b.ts", ["0:1", "1:0"], "unstaged");
+  expect(useChanges.getState().selectedLineIds).toEqual([]);
+});
+
+it("dispatch commits with typed options, refreshes, and reports success", async () => {
+  await useChanges.getState().refresh("/repos/main");
+  vi.mocked(readStatus).mockClear();
+  const options = { message: "feat: commit", amend: false, stageAll: false };
+
+  const succeeded = await useChanges.getState().dispatch({ type: "commit", options });
+
+  expect(succeeded).toBe(true);
+  expect(commit).toHaveBeenCalledWith("/repos/main", options);
+  expect(readStatus).toHaveBeenCalledWith("/repos/main");
+  expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Commit complete", icon: "✓" }));
+});
+
+it("dispatch commits and pushes, and reports a failed push", async () => {
+  await useChanges.getState().refresh("/repos/main");
+  const options = { message: "feat: push", amend: false, stageAll: false };
+  vi.mocked(commitAndPush).mockRejectedValueOnce({ kind: "GitAuth", message: "authentication required" });
+
+  const succeeded = await useChanges.getState().dispatch({ type: "commit-and-push", options });
+
+  expect(succeeded).toBe(false);
+  expect(commitAndPush).toHaveBeenCalledWith("/repos/main", options);
+  expect(toast).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: "Couldn't commit & push: authentication required",
+      icon: "!",
+    }),
+  );
+});
+
+it("dispatch syncs without a message and labels the toast as Sync", async () => {
+  await useChanges.getState().refresh("/repos/main");
+
+  await useChanges.getState().dispatch({
+    type: "commit-and-sync",
+    options: { message: "", amend: false, stageAll: false },
+  });
+
+  expect(commitAndSync).toHaveBeenCalledWith("/repos/main", {
+    message: "",
+    amend: false,
+    stageAll: false,
+  });
+  expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Sync complete" }));
+});
+
+it("refresh loads stashes for the tracked worktree", async () => {
+  const stash = { index: 0, message: "On main: wip", time: 1, branch: "main" };
+  vi.mocked(stashList).mockResolvedValue([stash]);
+
+  await useChanges.getState().refresh("/repos/main");
+
+  await vi.waitFor(() => expect(useChanges.getState().stashes).toEqual([stash]));
+});
+
+it("dispatch pushes a stash with options and refreshes", async () => {
+  await useChanges.getState().refresh("/repos/main");
+  vi.mocked(stashList).mockClear();
+
+  const succeeded = await useChanges.getState().dispatch({
+    type: "stash-push",
+    options: { message: "wip", includeUntracked: true },
+  });
+
+  expect(succeeded).toBe(true);
+  expect(stashPush).toHaveBeenCalledWith("/repos/main", {
+    message: "wip",
+    includeUntracked: true,
+  });
+  expect(stashList).toHaveBeenCalledWith("/repos/main");
+  expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Stash complete" }));
+});
+
+it("dispatch applies and pops stashes by index", async () => {
+  await useChanges.getState().refresh("/repos/main");
+
+  await useChanges.getState().dispatch({ type: "stash-apply", index: 2 });
+  await useChanges.getState().dispatch({ type: "stash-pop", index: 1 });
+
+  expect(stashApply).toHaveBeenCalledWith("/repos/main", 2);
+  expect(stashPop).toHaveBeenCalledWith("/repos/main", 1);
+});
+
+it("dispatch drop toasts Undo and fires the undo-last intent", async () => {
+  await useChanges.getState().refresh("/repos/main");
+  const onUndo = vi.fn();
+  window.addEventListener("branchwork:undo-last", onUndo);
+
+  await useChanges.getState().dispatch({ type: "stash-drop", index: 0 });
+
+  expect(stashDrop).toHaveBeenCalledWith("/repos/main", 0);
+  const dropped = vi
+    .mocked(toast)
+    .mock.calls.find(([entry]) => entry.title === "Stash dropped");
+  expect(dropped).toBeDefined();
+  expect(dropped![0].action?.label).toBe("Undo");
+
+  dropped![0].action!.run();
+  expect(onUndo).toHaveBeenCalledOnce();
+  expect((onUndo.mock.calls[0][0] as CustomEvent).detail).toEqual({
+    type: "undo.last",
+    worktree: "/repos/main",
+  });
+  window.removeEventListener("branchwork:undo-last", onUndo);
 });

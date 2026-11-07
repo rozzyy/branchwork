@@ -128,7 +128,7 @@ pub fn read(worktree_path: &Path, file_path: &str, area: DiffArea) -> Result<Dif
     model_from_diff(&repository, &worktree_path, &diff, file_path, area)
 }
 
-fn ensure_path_stays_in_worktree(root: &Path, path: &Path) -> Result<(), AppError> {
+pub(crate) fn ensure_path_stays_in_worktree(root: &Path, path: &Path) -> Result<(), AppError> {
     let candidate = root.join(path);
     let mut existing = candidate.as_path();
     while !existing.exists() {
@@ -147,7 +147,7 @@ fn ensure_path_stays_in_worktree(root: &Path, path: &Path) -> Result<(), AppErro
     Ok(())
 }
 
-fn validate_file_path(path: &str) -> Result<PathBuf, AppError> {
+pub(crate) fn validate_file_path(path: &str) -> Result<PathBuf, AppError> {
     // NUL would panic inside git2's pathspec conversion.
     if path.contains('\0') {
         return Err(AppError::validation("Diff path must not contain NUL"));
@@ -166,8 +166,7 @@ fn validate_file_path(path: &str) -> Result<PathBuf, AppError> {
         })
         || path
             .components()
-            .next()
-            .is_some_and(|component| component.as_os_str().eq_ignore_ascii_case(".git"))
+            .any(|component| component.as_os_str().eq_ignore_ascii_case(".git"))
     {
         return Err(AppError::validation(
             "Diff path must be a repository-relative file outside .git",
@@ -465,7 +464,7 @@ mod tests {
         repository
     }
 
-    fn find_line<'a>(model: &'a DiffModel, kind: DiffLineKind) -> &'a DiffLine {
+    fn find_line(model: &DiffModel, kind: DiffLineKind) -> &DiffLine {
         model
             .hunks
             .iter()

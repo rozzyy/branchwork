@@ -95,3 +95,163 @@ Expected:
 | M2-S1-05 | | |
 | M2-S1-06 | | |
 | M2-S1-07 | | |
+
+---
+
+## Stage 2: Changes screen — staging, commit, stashes
+
+Stage 2 wires all write operations. You need a scratch repository you can freely commit to.
+
+> **Prerequisites:** Stage 1 manual checks passed. Active worktree set to a dirty repository.
+
+### M2-S2-01 · Stage a file by row action
+
+1. With a modified, unstaged file (`a.txt`) in the scratch repo, open **Changes**.
+2. Hover over `a.txt` in the **Changes (Unstaged)** section; click the **＋ Stage** button.
+
+Expected:
+- `a.txt` disappears from **Changes** and appears under **Staged Changes** with status `M`.
+- A success toast appears briefly.
+
+### M2-S2-02 · Unstage a file by row action
+
+1. With `a.txt` now staged (from M2-S2-01 or `git add a.txt`), hover over its row in **Staged Changes** and click the **− Unstage** button.
+
+Expected:
+- `a.txt` moves back to **Changes** (Unstaged). No error toast.
+
+### M2-S2-03 · Discard working-tree changes
+
+1. Edit `a.txt` so it has unstaged changes.
+2. Hover over its row in **Changes** and click the **↶ Discard** button.
+
+Expected:
+- The file reverts to the last committed content (check in a terminal: `git diff a.txt` shows nothing).
+- No file was deleted; untracked files are unaffected.
+
+### M2-S2-04 · Stage All and Discard All section actions
+
+1. Create three modified files. Click the **＋ Stage All** icon (right of **Changes** section header).
+
+Expected:
+- All three move to **Staged Changes** instantly.
+
+2. Click the **↶ Discard All** icon (left of **Changes** section header). Confirm in the dialog.
+
+Expected:
+- A confirmation dialog lists the files. After OK all unstaged changes are reverted.
+
+### M2-S2-05 · Stage a hunk from the diff pane
+
+1. Edit `a.txt` with two separate blocks of changes (enough apart to produce two hunks in `git diff`).
+2. Click `a.txt` in **Changes** to show its diff.
+3. Click the **Stage hunk** button in the header of the *first* hunk only.
+
+Expected:
+- The first hunk disappears from the unstaged diff. Running `git diff --cached a.txt` shows only the first block staged.
+
+### M2-S2-06 · Stage selected lines
+
+1. With a hunk visible, click two individual `+` or `−` lines (they become highlighted).
+2. Click **Stage selected lines**.
+
+Expected:
+- Only the clicked lines appear in the staged diff. The rest remain unstaged.
+
+### M2-S2-07 · Commit staged changes
+
+1. Stage at least one file. Type a commit message (e.g. `test: manual commit`) in the commit box.
+2. Check that the counter shows `XX/72` with no colour change for a short message.
+3. Click **✓ Commit** (or press ⌘↵).
+
+Expected:
+- A success toast appears. The staged section empties. Running `git log --oneline -1` shows the new commit.
+
+### M2-S2-08 · Amend the last commit
+
+1. Make a small change and stage it. Open the split-button menu (▾).
+2. Choose **Amend**.
+
+Expected:
+- `git log --oneline -1` shows the same commit SHA updated with the staged changes (and the new message if you typed one).
+
+### M2-S2-09 · Commit & Push against a local bare remote
+
+> **Setup:** `git init --bare /tmp/bw-bare && git remote add origin /tmp/bw-bare && git push -u origin HEAD` in the scratch repo.
+
+1. Stage a change. Type a message. Open the split-button menu, choose **Commit & Push**.
+
+Expected:
+- The commit appears both locally and in the bare remote (`git log --oneline /tmp/bw-bare`). An auth error (wrong remote URL) surfaces as an actionable toast.
+
+### M2-S2-10 · Commit message counter colour changes
+
+1. Type exactly 50 characters in the commit box. The counter should be neutral (grey).
+2. Type one more character (51 total): the counter turns **yellow**.
+3. Type to 73 total: the counter turns **red**.
+
+Expected: exact threshold matching as described.
+
+### M2-S2-11 · ✦ Generate is disabled
+
+Expected:
+- The **✦** button next to the commit textarea is visually disabled. Hovering shows a tooltip mentioning it is coming in a future version (M6).
+
+### M2-S2-12 · Stash Push (Stash All from ⋯ menu)
+
+1. Have both staged and unstaged changes. Click **⋯** (More) in the Changes header.
+2. Choose **Stash All**.
+
+Expected:
+- Both staged and unstaged changes are cleared from the list.
+- The **Stashes** section shows a new entry at index 0 with the commit message prefix.
+
+### M2-S2-13 · Stash Apply
+
+1. With at least one stash, click the **↓ Apply stash** button on `stash@{0}`.
+
+Expected:
+- The stash's changes reappear in the working tree. The stash entry *remains* in the list (apply does not remove it).
+
+### M2-S2-14 · Stash Pop
+
+1. Click the **⇪ Pop stash** button on `stash@{0}`.
+
+Expected:
+- The stash's changes reappear in the working tree. The stash entry *disappears* from the list.
+
+### M2-S2-15 · Stash Drop + Undo toast
+
+1. Click the **× Drop stash** button on `stash@{0}`.
+
+Expected:
+- The stash entry disappears. A toast appears with an **Undo** action.
+- Clicking Undo triggers the `undo_last` IPC (currently shows a deferred toast — full undo wired in Task 14).
+
+### M2-S2-16 · Sync without a new message
+
+1. Click the **⟳ Sync** button in the branch line (no message typed).
+
+Expected:
+- A fetch + rebase + push runs. Any current commit message draft is *preserved* in the textarea.
+
+### M2 Stage 2 results
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M2-S2-01 | | |
+| M2-S2-02 | | |
+| M2-S2-03 | | |
+| M2-S2-04 | | |
+| M2-S2-05 | | |
+| M2-S2-06 | | |
+| M2-S2-07 | | |
+| M2-S2-08 | | |
+| M2-S2-09 | | |
+| M2-S2-10 | | |
+| M2-S2-11 | | |
+| M2-S2-12 | | |
+| M2-S2-13 | | |
+| M2-S2-14 | | |
+| M2-S2-15 | | |
+| M2-S2-16 | | |

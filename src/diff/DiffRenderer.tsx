@@ -21,8 +21,11 @@ interface DiffRendererProps {
   area: DiffViewArea;
   hunkAreas?: readonly DiffArea[];
   fileName?: string;
+  selectedLineIds?: readonly string[];
   onToggleLine?: (hunk: Hunk, lineKey: string) => void;
-  onRequestHunkAction?: (hunk: Hunk, action: HunkAction) => void;
+  onRequestHunkAction?: (hunk: Hunk, action: HunkAction, hunkIndex: number) => void;
+  onStageSelectedLines?: () => void;
+  onOpenFile?: () => void;
 }
 
 function hunkArea(area: DiffViewArea, hunkAreas: readonly DiffArea[] | undefined, index: number): DiffArea {
@@ -88,19 +91,17 @@ function unchangedLabel(count: number): string {
 // ponytail: rough per-hunk `contain-intrinsic-size` estimate (line count x row height, plus the
 // header) so an off-screen hunk reserves close to its real height instead of the old flat 240px,
 // which made the scrollbar/scrollHeight jump as hunks scrolled into view.
-const DIFF_ROW_HEIGHT_PX = 22;
+const DIFF_ROW_HEIGHT_PX = 20;
 const DIFF_HEADER_HEIGHT_PX = 30;
+const ROW_WINDOW_THRESHOLD = 240;
+const ROW_OVERSCAN_PX = 800;
 
 function estimateHunkHeight(hunk: Hunk): number {
   return DIFF_HEADER_HEIGHT_PX + hunk.lines.length * DIFF_ROW_HEIGHT_PX;
 }
 
-// ponytail: windows at hunk granularity, not per row. A hunk near the viewport (plus the overscan
-// margin below) renders in full; everything else becomes a spacer sized by estimateHunkHeight(),
-// so the scrollbar and ruler stay roughly right without 5 000 real DOM rows existing at once.
-// Known ceiling: a single hunk that is itself huge (plan caps context_lines at 3/interhunk at 0,
-// so this would mean one giant contiguous change) still renders in full once active -- window its
-// rows too if real diffs start producing that.
+// Window hunks first, then rows inside an active hunk when one contiguous change is exceptionally
+// large. Fixed-height rows keep virtual spacers aligned without creating thousands of DOM nodes.
 const INITIAL_RENDER_BUDGET_PX = 1_600;
 const OVERSCAN_MARGIN = "800px 0px";
 
@@ -114,20 +115,93 @@ function initialActiveHunks(hunks: readonly Hunk[]): Set<number> {
   return active;
 }
 
+type HunkDisplayRow =
+  | { kind: "line"; lineIndex: number }
+  | { kind: "pair"; delLineIndex: number; addLineIndex: number }
+  | { kind: "collapse"; lineIndex: number; count: number };
+
+function buildHunkRows(
+  hunk: Hunk,
+  hunkIndex: number,
+  mode: DiffMode,
+  expandedRuns: ReadonlySet<string>,
+): HunkDisplayRow[] {
+  const rows: HunkDisplayRow[] = [];
+  let lineIndex = 0;
+  while (lineIndex < hunk.lines.length) {
+    if (hunk.lines[lineIndex].kind !== "context") {
+      if (mode === "split") {
+        const delStart = lineIndex;
+        while (lineIndex < hunk.lines.length && hunk.lines[lineIndex].kind === "del") lineIndex += 1;
+        const delCount = lineIndex - delStart;
+        const addStart = lineIndex;
+        while (lineIndex < hunk.lines.length && hunk.lines[lineIndex].kind === "add") lineIndex += 1;
+        const addCount = lineIndex - addStart;
+        for (let offset = 0; offset < Math.max(delCount, addCount); offset += 1) {
+          rows.push({
+            kind: "pair",
+            delLineIndex: delStart + offset,
+            addLineIndex: addStart + offset,
+          });
+        }
+        continue;
+      }
+      rows.push({ kind: "line", lineIndex });
+      lineIndex += 1;
+      continue;
+    }
+
+    const runStart = lineIndex;
+    while (lineIndex < hunk.lines.length && hunk.lines[lineIndex].kind === "context") lineIndex += 1;
+    const runLength = lineIndex - runStart;
+    if (runLength > 7 && !expandedRuns.has(`${hunkIndex}:${runStart}`)) {
+      rows.push({ kind: "collapse", lineIndex: runStart, count: runLength });
+      continue;
+    }
+    for (let index = runStart; index < lineIndex; index += 1) {
+      rows.push({ kind: "line", lineIndex: index });
+    }
+  }
+  return rows;
+}
+
+function visibleRowRange(
+  rowCount: number,
+  hunkTop: number,
+  scrollTop: number,
+  viewportHeight: number,
+): [number, number] {
+  const relativeTop = scrollTop - hunkTop - DIFF_HEADER_HEIGHT_PX;
+  const first = Math.max(0, Math.floor((relativeTop - ROW_OVERSCAN_PX) / DIFF_ROW_HEIGHT_PX));
+  const last = Math.min(
+    rowCount,
+    Math.max(first, Math.ceil((relativeTop + viewportHeight + ROW_OVERSCAN_PX) / DIFF_ROW_HEIGHT_PX)),
+  );
+  return [first, last];
+}
+
 export function DiffRenderer({
   model,
   mode,
   area,
   hunkAreas,
   fileName,
+  selectedLineIds = [],
   onToggleLine,
   onRequestHunkAction,
+  onStageSelectedLines,
+  onOpenFile,
 }: DiffRendererProps) {
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(() => new Set());
   const hunksRef = useRef<HTMLDivElement>(null);
   const hunkRefs = useRef<(HTMLElement | null)[]>([]);
+  const [scrollMetrics, setScrollMetrics] = useState({ top: 0, height: 0 });
   const [activeHunks, setActiveHunks] = useState<Set<number> | "all">(() =>
     typeof IntersectionObserver === "undefined" ? "all" : initialActiveHunks(model.hunks),
+  );
+  const displayRows = useMemo(
+    () => model.hunks.map((hunk, index) => buildHunkRows(hunk, index, mode, expandedRuns)),
+    [expandedRuns, mode, model.hunks],
   );
   // prototype's `hkJump`/`S.hkI`: -1 (nothing jumped to yet) until the first ↑/↓ press, then
   // clamped to the hunk list bounds and scrolled into view.
@@ -139,11 +213,25 @@ export function DiffRenderer({
     hunkRefs.current[next]?.scrollIntoView?.({ block: "center", behavior: "smooth" });
   };
 
-  // R-2: window at hunk granularity, scoped to `.diff-hunks` itself (the real scroller -- it's a
-  // full-height flex child of `.diff-renderer` now, not stacked under the Changes file lists, so
-  // no extra sticky/measured-height hack is needed to keep it from overflowing the window). Without
-  // IntersectionObserver (jsdom), render everything -- the existing unit tests assert on rendered
-  // content and don't simulate layout.
+  // Hunk and row windows are both scoped to the real `.diff-hunks` scroller. Without
+  // IntersectionObserver, keep all hunk shells mounted; huge individual hunks still row-window.
+  useEffect(() => {
+    const node = hunksRef.current;
+    if (!node) return;
+    const updateSize = () => {
+      setScrollMetrics((previous) =>
+        previous.height === node.clientHeight && previous.top === node.scrollTop
+          ? previous
+          : { top: node.scrollTop, height: node.clientHeight },
+      );
+    };
+    updateSize();
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateSize);
+    resizeObserver?.observe(node);
+    return () => resizeObserver?.disconnect();
+  }, []);
+
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") {
       setActiveHunks("all");
@@ -209,7 +297,12 @@ export function DiffRenderer({
           {labels.chip && <span className="chip">{t(labels.chip)}</span>}
           <span className="diff-file-path">{fileName}</span>
           <span className="diff-file-spacer" />
-          <Button disabled size="sm" variant="ghost">
+          <Button
+            disabled={!onStageSelectedLines || selectedLineIds.length === 0 || area === "staged"}
+            onClick={() => onStageSelectedLines?.()}
+            size="sm"
+            variant="ghost"
+          >
             {t("diff.stageSelectedLines")}
           </Button>
           <button
@@ -232,7 +325,14 @@ export function DiffRenderer({
           >
             ↓
           </button>
-          <button aria-label={t("changes.openFile")} className="ib2" disabled title={t("changes.openFile")} type="button">
+          <button
+            aria-label={t("changes.openFile")}
+            className="ib2"
+            disabled={!onOpenFile}
+            onClick={() => onOpenFile?.()}
+            title={t("changes.openFile")}
+            type="button"
+          >
             ▤
           </button>
         </header>
@@ -244,13 +344,34 @@ export function DiffRenderer({
         </div>
       )}
       <div className="diff-body">
-        <div className="diff-hunks" ref={hunksRef}>
+        <div
+          className="diff-hunks"
+          onScroll={(event) => {
+            const node = event.currentTarget;
+            setScrollMetrics((previous) =>
+              previous.height === node.clientHeight && previous.top === node.scrollTop
+                ? previous
+                : { top: node.scrollTop, height: node.clientHeight },
+            );
+          }}
+          ref={hunksRef}
+        >
           {model.hunks.map((hunk, hunkIndex) => {
             const currentArea = hunkArea(area, hunkAreas, hunkIndex);
             const dimmed = area !== "all" && currentArea !== area;
             const actions: HunkAction[] =
               area === "all" ? [] : currentArea === "staged" ? ["unstage"] : ["stage", "revert"];
             const active = activeHunks === "all" || activeHunks.has(hunkIndex);
+            const rows = displayRows[hunkIndex];
+            const [firstRow, lastRow] =
+              rows.length > ROW_WINDOW_THRESHOLD
+                ? visibleRowRange(
+                    rows.length,
+                    hunkRefs.current[hunkIndex]?.offsetTop ?? 0,
+                    scrollMetrics.top,
+                    scrollMetrics.height,
+                  )
+                : [0, rows.length];
             return (
               <section
                 className={`diff-hunk${dimmed ? " diff-hunk-dimmed" : ""}`}
@@ -277,7 +398,7 @@ export function DiffRenderer({
                           <Button
                             disabled={!onRequestHunkAction}
                             key={action}
-                            onClick={() => onRequestHunkAction?.(hunk, action)}
+                            onClick={() => onRequestHunkAction?.(hunk, action, hunkIndex)}
                             size="sm"
                             variant={action === "revert" ? "ghost" : "default"}
                           >
@@ -287,13 +408,15 @@ export function DiffRenderer({
                       </div>
                     </header>
                     <div className="diff-lines">
-                      {renderHunkLines({
+                      {renderHunkRows({
                         hunk,
                         hunkIndex,
                         mode,
+                        rows,
+                        firstRow,
+                        lastRow,
+                        selectedLineIds,
                         onToggleLine,
-                        isExpanded: (lineIndex) =>
-                          expandedRuns.has(`${hunkIndex}:${lineIndex}`),
                         expand: (lineIndex) =>
                           setExpandedRuns((previous) => {
                             const next = new Set(previous);
@@ -328,102 +451,95 @@ export function DiffRenderer({
   );
 }
 
-interface RenderHunkLinesArgs {
+interface RenderHunkRowsArgs {
   hunk: Hunk;
   hunkIndex: number;
   mode: DiffMode;
+  rows: HunkDisplayRow[];
+  firstRow: number;
+  lastRow: number;
+  selectedLineIds: readonly string[];
   onToggleLine?: DiffRendererProps["onToggleLine"];
-  isExpanded(lineIndex: number): boolean;
   expand(lineIndex: number): void;
 }
 
-function renderHunkLines({
+function renderHunkRows({
   hunk,
   hunkIndex,
   mode,
+  rows,
+  firstRow,
+  lastRow,
+  selectedLineIds,
   onToggleLine,
-  isExpanded,
   expand,
-}: RenderHunkLinesArgs) {
-  const rows = [];
-  let lineIndex = 0;
-  while (lineIndex < hunk.lines.length) {
-    if (hunk.lines[lineIndex].kind !== "context") {
-      if (mode === "split") {
-        // Pair a del-run with the following add-run into shared rows (del left, add right), the
-        // way the prototype renders a modified line, instead of one staggered row per line.
-        const delStart = lineIndex;
-        while (lineIndex < hunk.lines.length && hunk.lines[lineIndex].kind === "del") lineIndex += 1;
-        const delCount = lineIndex - delStart;
-        const addStart = lineIndex;
-        while (lineIndex < hunk.lines.length && hunk.lines[lineIndex].kind === "add") lineIndex += 1;
-        const addCount = lineIndex - addStart;
-        for (let offset = 0; offset < Math.max(delCount, addCount); offset += 1) {
-          rows.push(
-            <DiffSplitPairRow
-              addLine={offset < addCount ? hunk.lines[addStart + offset] : undefined}
-              addLineIndex={addStart + offset}
-              delLine={offset < delCount ? hunk.lines[delStart + offset] : undefined}
-              delLineIndex={delStart + offset}
-              hunk={hunk}
-              hunkIndex={hunkIndex}
-              key={`${delStart}:${addStart}:${offset}`}
-              onToggleLine={onToggleLine}
-            />,
-          );
-        }
-        continue;
-      }
-      rows.push(
+}: RenderHunkRowsArgs) {
+  const visibleRows = [];
+  if (firstRow > 0) {
+    visibleRows.push(
+      <div
+        aria-hidden
+        className="diff-row-spacer"
+        key="top-spacer"
+        style={{ height: firstRow * DIFF_ROW_HEIGHT_PX }}
+      />,
+    );
+  }
+  for (const row of rows.slice(firstRow, lastRow)) {
+    if (row.kind === "line") {
+      visibleRows.push(
         <DiffLineRow
           hunk={hunk}
           hunkIndex={hunkIndex}
-          key={lineIndex}
-          line={hunk.lines[lineIndex]}
-          lineIndex={lineIndex}
+          key={`line-${row.lineIndex}`}
+          line={hunk.lines[row.lineIndex]}
+          lineIndex={row.lineIndex}
           mode={mode}
+          selectedLineIds={selectedLineIds}
           onToggleLine={onToggleLine}
         />,
       );
-      lineIndex += 1;
-      continue;
-    }
-
-    const runStart = lineIndex;
-    while (lineIndex < hunk.lines.length && hunk.lines[lineIndex].kind === "context") {
-      lineIndex += 1;
-    }
-    const runLength = lineIndex - runStart;
-    const runKey = `${hunkIndex}:${runStart}`;
-    if (runLength > 7 && !isExpanded(runStart)) {
-      rows.push(
+    } else if (row.kind === "pair") {
+      const delLine = hunk.lines[row.delLineIndex];
+      const addLine = hunk.lines[row.addLineIndex];
+      visibleRows.push(
+        <DiffSplitPairRow
+          addLine={addLine?.kind === "add" ? addLine : undefined}
+          addLineIndex={row.addLineIndex}
+          delLine={delLine?.kind === "del" ? delLine : undefined}
+          delLineIndex={row.delLineIndex}
+          hunk={hunk}
+          hunkIndex={hunkIndex}
+          key={`pair-${row.delLineIndex}-${row.addLineIndex}`}
+          selectedLineIds={selectedLineIds}
+          onToggleLine={onToggleLine}
+        />,
+      );
+    } else {
+      visibleRows.push(
         <button
           className="diff-context-collapse"
-          key={runKey}
-          onClick={() => expand(runStart)}
+          key={`collapse-${row.lineIndex}`}
+          onClick={() => expand(row.lineIndex)}
           style={{ gridColumn: "1 / -1" }}
           type="button"
         >
-          {unchangedLabel(runLength)}
+          {unchangedLabel(row.count)}
         </button>,
-      );
-      continue;
-    }
-    for (let index = runStart; index < lineIndex; index += 1) {
-      rows.push(
-        <DiffLineRow
-          hunk={hunk}
-          hunkIndex={hunkIndex}
-          key={index}
-          line={hunk.lines[index]}
-          lineIndex={index}
-          mode={mode}
-          onToggleLine={onToggleLine}
-        />,
       );
     }
   }
-  return rows;
+  if (lastRow < rows.length) {
+    visibleRows.push(
+      <div
+        aria-hidden
+        className="diff-row-spacer"
+        key="bottom-spacer"
+        style={{ height: (rows.length - lastRow) * DIFF_ROW_HEIGHT_PX }}
+      />,
+    );
+  }
+  return visibleRows;
 }
 
 type Side = "old" | "new";
@@ -438,18 +554,22 @@ interface NumberCellProps {
   line?: DiffLine;
   lineIndex: number;
   side: Side;
+  selectedLineIds?: readonly string[];
   onToggleLine?: DiffRendererProps["onToggleLine"];
 }
 
-function NumberCell({ hunk, hunkIndex, line, lineIndex, side, onToggleLine }: NumberCellProps) {
+function NumberCell({ hunk, hunkIndex, line, lineIndex, side, selectedLineIds, onToggleLine }: NumberCellProps) {
   if (!line || !sideShowsNumber(line, side)) return <span className="diff-line-number" aria-hidden />;
   const value = side === "old" ? line.old : line.new;
+  const lineId = `${hunkIndex}:${lineIndex}`;
   if (onToggleLine && line.kind !== "context") {
+    const selected = selectedLineIds?.includes(lineId);
     return (
       <button
         aria-label={t("diff.toggleLine", { line: lineIndex + 1 })}
-        className="diff-line-number"
-        onClick={() => onToggleLine(hunk, `${hunkIndex}:${lineIndex}`)}
+        aria-pressed={selected}
+        className={"diff-line-number" + (selected ? " diff-line-selected" : "")}
+        onClick={() => onToggleLine(hunk, lineId)}
         type="button"
       >
         {value ?? ""}
@@ -477,27 +597,28 @@ interface DiffLineRowProps {
   line: DiffLine;
   lineIndex: number;
   mode: DiffMode;
+  selectedLineIds?: readonly string[];
   onToggleLine?: DiffRendererProps["onToggleLine"];
 }
 
 /** In split mode this only ever renders a context line (changed lines go through
  * `DiffSplitPairRow` instead); in inline mode it renders every line kind. Only the content cell
  * carries the del/add tint (prototype's `.c.del`/`.c.add`) -- the number columns stay plain. */
-function DiffLineRow({ hunk, hunkIndex, line, lineIndex, mode, onToggleLine }: DiffLineRowProps) {
+function DiffLineRow({ hunk, hunkIndex, line, lineIndex, mode, selectedLineIds, onToggleLine }: DiffLineRowProps) {
   if (mode === "inline") {
     return (
       <div className="diff-line diff-inline-line">
-        <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} onToggleLine={onToggleLine} side="old" />
-        <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} onToggleLine={onToggleLine} side="new" />
+        <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} selectedLineIds={selectedLineIds} onToggleLine={onToggleLine} side="old" />
+        <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} selectedLineIds={selectedLineIds} onToggleLine={onToggleLine} side="new" />
         <ContentCell inline line={line} />
       </div>
     );
   }
   return (
     <div className="diff-line diff-split-line">
-      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} onToggleLine={onToggleLine} side="old" />
+      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} selectedLineIds={selectedLineIds} onToggleLine={onToggleLine} side="old" />
       <ContentCell line={line} />
-      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} onToggleLine={onToggleLine} side="new" />
+      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={line} lineIndex={lineIndex} selectedLineIds={selectedLineIds} onToggleLine={onToggleLine} side="new" />
       <ContentCell line={line} />
     </div>
   );
@@ -510,6 +631,7 @@ interface DiffSplitPairRowProps {
   delLineIndex: number;
   addLine?: DiffLine;
   addLineIndex: number;
+  selectedLineIds?: readonly string[];
   onToggleLine?: DiffRendererProps["onToggleLine"];
 }
 
@@ -523,13 +645,14 @@ function DiffSplitPairRow({
   delLineIndex,
   addLine,
   addLineIndex,
+  selectedLineIds,
   onToggleLine,
 }: DiffSplitPairRowProps) {
   return (
     <div className="diff-line diff-split-line">
-      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={delLine} lineIndex={delLineIndex} onToggleLine={onToggleLine} side="old" />
+      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={delLine} lineIndex={delLineIndex} selectedLineIds={selectedLineIds} onToggleLine={onToggleLine} side="old" />
       <ContentCell line={delLine} />
-      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={addLine} lineIndex={addLineIndex} onToggleLine={onToggleLine} side="new" />
+      <NumberCell hunk={hunk} hunkIndex={hunkIndex} line={addLine} lineIndex={addLineIndex} selectedLineIds={selectedLineIds} onToggleLine={onToggleLine} side="new" />
       <ContentCell line={addLine} />
     </div>
   );

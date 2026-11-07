@@ -74,6 +74,48 @@ impl AppError {
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Internal, message)
     }
+
+    pub fn git_hook(hook: &str, stderr: impl Into<String>) -> Self {
+        let detail = stderr.into();
+        Self {
+            kind: ErrorKind::GitHook,
+            message: format!("{hook} hook failed"),
+            detail: if detail.is_empty() {
+                None
+            } else {
+                Some(detail)
+            },
+            recoverable: true,
+        }
+    }
+
+    pub fn git_auth(message: impl Into<String>, stderr: impl Into<String>) -> Self {
+        let detail = stderr.into();
+        Self {
+            kind: ErrorKind::GitAuth,
+            message: message.into(),
+            detail: if detail.is_empty() {
+                None
+            } else {
+                Some(detail)
+            },
+            recoverable: true,
+        }
+    }
+
+    pub fn git_conflict(message: impl Into<String>, stderr: impl Into<String>) -> Self {
+        let detail = stderr.into();
+        Self {
+            kind: ErrorKind::GitConflict,
+            message: message.into(),
+            detail: if detail.is_empty() {
+                None
+            } else {
+                Some(detail)
+            },
+            recoverable: true,
+        }
+    }
 }
 
 // ponytail: generic string errors (built by the existing `format!("...: {error}")` call

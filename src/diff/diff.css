@@ -10,8 +10,7 @@
 .diff-columns span { padding: 3px 12px; }
 .diff-columns span + span { border-left: 1px solid var(--line); }
 .diff-body { flex: 1; min-height: 0; display: flex; }
-.diff-hunks { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
-/* ponytail: native offscreen skip for big diffs (§9 5k-line budget); virtualize if this stops being enough. */
+.diff-hunks { position: relative; flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
 /* ponytail: contain-intrinsic-size is set per-hunk as an inline style (DiffRenderer.tsx), sized
    from that hunk's own line count, so an off-screen hunk doesn't under-reserve its real height. */
 .diff-hunk { min-width: 0; border-bottom: 1px solid var(--line); content-visibility: auto; }
@@ -21,13 +20,14 @@
 .diff-hunk-header-current { box-shadow: inset 3px 0 var(--acc); }
 .diff-hunk-actions { display: flex; gap: 6px; margin-left: auto; }
 .diff-lines { display: grid; min-width: 0; }
-.diff-line { display: grid; min-width: 0; }
+.diff-line { display: grid; min-width: 0; height: 20px; }
 .diff-mode-split .diff-line { grid-template-columns: 44px minmax(0, 1fr) 44px minmax(0, 1fr); }
 .diff-mode-split .diff-line > :nth-child(2) { border-right: 1px solid var(--line); }
 .diff-mode-inline .diff-line { grid-template-columns: 40px 40px minmax(0, 1fr); }
 .diff-line-number { display: flex; align-items: center; justify-content: flex-end; padding: 0 8px 0 2px; border: 0; background: none; color: var(--fg3); font: inherit; text-align: right; user-select: none; opacity: .7; }
 button.diff-line-number { cursor: pointer; width: 100%; }
 button.diff-line-number:hover { opacity: 1; background: var(--s3); color: var(--fg); }
+button.diff-line-number.diff-line-selected { opacity: 1; background: var(--accs); color: var(--acc); }
 .diff-cell { padding-left: 8px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
 .diff-cell-del { background: color-mix(in oklch, var(--red) 13%, transparent); }
 .diff-cell-add { background: color-mix(in oklch, var(--grn) 12%, transparent); }
@@ -35,7 +35,7 @@ button.diff-line-number:hover { opacity: 1; background: var(--s3); color: var(--
 .diff-intra { border-radius: 2px; color: inherit; }
 .diff-intra-add { background: color-mix(in oklch, var(--grn) 36%, transparent); }
 .diff-intra-del { background: color-mix(in oklch, var(--red) 38%, transparent); }
-.diff-context-collapse { grid-column: 1 / -1; width: 100%; padding: 2px 0; border: 0; background: color-mix(in oklch, var(--acc) 6%, transparent); color: var(--acc); cursor: pointer; font: 11.5px var(--font-ui); text-align: center; }
+.diff-context-collapse { grid-column: 1 / -1; width: 100%; height: 20px; padding: 0; border: 0; background: color-mix(in oklch, var(--acc) 6%, transparent); color: var(--acc); cursor: pointer; font: 11.5px var(--font-ui); text-align: center; }
 .diff-context-collapse:hover { background: var(--accs); }
 .diff-ruler { width: 12px; flex: none; border-left: 1px solid var(--line); position: relative; }
 .diff-ruler-tick { position: absolute; left: 3px; right: 3px; height: 3px; transform: translateY(-50%); border-radius: 1px; background: var(--diff-ruler-color); }
