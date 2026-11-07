@@ -40,7 +40,10 @@ export const useWorktrees = create<WorktreesStore>((set, get) => ({
     set({
       projectId: project.id,
       ...(projectChanged ? { worktrees: [], pinnedPaths: [], activePath: null } : {}),
-      loading: true,
+      // Only show the loading spinner on a project change (no data yet).
+      // On a same-project refresh (e.g. triggered by git:changed), keep the
+      // existing data visible so the sidebar doesn't flash to a blank state.
+      loading: projectChanged,
       error: null,
     });
     try {

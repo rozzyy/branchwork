@@ -360,3 +360,4 @@ export type Worktree_Serialize = {
 	dirtyCount: number,
 	state: WorktreeState,
 };
+
