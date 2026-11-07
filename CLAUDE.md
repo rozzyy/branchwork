@@ -25,11 +25,12 @@ after the last task of the stage:
   code-reviewer + security-reviewer (if security surfaces were touched) + e2e-testing  → reports in .agent/reviews/
   write/extend the manual E2E test spec: docs/testing/m0-manual-e2e.md
   🛑 STOP at the stage's MANUAL TEST CHECKPOINT and wait for the user
-  on go-ahead: commit the stage (one commit), then start the next stage
+  on go-ahead: commit the stage (one commit) on the stage branch, then branch again for the next stage
 ```
 
 ## Hard rules
 
+- **New branch per stage.** Before starting the first task of a new stage, create a branch from the latest `main` (`git switch -c m<N>-stage-<K>`, e.g. `m2-stage-3`), or a worktree (`git worktree add ../branchwork-m2-stage-3 -b m2-stage-3`) when parallel work is needed. Every task in that stage happens on that branch; never start a stage on `main`.
 - **No per-task commits, never `git push`.** Skip the plan's per-task "Commit" steps. After the user approves a stage checkpoint, make **one commit per stage** (the coordinator does this, not executors).
 - No over-engineering: build only what the task text specifies.
 - No over-testing: write only the tests in the task text. Add a regression test only for a bug that was actually found.
