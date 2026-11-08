@@ -2,6 +2,85 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-08: Light-mode report — code verified, awaiting clean retest (branch `m3-stage-1`, uncommitted)
+
+- **Report:** screenshot 17:13 shows Settings with Light selected but the stage rendered black. Pixel inspection confirms store=light (checked pill) but dark CSS tokens (gray pill, black pane).
+- **Ruled out:** store logic (settings tests green), rendering pipeline (Playwright probe: clicking Light sets `data-theme=light` and a light pane background), theme writers (all apply store+DOM atomically). Chromium WebKit canvas-`var()` check earlier also green.
+- **Likely cause:** transient state in the live `tauri dev` session (running since 16:50) — the screenshot was taken at 17:13, exactly while files were being hot-edited under it (titlebar/settings/shell edits 17:08–17:13). No code path produces store=light/DOM=dark in one tick.
+- **Next:** user reloads (Cmd+R) or restarts dev and retests Light. If it persists on a clean boot, treat as a real bug and instrument further. Probe spec removed; nothing shipped.
+
+## 2026-11-08: Theme toggle in navbar + full-width title bar (branch `m3-stage-1`, uncommitted)
+
+- **Changed (user requests):** added the prototype's `◐` theme toggle next to the terminal button (shared `toggleTheme()` store action, also now used by the palette command); regrouped the right-side icons into a flush-right group so the title bar uses the full width instead of ending in a dead 78px spacer.
+- **Verification:** `pnpm typecheck` clean; TitleBar/App suites 7/7 (incl. new toggle test + store flip test).
+- **Next:** still 🛑 Checkpoint M3.1 — manual M3-S1-01..07 + commit only on go-ahead and order. No push.
+
+## 2026-11-08: Navbar terminal button matches prototype (branch `m3-stage-1`, uncommitted)
+
+- **Changed (user request):** the title-bar terminal toggle now mirrors the prototype's round glass header button (30×30 circle, `var(--glass)` + shadow, accent-tinted when the dock is open) instead of the flat 26×24 `.icon-btn`. CSS-only; no string, behavior, or test changes.
+- **Verification:** `pnpm typecheck` clean; shell/App/terminal suites 62/62.
+- **Next:** still 🛑 Checkpoint M3.1 — manual M3-S1-01..07 + commit only on go-ahead and order. No push.
+
+## 2026-11-08: Terminal dock header matches prototype (branch `m3-stage-1`, uncommitted)
+
+- **Changed (user request):** dock header now follows `docs/design/prototype.html`: worktree color dot on each tab (reuses sidebar `worktreeColor`), `＋` beside the tabs, flat control row with prototype glyphs (split `⫴`, swap `⇄`, bottom `▁`, right `▕`, float `❐`, max `⤢`, close `✕`), 26×24 buttons, 12px tabs. Removed the app-specific leading `❯_` title and the bordered mode subgroup. No string or behavior changes; dark `--term` surface deliberately not adopted (app themes via surface tokens).
+- **Verification:** `pnpm typecheck` clean; affected suites 41/41; `./init.sh` green (41 files / 324 tests; Rust 139/3); `pnpm test:e2e` 76/76.
+- **Next:** still 🛑 Checkpoint M3.1 — manual M3-S1-01..07 + commit only on go-ahead and order. No push.
+
+## 2026-11-08: Terminal invisible text fixed — oklch→sRGB conversion (branch `m3-stage-1`, uncommitted)
+
+- **Cause:** xterm.js v6 cannot parse `oklch()` theme colors. In light mode the background rendered black and text invisible; dark mode only worked by accident. Proven with side-by-side raw-xterm probes (light-oklch → black bg + unreadable text; hex control → correct).
+- **Fix:** new `src/terminal/colors.ts` converts `oklch()` to `rgb()/rgba()` with pure math before handing colors to xterm (engine-independent, no DOM). `CliPane` uses it for all four theme colors; anything else passes through untouched, with safe fallback to the raw value.
+- **Verification:** converter unit tests use browser-canvas ground truth (4 light + 2 dark vectors match channel-for-channel; 1 LSB canvas noise on one channel, confirmed by an independent Python implementation). Screenshot of the real dock in light mode shows white pane + readable text. `./init.sh` green (42 files / 332 tests; Rust 139/3); `pnpm test:e2e` 76/76. Probe specs deleted.
+- **Next:** still 🛑 Checkpoint M3.1 — manual M3-S1-01..07 + commit only on go-ahead and order. No push.
+
+## 2026-11-08: Terminal font fix + auto-close on clean exit (branch `m3-stage-1`, uncommitted)
+
+- **Font (user report: unclear, sparse letters):** root cause was `fontFamily: "var(--font-mono)"` passed raw to xterm.js — canvas 2D rejects `var()` (proven in Chromium and WebKit via Playwright probe: the previous font is kept), so the glyph atlas and cell metrics silently used the wrong font. `CliPane` now resolves the token via `getComputedStyle` with an `SF Mono` fallback. Regression test asserts xterm receives no `var(`.
+- **Exit (user report: `exit` stuck at logout):** reproduced the backend path with a new Rust test — the Exit event arrives promptly, so the shell was exiting fine; the dead tab just sat there by design. The dock now auto-closes tabs whose session exits cleanly (code 0, no signal) via an exit subscription in `load()`; abnormal ends stay open with output/error state. Regression tests cover auto-close, keep-on-failure, and the pre-existing guard is structural (no subscription existed before).
+- **Docs:** manual spec M3-S1-03 updated (clean exit closes, abnormal stays); spec review file carries a follow-up addendum.
+- **Verification:** `./init.sh` green — typecheck + Clippy clean; 41 Vitest files / 323 tests; Rust 139 passed / 3 ignored. `pnpm test:e2e` 76/76 (one transient run aborted at 60 passed under load; two clean reruns 76/76, code unchanged).
+- **Next:** still 🛑 Checkpoint M3.1 — manual M3-S1-01..07 + commit only on go-ahead and order. No push.
+
+## 2026-11-08: M3 Stage 1 reviews + manual E2E spec (branch `m3-stage-1`)
+
+- **Reviews:** Task 03 spec review PASS (all 7 ACs, `.agent/reviews/m3-task-03-spec.md`); Stage 1 security review PASS, no vulnerabilities (`.agent/reviews/m3-stage-1-security.md`); code review found 2 Important defects, both fixed and re-reviewed PASS (`.agent/reviews/m3-stage-1-code.md`).
+- **Fixes:** close-during-spawn/concurrent-retry orphaned PTYs are now closed via a `pendingSpawns` guard + `closeOrphan` cleanup (live-tab respawn refused); dock-chrome Escape no longer fires from inside terminal input. Regression tests fail on the old behavior and pass now (`dock.test.ts` 9/9, `TerminalDock.test.tsx` 5/5).
+- **Manual spec:** added M3-S1-01..07 to `docs/testing/m0-manual-e2e.md` (toggle/survival, modes/resize/persistence, tabs/close, split/swap, restore, entry points, 8-PTY target); marked stale M1-S2-05 terminal-placeholder step superseded.
+- **Verification:** `./init.sh` — `=== Verification Complete ===`; typecheck + Clippy clean; 41 Vitest files / 320 tests; Rust 138 passed / 3 ignored; `pnpm test:e2e` 76/76. `cargo fmt --check`, `git diff --check` clean.
+- **Next:** 🛑 Checkpoint M3.1 — the user runs M3-S1-01..07. On go-ahead plus commit order: one stage commit (Tasks 01–03) on `m3-stage-1`, fast-forward into `main`. No commit or push now.
+
+## 2026-11-08: M3 Task 03 — Terminal dock (branch `m3-stage-1`)
+
+- **Built:** `src/terminal/dock.ts` store (open, bottom/right/floating/maximized modes, geometry, worktree-bound tabs, selected + second split tab with swap, settings persistence, fresh-shell restore with failure retention) and `src/terminal/TerminalDock.tsx` + `terminal-dock.css` (tab strip, mode radio group, split/swap/new/hide controls, drag + keyboard resize, per-tab retry/close). App renders the dock beside/over the stage; hiding unmounts panes (detach only) so sessions survive.
+- **Entry points:** title-bar ❯_ toggle, ⌃` shortcut, palette toggle/new-tab commands, sidebar worktree hover, Files toolbar + context menu, Graph context menu, Changes toolbar + ⋯ menu. The Files context-menu test was updated to the new live contract; agent/deferred items stay disabled.
+- **Tests:** `dock.test.ts` 6/6 (mode/geometry persistence + restore, tab lifecycle, split/swap, restore with failed worktree kept, no-worktree refusal, active-worktree default) and `TerminalDock.test.tsx` 4/4 (tab switch, split/swap order, close-vs-hide cleanup, mode switch). Plus a ⌃` global-keys test.
+- **Verification:** `pnpm typecheck` clean; full Vitest 41 files / 316 tests pass; Rust 138 passed / 3 ignored; `pnpm test:e2e` 76/76; `./init.sh` `=== Verification Complete ===`.
+- **Review:** self-checked all 7 ACs against `.agent/tasks/m3-task-03-terminal-dock.md` (no out-of-scope Terminal screen, panes, profiles, or agents). Formal spec-reviewer PASS still pending.
+- **Next:** spec review of Task 03, then Stage 1 review gate + manual E2E spec → 🛑 Checkpoint M3.1. No commit or push.
+
+## 2026-11-08: M3 Task 02 — Shared xterm terminal pane (branch `m3-stage-1`)
+
+- **Built:** Added xterm.js `CliPane` with Fit/WebGL addons, session-filtered byte output, UTF-8 chunk continuity, keystroke forwarding, validated debounced resize, explicit exit/error state, and resource cleanup on unmount without closing the PTY.
+- **Attach/replay:** Added typed attach/detach IPC, a bounded 256 KiB output history, completed-session retention until owner cleanup, and monotonic view attachment IDs so late attach/detach requests cannot displace a newer pane. Rust regressions cover output/exit before attach, detach/reattach replay, and stale view cleanup.
+- **Review:** Spec review PASS (`.agent/reviews/m3-task-02-cli-pane-spec.md`). The review identified and drove fixes for exit-before-attach replay and overlapping mount cleanup.
+- **Verification:** `./init.sh` — `=== Verification Complete ===`; Test Files 39 passed (39), Tests 305 passed (305); Rust 138 passed, 0 failed, 3 ignored; TypeScript and Clippy clean. Generated binding drift, `cargo fmt --check`, and `git diff --check` clean.
+- **Next:** M3 Task 03 — Terminal dock. Keep the full-screen Terminal workspace and agent controls out of scope; stop after Tasks 01–03 at the Stage 1 manual checkpoint. No per-task commit.
+
+## 2026-11-08: M3 Task 01 — PTY manager and typed IPC (branch `m3-stage-1`)
+
+- **Built:** Added `portable-pty` manager with registered-worktree login-shell spawn, typed spawn/write/resize/close commands, session-scoped output/exit/error events, input/dimension/session validation, and an eight-session cap. Generated Specta bindings and added `src/ipc/pty.ts` with browser guards and focused IPC tests.
+- **Cleanup/security:** Focused security review found that killing only the shell could leave descendants running and hold the reader open. Fixed with Unix process-group termination and Windows Job Object `KILL_ON_JOB_CLOSE`; added controlled-child tests for descendant cleanup on close and manager drop. Coordinator acceptance check PASS against all seven Task 01 criteria.
+- **Verification:** `./init.sh` — `=== Verification Complete ===`; TypeScript clean; Test Files 38 passed (38), Tests 299 passed (299); Rust 135 passed, 0 failed, 3 ignored; Clippy clean. `cargo fmt --check` and `git diff --check` clean. Windows cross-build could not run because the macOS host lacks a Windows C toolchain.
+- **Next:** Task 02 — shared xterm.js `CliPane`. No per-task commit; stop after Tasks 01–03 at the Stage 1 manual checkpoint.
+
+## 2026-11-08: M3 Task 01 — PTY manager and typed IPC (branch `m3-stage-1`)
+
+- **Plan:** Created `docs/superpowers/plans/2026-11-08-m3-terminal-agents.md` with four stages and 12 tasks derived from spec §§6.5–6.6. Added the active Task 01 acceptance criteria in `.agent/tasks/m3-task-01-pty-manager.md`; future features are registered as not-started.
+- **Stage branch:** Created `m3-stage-1` from `main` at Stage 5 commit `1336afb`. No code changes yet.
+- **Baseline:** `./init.sh` passed on the unchanged `main` baseline: 37 Vitest files / 297 tests; Rust 128 passed / 3 ignored; TypeScript and Clippy clean.
+- **Next:** Implement only M3 Task 01, run targeted and full checks, review IPC/process security, then continue Stage 1 tasks in order. No commit or push.
+
 ## 2026-11-08: M2 Stage 5 Task 17 — Graph commit history diffs (branch `m2-stage-5`)
 
 - **Built:** Changed files in the selected-commit inspector are accessible buttons that open/activate commit-specific diff tabs in Graph's main editor. Tabs retain SHA/path, coexist with WIP tabs, stay read-only, and compare with the first parent (root commits against an empty tree). The new Tauri IPC validates the project, registered worktree, commit SHA, and repository-relative path; shared binary/size summaries are reused.

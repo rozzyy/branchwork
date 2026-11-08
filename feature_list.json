@@ -1,6 +1,6 @@
 {
-  "milestone": "M2 Changes, files, and editor",
-  "plan": "docs/superpowers/plans/2026-11-07-m2-changes-files-editor.md",
+  "milestone": "M3 Terminal and agents",
+  "plan": "docs/superpowers/plans/2026-11-08-m3-terminal-agents.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -745,6 +745,184 @@
       ],
       "status": "done",
       "evidence": "Implemented validated read-only commit-file-diff IPC, commit-specific Graph editor tabs, and accessible clickable inspector paths. Rust parent/root diff fixtures and Vitest tab/read-only tests pass. Code review follow-up PASS (.agent/reviews/m2-stage-5-code-review.md); security review PASS with no findings (.agent/reviews/m2-stage-5-security-review.md). ./init.sh: 37 Vitest files/297 tests passed; Rust 128 passed/3 ignored; Clippy clean. pnpm test:e2e: 76 passed. User approved Checkpoint M2.5 and ordered Stage 5 closeout; no push."
+    },
+    {
+      "id": "m3-task-01-pty-manager",
+      "stage": 13,
+      "name": "PTY manager and typed IPC",
+      "description": ".agent/tasks/m3-task-01-pty-manager.md",
+      "dependencies": [
+        "m2-task-17-graph-history-diff"
+      ],
+      "status": "done",
+      "evidence": "Coordinator acceptance check PASS against all 7 criteria. Added portable-pty manager with registered-worktree login-shell spawn, typed spawn/write/resize/close commands, session-scoped events, validation and 8-session cap, generated bindings, and typed IPC wrapper/tests. Unix process-group termination and Windows Job Object cleanup address the focused security review's MEDIUM descendant-process finding. ./init.sh: 38 Vitest files/299 tests passed; Rust 135 passed/3 ignored; TypeScript and Clippy clean. cargo fmt --check and git diff --check clean. Windows cross-build could not run on macOS because libz-sys requires a Windows C toolchain."
+    },
+    {
+      "id": "m3-task-02-cli-pane",
+      "stage": 13,
+      "name": "Shared xterm terminal pane",
+      "description": ".agent/tasks/m3-task-02-cli-pane.md",
+      "dependencies": [
+        "m3-task-01-pty-manager"
+      ],
+      "status": "done",
+      "evidence": "Implemented reusable xterm CliPane with Fit/WebGL addons, byte-preserving session-filtered output, input forwarding, validated debounced resize, visible exit/error state, and unmount cleanup without closing the PTY. Added bounded 256 KiB output-history replay and monotonic attachment leases so initial output, completed sessions, and overlapping mount cleanup remain replayable. Spec review PASS (.agent/reviews/m3-task-02-cli-pane-spec.md). ./init.sh: === Verification Complete ===; 39 Vitest files/305 tests passed; Rust 138 passed/3 ignored; TypeScript and Clippy clean. Generated binding drift, cargo fmt, and git diff checks clean."
+    },
+    {
+      "id": "m3-task-03-terminal-dock",
+      "stage": 13,
+      "name": "Terminal dock",
+      "description": ".agent/tasks/m3-task-03-terminal-dock.md",
+      "dependencies": [
+        "m3-task-02-cli-pane"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS (7/7 ACs); Stage 1 security PASS; code review PASS after 2 Important fixes (orphan-spawn cleanup, Escape scope) with regression tests + focused re-review. 41 Vitest files/320 tests; Rust 138 passed/3 ignored; typecheck+Clippy clean; e2e 76/76. Reviews in .agent/reviews/m3-task-03-spec.md, m3-stage-1-code.md, m3-stage-1-security.md; manual spec M3-S1-01..07 written. No commit; awaiting Checkpoint M3.1 approval."
+    },
+    {
+      "id": "m3-stage-1-review",
+      "stage": 13,
+      "name": "M3 Stage 1 review and manual checkpoint",
+      "description": ".agent/tasks/m3-stage-1-review.md",
+      "dependencies": [
+        "m3-task-03-terminal-dock"
+      ],
+      "status": "in-progress",
+      "evidence": "Gate work done: spec/security/code reviews PASS (reports in .agent/reviews/), ./init.sh green (41/320; Rust 138/3), e2e 76/76, manual spec M3-S1-01..07 written. Awaiting user manual test at Checkpoint M3.1; commit only on go-ahead + order."
+    },
+    {
+      "id": "m3-task-04-layout-reducer",
+      "stage": 14,
+      "name": "Terminal pane layout reducer",
+      "description": ".agent/tasks/m3-task-04-layout-reducer.md",
+      "dependencies": [
+        "m3-stage-1-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-05-terminal-screen",
+      "stage": 14,
+      "name": "Terminal screen and pane persistence",
+      "description": ".agent/tasks/m3-task-05-terminal-screen.md",
+      "dependencies": [
+        "m3-task-03-terminal-dock",
+        "m3-task-04-layout-reducer"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-stage-2-review",
+      "stage": 14,
+      "name": "M3 Stage 2 review and manual checkpoint",
+      "description": ".agent/tasks/m3-stage-2-review.md",
+      "dependencies": [
+        "m3-task-05-terminal-screen"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-06-cli-registry",
+      "stage": 15,
+      "name": "CLI registry and profile environment",
+      "description": ".agent/tasks/m3-task-06-cli-registry.md",
+      "dependencies": [
+        "m3-stage-2-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-07-profiles",
+      "stage": 15,
+      "name": "Profile and account management",
+      "description": ".agent/tasks/m3-task-07-profiles.md",
+      "dependencies": [
+        "m3-task-06-cli-registry"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-08-agent-sessions",
+      "stage": 15,
+      "name": "New Agent flow and Sessions grid",
+      "description": ".agent/tasks/m3-task-08-agent-sessions.md",
+      "dependencies": [
+        "m3-task-02-cli-pane",
+        "m3-task-07-profiles"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-09-session-status",
+      "stage": 15,
+      "name": "Session status and notifications",
+      "description": ".agent/tasks/m3-task-09-session-status.md",
+      "dependencies": [
+        "m3-task-08-agent-sessions"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-10-agent-lifecycle",
+      "stage": 15,
+      "name": "Agent lifecycle and profile switching",
+      "description": ".agent/tasks/m3-task-10-agent-lifecycle.md",
+      "dependencies": [
+        "m3-task-09-session-status"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-stage-3-review",
+      "stage": 15,
+      "name": "M3 Stage 3 review and manual checkpoint",
+      "description": ".agent/tasks/m3-stage-3-review.md",
+      "dependencies": [
+        "m3-task-10-agent-lifecycle"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-11-handover",
+      "stage": 16,
+      "name": "Agent handover",
+      "description": ".agent/tasks/m3-task-11-handover.md",
+      "dependencies": [
+        "m3-stage-3-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-12-race",
+      "stage": 16,
+      "name": "Multi-agent race",
+      "description": ".agent/tasks/m3-task-12-race.md",
+      "dependencies": [
+        "m3-task-11-handover"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-stage-4-review",
+      "stage": 16,
+      "name": "M3 Stage 4 review and manual checkpoint",
+      "description": ".agent/tasks/m3-stage-4-review.md",
+      "dependencies": [
+        "m3-task-12-race"
+      ],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

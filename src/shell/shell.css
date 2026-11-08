@@ -38,7 +38,7 @@
 .search:hover { background: var(--glass2); }
 .search .kbd { margin-left: auto; }
 .search-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.title-right { width: 78px; height: 100%; }
+.title-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .body { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 8px; min-height: 0; padding: 0 8px 8px 8px; }
 .sidebar { display: flex; flex-direction: column; min-height: 0; border-radius: 16px; background: var(--glass); box-shadow: var(--spec); overflow: hidden; }
 .side-scroll { flex: 1; overflow: auto; padding: 6px 8px 10px; display: flex; flex-direction: column; gap: 1px; }
@@ -95,6 +95,24 @@
 .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-split { font-size: 11px; color: var(--acc); }
 .side-toggle { flex: none; }
+/* Title-bar toggles mirror the prototype's round glass header buttons. */
+.dock-toggle,
+.theme-toggle {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--glass);
+  box-shadow: var(--spec);
+  font-size: 13px;
+}
+.dock-toggle:hover,
+.theme-toggle:hover { background: var(--glass2); color: var(--fg); }
+.dock-toggle.on { background: var(--accs); color: var(--fg); }
+.main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.main > .stage { flex: 1; min-height: 0; }
+.main-dock-right { flex-direction: row; }
+.main-dock-right > .stage { min-width: 0; }
 .body { transition: grid-template-columns .25s var(--spring); }
 .app[data-sidebar="collapsed"] .body { grid-template-columns: 52px minmax(0, 1fr); }
 .app[data-sidebar="collapsed"] .side-scroll, .app[data-sidebar="collapsed"] .side-foot { padding-left: 6px; padding-right: 6px; }

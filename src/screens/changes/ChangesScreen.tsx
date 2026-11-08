@@ -6,6 +6,7 @@ import { useChanges, type ChangesSelection } from "../../state/changes";
 import { useFiles } from "../../state/files";
 import { useStage } from "../../state/stage";
 import { onGitChanged } from "../../ipc/worktrees";
+import { useDock } from "../../terminal/dock";
 import { undoLast } from "../../ipc/undo";
 import type { DiffArea } from "../../ipc/diff";
 import type { CommitOptions } from "../../ipc/changes";
@@ -64,7 +65,7 @@ export function ChangesToolbar() {
           ]}
           value={dmode}
         />
-        <Button disabled title={t("changes.terminalDeferred")}>
+        <Button disabled={!activePath} onClick={() => { if (activePath) void useDock.getState().openHere(activePath); }}>
           ❯_ {t("changes.terminal")}
         </Button>
       </div>
@@ -397,6 +398,13 @@ export function ChangesView() {
       label: t("changes.stashAll"),
       icon: "⊟",
       onSelect: () => void dispatch({ type: "stash-push", options: { includeUntracked: true } }),
+    },
+    {
+      kind: "item",
+      label: t("changes.openTerminal"),
+      icon: "❯_",
+      disabled: !activePath,
+      onSelect: () => { if (activePath) void useDock.getState().openHere(activePath); },
     },
   ];
 

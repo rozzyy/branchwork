@@ -4,6 +4,7 @@ import { usePalette } from "../palette/store";
 import { useDialog } from "../ui/dialog";
 import { initialStage } from "../stage/stageModel";
 import { useSidebar } from "../state/sidebar";
+import { useDock } from "../terminal/dock";
 
 const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
 
@@ -12,6 +13,7 @@ beforeEach(() => {
   usePalette.setState({ open: false, query: "" });
   useDialog.setState({ current: null });
   useSidebar.setState({ collapsed: false });
+  useDock.setState({ open: false });
   (document.activeElement as HTMLElement | null)?.blur();
 });
 
@@ -50,4 +52,11 @@ it("⌃⇧G goes to Changes", () => {
 it("⌘B toggles the sidebar", () => {
   handleGlobalKey(key({ key: "b", metaKey: true }));
   expect(useSidebar.getState().collapsed).toBe(true);
+});
+
+it("⌃` toggles the terminal dock", () => {
+  expect(handleGlobalKey(key({ key: "`", code: "Backquote", ctrlKey: true }))).toBe(true);
+  expect(useDock.getState().open).toBe(true);
+  handleGlobalKey(key({ key: "`", code: "Backquote", ctrlKey: true }));
+  expect(useDock.getState().open).toBe(false);
 });

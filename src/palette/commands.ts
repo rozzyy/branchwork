@@ -3,10 +3,10 @@ import { t } from "../i18n/t";
 import { NUMBER_KEYS, SCREENS } from "../screens/registry";
 import { useStage } from "../state/stage";
 import { useSettings } from "../state/settings";
-import { prefersDark, resolveMode } from "../theme/theme";
 import { toast } from "../ui/toast";
 import { useSidebar } from "../state/sidebar";
 import { useWorktrees } from "../state/worktrees";
+import { useDock } from "../terminal/dock";
 import { undoLast } from "../ipc/undo";
 import { useChanges } from "../state/changes";
 import { ask } from "../ui/dialog";
@@ -80,10 +80,7 @@ export function buildCommands(): Command[] {
       group: "palette.group.appearance",
       icon: "◐",
       title: t("palette.toggleTheme"),
-      run: () => {
-        const { theme, setTheme } = useSettings.getState();
-        setTheme({ mode: resolveMode(theme.mode, prefersDark()) === "dark" ? "light" : "dark" });
-      },
+      run: () => useSettings.getState().toggleTheme(),
     },
     { id: "sidebar:toggle", group: "palette.group.appearance", icon: "◧", title: t("palette.toggleSidebar"), kbd: "⌘B", run: () => useSidebar.getState().toggle() },
   ];
@@ -103,6 +100,10 @@ export function buildCommands(): Command[] {
     { id: "open.changes", group: "palette.group.navigate", icon: "±", title: t("palette.openChanges"), run: () => stage().go("changes") },
     { id: "open.files", group: "palette.group.navigate", icon: "▤", title: t("palette.openFiles"), run: () => stage().go("files") },
     { id: "open.blame", group: "palette.group.navigate", icon: "≡", title: t("palette.openBlame"), run: () => stage().go("blame") },
+  ];
+  const terminal: Command[] = [
+    { id: "terminal.toggle", group: "palette.group.navigate", icon: "❯_", title: t("palette.toggleTerminal"), kbd: "⌃`", run: () => useDock.getState().toggle() },
+    { id: "terminal.newTab", group: "palette.group.navigate", icon: "＋", title: t("palette.newTerminalTab"), run: () => { void useDock.getState().newTab(); } },
   ];
   const git: Command[] = [
     {
@@ -127,7 +128,7 @@ export function buildCommands(): Command[] {
       run: () => { void discardAllChanges(); },
     },
   ];
-  return [...nav, ...split, ...appearance, ...open, ...git, ...undo];
+  return [...nav, ...split, ...appearance, ...open, ...terminal, ...git, ...undo];
 }
 
 export function askClaudeCommand(q: string): Command {

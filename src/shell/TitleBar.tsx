@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { t } from "../i18n/t";
+import { useSettings } from "../state/settings";
 import { useSidebar } from "../state/sidebar";
+import { useDock } from "../terminal/dock";
 import { projectsForGroup, useRepos } from "../state/repos";
 import { GroupSwitcher, GroupSwitcherAddButton } from "./GroupSwitcher";
 
@@ -44,6 +46,7 @@ function ProjectTabs() {
 }
 
 export function TitleBar() {
+  const dockOpen = useDock((s) => s.open);
   return (
     <header className="titlebar" data-tauri-drag-region>
       <div className="traffic-space" data-tauri-drag-region />
@@ -57,7 +60,25 @@ export function TitleBar() {
         <span className="search-label">{t("search.placeholder")}</span>
         <kbd className="kbd">⌘K</kbd>
       </button>
-      <div className="title-right" data-tauri-drag-region />
+      <div className="title-right" data-tauri-drag-region>
+        <button
+          className={"icon-btn dock-toggle" + (dockOpen ? " on" : "")}
+          aria-label={t("dock.toggle")}
+          aria-pressed={dockOpen ? "true" : "false"}
+          title={`${t("dock.toggle")} · ⌃\``}
+          onClick={() => useDock.getState().toggle()}
+        >
+          ❯_
+        </button>
+        <button
+          className="icon-btn theme-toggle"
+          aria-label={t("palette.toggleTheme")}
+          title={t("palette.toggleTheme")}
+          onClick={() => useSettings.getState().toggleTheme()}
+        >
+          ◐
+        </button>
+      </div>
     </header>
   );
 }

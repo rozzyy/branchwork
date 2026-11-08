@@ -8,13 +8,15 @@ import { Menu, type MenuItem } from "../ui/Menu";
 import { SCREEN_MIME } from "../stage/dnd";
 import { t } from "../i18n/t";
 import { onGitChanged, type Worktree } from "../ipc/worktrees";
+import { useDock } from "../terminal/dock";
 import { toast } from "../ui/toast";
 
 // Deterministic color stripe/dot per worktree path, picked from a small token palette.
 // Ordered so adjacent hashes don't land on near-identical hues (--acc and --blu are both blue-ish).
 const WORKTREE_COLORS = ["var(--acc)", "var(--grn)", "var(--yel)", "var(--pur)", "var(--blu)", "var(--red)"];
 
-function worktreeColor(path: string): string {
+/** Shared with the terminal dock so tabs carry the same worktree color as the sidebar. */
+export function worktreeColor(path: string): string {
   // djb2-ish hash: a plain polynomial hash clusters short, similar paths into the same bucket.
   let hash = 5381;
   for (let index = 0; index < path.length; index++) hash = ((hash * 33) ^ path.charCodeAt(index)) | 0;
@@ -286,7 +288,7 @@ function WorktreeSection() {
                       className="worktree-terminal-placeholder"
                       aria-label={t("sidebar.terminalPlaceholder")}
                       title={t("sidebar.terminalPlaceholder")}
-                      disabled
+                      onClick={() => void useDock.getState().openHere(worktree.path)}
                     >
                       ❯_
                     </button>

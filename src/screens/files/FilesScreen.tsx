@@ -21,6 +21,7 @@ import { undoLast } from "../../ipc/undo";
 import { readDiff, type DiffModel } from "../../ipc/diff";
 import { readStatus } from "../../ipc/status";
 import { onGitChanged } from "../../ipc/worktrees";
+import { useDock } from "../../terminal/dock";
 import { errorMessage } from "../../ipc/errors";
 import { rank } from "../../palette/fuzzy";
 import { DiffRenderer } from "../../diff/DiffRenderer";
@@ -129,7 +130,7 @@ export function FilesToolbar() {
           {t("files.openIn")}
         </Button>
         {openInAt && <Menu items={openInItems} onClose={() => setOpenInAt(null)} x={openInAt.x} y={openInAt.y} />}
-        <Button disabled title={t("ui.deferred_m3")}>
+        <Button disabled={!activePath} onClick={() => { if (activePath) void useDock.getState().openHere(activePath); }}>
           ❯_ {t("files.terminal")}
         </Button>
       </div>
@@ -646,9 +647,10 @@ export function FilesView() {
       kind: "item",
       label: t("files.openTerminalHere"),
       icon: "❯_",
-      disabled: true,
-      title: t("ui.deferred_m3"),
-      onSelect: () => {},
+      onSelect: () => {
+        const target = useWorktrees.getState().activePath;
+        if (target) void useDock.getState().openHere(target);
+      },
     });
     items.push({ kind: "item", label: t("files.revealInFinder"), icon: "⌘", onSelect: () => void handleReveal(path) });
     items.push({ kind: "item", label: t("files.copyPath"), icon: "⧉", onSelect: () => handleCopyPath(path) });

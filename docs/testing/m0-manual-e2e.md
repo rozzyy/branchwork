@@ -402,9 +402,7 @@ Expected:
 
 ### M1-S2-05 · Terminal affordance placeholder
 
-1. Inspect the terminal affordance beside a worktree row and try to focus it with the keyboard.
-
-Expected: it is disabled and clearly indicates that terminal integration is not available yet; no terminal is launched.
+Superseded by M3 Stage 1 below: the worktree-row terminal button now opens the Terminal dock. Use M3-S1-06 instead.
 
 ### M1 Stage 2 result
 
@@ -414,4 +412,80 @@ Expected: it is disabled and clearly indicates that terminal integration is not 
 | M1-S2-02 | | |
 | M1-S2-03 | | |
 | M1-S2-04 | | |
-| M1-S2-05 | | |
+| M1-S2-05 | | Superseded by M3-S1-06 |
+
+---
+
+## M3 Stage 1: PTY foundation and terminal dock
+
+Run the completed M0/M1 checks first as a regression check. Open a registered Git repository with at least one worktree, then exercise the dock.
+
+### M3-S1-01 · Toggle, shortcut, and session survival
+
+1. Open the dock from the title-bar ❯_ button, then hide it from its × button.
+2. Toggle it with ⌃` (Control + backquote).
+3. Start a shell tab, run `sleep 60`, hide the dock, switch screens, and reopen it.
+
+Expected:
+- The button, the shortcut, and the palette entries all toggle the dock.
+- Hiding the dock or switching screens never closes PTY sessions; the `sleep` output resumes on reopen.
+
+### M3-S1-02 · Modes, resize, and geometry persistence
+
+1. Switch through bottom, right, floating, and maximized modes.
+2. Drag-resize the bottom and right docks; drag-move and corner-resize the floating dock.
+3. Quit and relaunch Branchwork with the dock open.
+
+Expected:
+- Bottom/right docks reserve layout space; floating/maximized overlay the content.
+- Mode and size persist across relaunch.
+
+### M3-S1-03 · Tabs, worktree binding, and close
+
+1. Open a new tab with ＋ while a worktree is active.
+2. Switch between tabs and confirm each session keeps its own output.
+3. Type `exit` in a tab and confirm the tab closes by itself; end another shell abnormally (e.g. `kill -9 $$`) and confirm that tab stays with its output until you close it.
+
+Expected:
+- Each tab runs the login shell in its worktree; switching preserves sessions.
+- Closing a tab closes its PTY and removes it; a cleanly exited shell closes its own tab.
+- Abnormally ended sessions stay visible with their output and error state until explicitly closed.
+
+### M3-S1-04 · Split and swap
+
+1. With one tab open, use the split control; with two tabs, toggle the split.
+2. Use the swap control and confirm the panes exchange sides.
+3. Confirm no more than two dock panes are ever visible.
+
+### M3-S1-05 · Restore after relaunch
+
+1. Open tabs in two registered worktrees, arrange a split, quit, and relaunch.
+2. If a saved worktree is no longer registered, confirm the behavior.
+
+Expected:
+- Fresh shells start for still-registered worktrees with the saved selection and split.
+- Missing worktrees report a restore error without silently dropping the saved tab.
+
+### M3-S1-06 · Entry points
+
+1. Open the dock from each: sidebar worktree hover button, Files toolbar and file context menu, Graph context menu, Changes toolbar and ⋯ menu, palette commands.
+
+Expected: each entry opens the dock on the active (or row) worktree without launching anything else.
+
+### M3-S1-07 · Concurrent sessions (§9 target)
+
+1. Open 8 terminal tabs and run output in each (e.g. `seq 1 200`).
+
+Expected: all 8 sessions stay responsive with no dropped frames; record any lag.
+
+### M3 Stage 1 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M3-S1-01 | | |
+| M3-S1-02 | | |
+| M3-S1-03 | | |
+| M3-S1-04 | | |
+| M3-S1-05 | | |
+| M3-S1-06 | | |
+| M3-S1-07 | | 8-PTY target: ___ |

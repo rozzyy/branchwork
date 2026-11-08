@@ -12,6 +12,7 @@ import {
   type WipSummary,
 } from "../../ipc/graph";
 import { createWorktreeAtCommit, onGitChanged } from "../../ipc/worktrees";
+import { useDock } from "../../terminal/dock";
 import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
 import { useStage } from "../../state/stage";
@@ -67,7 +68,6 @@ const deferredMenuActions = [
   "graph.action.openPullRequest",
   "graph.action.diff",
   "graph.action.blame",
-  "graph.action.terminal",
   "graph.action.agent",
 ] as const;
 // ponytail: a badge letter for the known bucket a WIP file is in; not a real git status
@@ -596,6 +596,9 @@ export function GraphView() {
     { kind: "item", label: t("graph.copySha"), icon: "⧉", onSelect: () => void copySha(menu.commit.sha) },
     { kind: "item", label: t("graph.createWorktreeHere"), icon: "⌂", onSelect: () => {
       if (project) void createWorktreeFromCommit(project, menu.commit);
+    } },
+    { kind: "item", label: t("graph.action.terminal"), icon: "❯_", onSelect: () => {
+      if (activePath) void useDock.getState().openHere(activePath);
     } },
     { kind: "separator" },
     { kind: "header", label: t("graph.deferredActions") },

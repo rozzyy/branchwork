@@ -11,6 +11,14 @@ afterEach(() => {
   clearMocks();
 });
 
+it("flips between dark and light", () => {
+  useSettings.setState({ theme: { ...DEFAULT_THEME, mode: "dark" } });
+  useSettings.getState().toggleTheme();
+  expect(useSettings.getState().theme.mode).toBe("light");
+  useSettings.getState().toggleTheme();
+  expect(useSettings.getState().theme.mode).toBe("dark");
+});
+
 it("persists theme changes and restores them on load", async () => {
   useSettings.getState().setTheme({ mode: "light", accentHue: 25 });
   expect(document.documentElement.dataset.theme).toBe("light");

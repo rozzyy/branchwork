@@ -32,6 +32,7 @@ specta-typescript = "0.0.13"
 # Delete-to-Trash backend (Task 09). Pinned to the 5.3 minor line so an upstream minor bump
 # cannot change Trash behavior under us without a deliberate Cargo.toml edit.
 trash = "~5.3.0"
+portable-pty = "0.9"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -41,3 +42,9 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+[target."cfg(unix)".dependencies]
+libc = "0.2"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }

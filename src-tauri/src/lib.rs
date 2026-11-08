@@ -5,6 +5,7 @@ mod error;
 mod fs;
 mod graph;
 mod oplog;
+mod pty;
 mod repository;
 mod stage;
 mod stash;
@@ -13,6 +14,7 @@ mod store;
 mod worktree;
 
 use error::AppError;
+use pty::{PtyErrorEvent, PtyExit, PtyManager, PtyOutput, PtySession};
 use serde::Serialize;
 use std::path::Path;
 use store::{Group, Project, Store, WorktreePin};
@@ -695,6 +697,67 @@ fn file_history(
     blame::file_history(&worktree_path, &path, options)
 }
 
+#[tauri::command]
+#[specta::specta]
+fn pty_spawn(
+    store: State<'_, Store>,
+    manager: State<'_, PtyManager>,
+    app: AppHandle,
+    worktree_path: String,
+    columns: u16,
+    rows: u16,
+) -> Result<PtySession, AppError> {
+    let path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    manager.spawn(&path, columns, rows, app)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn pty_write(
+    manager: State<'_, PtyManager>,
+    session_id: String,
+    data: Vec<u8>,
+) -> Result<(), AppError> {
+    manager.write(&session_id, &data)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn pty_resize(
+    manager: State<'_, PtyManager>,
+    session_id: String,
+    columns: u16,
+    rows: u16,
+) -> Result<(), AppError> {
+    manager.resize(&session_id, columns, rows)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn pty_attach(
+    manager: State<'_, PtyManager>,
+    session_id: String,
+    attachment_id: u64,
+) -> Result<(), AppError> {
+    manager.attach(&session_id, attachment_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn pty_detach(
+    manager: State<'_, PtyManager>,
+    session_id: String,
+    attachment_id: u64,
+) -> Result<(), AppError> {
+    manager.detach(&session_id, attachment_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn pty_close(manager: State<'_, PtyManager>, session_id: String) -> Result<(), AppError> {
+    manager.close(&session_id)
+}
+
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
 // one async worker, not a blocking-threadpool thread), which frees the main thread. A true
 // `spawn_blocking` move is deferred to the cancellable-clone work (spec §7).
@@ -765,13 +828,22 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             fs_delete,
             reveal_in_finder,
             blame,
-            file_history
+            file_history,
+            pty_spawn,
+            pty_write,
+            pty_resize,
+            pty_attach,
+            pty_detach,
+            pty_close
         ])
         // `git:changed` (emitted in `run()`'s setup below) carries this payload; registering it
         // here (rather than as a tauri-specta `Event`) exports its TS type without changing how
         // it's emitted/listened to.
         .typ::<worktree::WorktreeChanged>()
         .typ::<OpDone>()
+        .typ::<PtyOutput>()
+        .typ::<PtyExit>()
+        .typ::<PtyErrorEvent>()
 }
 
 /// S3-M1: rejects any top-level webview navigation off the app's own origin. Defence in depth
@@ -818,6 +890,7 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let store = Store::open(&dir.join("app.db")).map_err(|e| e.to_string())?;
             app.manage(store);
+            app.manage(PtyManager::default());
             let app_handle = app.handle().clone();
             app.manage(worktree::WorktreeWatcher::new(move |event| {
                 if let Err(error) = app_handle.emit("git:changed", event) {

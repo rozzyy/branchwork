@@ -4,6 +4,7 @@ import { usePalette } from "../palette/store";
 import { useDialog } from "../ui/dialog";
 import { NUMBER_KEYS } from "../screens/registry";
 import { useSidebar } from "../state/sidebar";
+import { useDock } from "../terminal/dock";
 
 export function isTyping(el: Element | null): boolean {
   return !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || (el as HTMLElement).isContentEditable);
@@ -16,6 +17,7 @@ export function handleGlobalKey(e: KeyboardEvent): boolean {
   if (mod && !e.shiftKey && e.key.toLowerCase() === "b") { useSidebar.getState().toggle(); return true; }
   if (mod && e.code === "Backslash") { useStage.getState().toggleSplit(e.shiftKey ? "bottom" : "right"); return true; }
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "g") { useStage.getState().go("changes"); return true; }
+  if (e.ctrlKey && !e.metaKey && e.code === "Backquote") { useDock.getState().toggle(); return true; }
   if (mod || e.altKey || isTyping(document.activeElement)) return false;
   if (usePalette.getState().open || useDialog.getState().current) return false;
   const n = Number(e.key);

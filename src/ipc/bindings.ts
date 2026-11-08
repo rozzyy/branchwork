@@ -54,6 +54,12 @@ export const commands = {
 	revealInFinder: (worktreePath: string, path: string) => __TAURI_INVOKE<null>("reveal_in_finder", { worktreePath, path }),
 	blame: (worktreePath: string, path: string, options: BlameRequest) => __TAURI_INVOKE<BlameResult>("blame", { worktreePath, path, options }),
 	fileHistory: (worktreePath: string, path: string, options: FileHistoryRequest) => __TAURI_INVOKE<FileHistoryEntry[]>("file_history", { worktreePath, path, options }),
+	ptySpawn: (worktreePath: string, columns: number, rows: number) => __TAURI_INVOKE<PtySession>("pty_spawn", { worktreePath, columns, rows }),
+	ptyWrite: (sessionId: string, data: number[]) => __TAURI_INVOKE<null>("pty_write", { sessionId, data }),
+	ptyResize: (sessionId: string, columns: number, rows: number) => __TAURI_INVOKE<null>("pty_resize", { sessionId, columns, rows }),
+	ptyAttach: (sessionId: string, attachmentId: number) => __TAURI_INVOKE<null>("pty_attach", { sessionId, attachmentId }),
+	ptyDetach: (sessionId: string, attachmentId: number) => __TAURI_INVOKE<null>("pty_detach", { sessionId, attachmentId }),
+	ptyClose: (sessionId: string) => __TAURI_INVOKE<null>("pty_close", { sessionId }),
 };
 
 /* Types */
@@ -353,6 +359,34 @@ export type Project_Serialize = {
 	name: string,
 	localPath: string,
 	groupId: string | null,
+};
+
+export type PtyErrorEvent = {
+	sessionId: string,
+	message: string,
+};
+
+export type PtyExit = PtyExit_Serialize | PtyExit_Deserialize;
+
+export type PtyExit_Deserialize = {
+	sessionId: string,
+	exitCode?: number | null,
+	signal?: string | null,
+};
+
+export type PtyExit_Serialize = {
+	sessionId: string,
+	exitCode: number | null,
+	signal: string | null,
+};
+
+export type PtyOutput = {
+	sessionId: string,
+	data: number[],
+};
+
+export type PtySession = {
+	sessionId: string,
 };
 
 export type StashEntry = {

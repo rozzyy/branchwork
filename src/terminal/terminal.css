@@ -1,0 +1,44 @@
+.cli-pane {
+  display: flex;
+  position: relative;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surf);
+}
+
+.cli-pane-screen {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px 10px;
+  overflow: hidden;
+  background: var(--surf);
+}
+
+.cli-pane-screen .xterm {
+  height: 100%;
+}
+
+.cli-pane-screen .xterm-viewport {
+  background-color: var(--surf) !important;
+}
+
+.cli-pane-message {
+  flex: none;
+  padding: 5px 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.cli-pane-error {
+  color: var(--red);
+  background: color-mix(in oklch, var(--red) 10%, var(--surf));
+}
+
+.cli-pane-exit {
+  color: var(--fg2);
+  background: var(--s2);
+}

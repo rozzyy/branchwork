@@ -175,8 +175,7 @@ it("the context menu shows live items alongside disabled deferred ones", async (
   expect(screen.getByRole("menuitem", { name: /Rename/ })).toBeEnabled();
 
   const terminalItem = screen.getByRole("menuitem", { name: /Open terminal here/ });
-  expect(terminalItem).toBeDisabled();
-  expect(terminalItem).toHaveAttribute("title", "Available in M3 (Terminal & agents)");
+  expect(terminalItem).toBeEnabled();
 
   const agentItem = screen.getByRole("menuitem", { name: /Ask agent about this/ });
   expect(agentItem).toBeDisabled();

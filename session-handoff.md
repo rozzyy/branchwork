@@ -1,15 +1,15 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-08
-- **Current Objective:** Close Stage 5, then prepare the M3 task list
+- **Current Objective:** M3 Stage 1, Checkpoint M3.1: user manual test
 
-- **Milestone / stage:** M1 and M2 Stage 4 released. User approved manual Checkpoint M2.5 and ordered Stage 5 closeout; then prepare an M3 plan and task list before implementation.
-- **Branch:** `m2-stage-5` from `main` at v0.2.0; Stage 4 commit `300a23a`, release commit `c5e4589`.
-- **Completed task:** `m2-task-17-graph-history-diff` (`.agent/tasks/m2-task-17-graph-history-diff.md`).
+- **Milestone / stage:** M1 and M2 released through M2.5. M3 Stage 1 implementation + reviews complete (Tasks 01–03 done); stopped at the user checkpoint.
+- **Branch:** `m3-stage-1` from `main` at Stage 5 commit `1336afb`; Stage 4 commit `300a23a`, release `v0.2.0`. No push, no stage commit yet.
+- **Active task:** `m3-stage-1-review` — manual E2E M3-S1-01..07 awaiting the user (`docs/testing/m0-manual-e2e.md`).
 
 ## Recommended Next Step
 
-Create the single Stage 5 commit on `m2-stage-5`, fast-forward it into `main`, and delete the stage branch. Do not push. Then draft the M3 implementation plan and task breakdown from spec §6.5–6.6. Present the list to the user and stop before implementing M3.
+🛑 STOP — Checkpoint M3.1. The user runs the manual E2E spec (M3-S1-01..07, plus M0/M1 regression checks). On go-ahead AND an explicit commit order: make the single stage commit (Tasks 01–03) on `m3-stage-1`, then fast-forward into `main`. Never start M3 Stage 2 (Tasks 04–05) without the user's go-ahead. No push.
 
 ## M2 structure
 
@@ -17,7 +17,11 @@ Create the single Stage 5 commit on `m2-stage-5`, fast-forward it into `main`, a
 - Stage 2 — Changes screen: staging, commit variants, stashes (Tasks 05–08) → Checkpoint M2.2 ✅ committed
 - Stage 3 — Files & editor: fs IPC, File manager UI, CodeMirror (Tasks 09–11) → Checkpoint M2.3 ✅ committed `ad0ff87`
 - Stage 4 — Blame, history, oplog undo, polish, Graph WIP inspector (Tasks 12–16) → Checkpoint M2.4 ✅ committed `300a23a`; M2 release `v0.2.0`
-- Stage 5 follow-up — Graph commit history diff inspector (Task 17) → checkpoint approved; closeout ordered on `m2-stage-5`
+- Stage 5 follow-up — Graph commit history diff inspector (Task 17) → committed as `1336afb` and fast-forwarded into `main`, no push
+- M3 Stage 1 — PTY foundation and terminal dock (Tasks 01–03) → active on `m3-stage-1`; Tasks 01–02 complete
+- M3 Stage 2 — Full-screen Terminal workspace (Tasks 04–05) → not started
+- M3 Stage 3 — Agent registry and session lifecycle (Tasks 06–10) → not started
+- M3 Stage 4 — Agent workflows (Tasks 11–12) → not started
 
 ## Decisions this session (user)
 
@@ -38,3 +42,10 @@ Create the single Stage 5 commit on `m2-stage-5`, fast-forward it into `main`, a
 - M2 Stage 4's manual E2E and native memory checks remain unverified by user approval. Do not alter the v0.2.0 release; this follow-up is tracked separately. Do not push.
 - Stage 5 validation: `./init.sh` passed (37 Vitest files / 297 tests; Rust 128 passed / 3 ignored; Clippy/typecheck clean); `pnpm test:e2e` passed 76/76; `cargo fmt --check` and `git diff --check` clean. See `.agent/reviews/m2-stage-5-code-review.md`, `.agent/reviews/m2-stage-5-security-review.md`, and `.agent/reviews/m2-stage-5-e2e.md`.
 - Manual M2-S5-01 and Checkpoint M2.5 were approved by the user; Stage 5 commit and fast-forward are authorized. Do not push.
+- M3 plan: `docs/superpowers/plans/2026-11-08-m3-terminal-agents.md`; Stage 1 Task 03 is active. `./init.sh` passed before implementation (37 Vitest files / 297 tests; Rust 128 passed / 3 ignored; typecheck and Clippy clean).
+- Task 03 implementation is complete and verified: dock store + UI, 4 modes, tabs, split/swap, persistence/restore, all Stage 1 entry points. `./init.sh` green (41 Vitest files / 316 tests; Rust 138 passed / 3 ignored); `pnpm test:e2e` 76/76. Formal Task 03 spec review still pending; no commit or push.
+- Task 01 is complete: PTY manager/IPC, generated bindings, and tests are implemented. The focused security review found that killing only the shell could leave descendants alive; cleanup now kills the Unix process group or Windows Job Object. Regression tests verify descendant cleanup and reader termination.
+- `./init.sh` after Task 01: `=== Verification Complete ===`; typecheck clean; Test Files 38 passed (38), Tests 299 passed (299); Rust 135 passed, 0 failed, 3 ignored; Clippy clean. `cargo fmt --check` and `git diff --check` clean.
+- Task 02 is complete and spec-reviewed PASS. `./init.sh`: `=== Verification Complete ===`; 39 Vitest files / 305 tests; Rust 138 passed / 3 ignored; TypeScript and Clippy clean. See `.agent/reviews/m3-task-02-cli-pane-spec.md`.
+- Task 02 PTY replay retains bounded output for reattachment. Abnormally ended sessions remain until the dock owner closes them; cleanly exited shells now auto-close their tab. Task 03 must close sessions when tabs are explicitly closed and preserve sessions when the dock is merely hidden.
+- Windows cross-build remains unverified on this macOS host: `libz-sys` requires a Windows C toolchain. The Windows Job Object path is present and must receive platform CI coverage.

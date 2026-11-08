@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { TitleBar } from "./TitleBar";
 import { useRepos } from "../state/repos";
+import { useSettings } from "../state/settings";
+import { DEFAULT_THEME } from "../theme/theme";
 import type { Project } from "../ipc/catalog";
 
 const projects: Project[] = [
@@ -53,4 +55,11 @@ it("clicking the close button hides the tab and does not select it", () => {
   fireEvent.click(screen.getByRole("button", { name: "Close tab Beta" }));
   expect(Array.from(container.querySelectorAll(".project-tab")).map((tab) => tab.textContent)).toEqual(["Alpha"]);
   expect(useRepos.getState().activeProjectId).toBe("p1");
+});
+
+it("toggles the theme from the title bar", () => {
+  useSettings.setState({ theme: { ...DEFAULT_THEME, mode: "dark" } });
+  render(<TitleBar />);
+  fireEvent.click(screen.getByRole("button", { name: "Toggle dark / light" }));
+  expect(useSettings.getState().theme.mode).toBe("light");
 });
