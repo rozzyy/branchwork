@@ -1,6 +1,7 @@
 mod commit;
 mod diff;
 mod error;
+mod fs;
 mod graph;
 mod oplog;
 mod repository;
@@ -13,7 +14,7 @@ mod worktree;
 use error::AppError;
 use std::path::Path;
 use store::{Group, Project, Store, WorktreePin};
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, Manager, State, Url};
 
 fn validate_id(id: &str, kind: &str) -> Result<(), AppError> {
     if id.trim().is_empty() {
@@ -367,11 +368,7 @@ fn stash_apply(
 
 #[tauri::command(async)]
 #[specta::specta]
-fn stash_pop(
-    store: State<'_, Store>,
-    worktree_path: String,
-    index: usize,
-) -> Result<(), AppError> {
+fn stash_pop(store: State<'_, Store>, worktree_path: String, index: usize) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
     stash::stash_pop(&worktree_path, index)
 }
@@ -471,6 +468,84 @@ fn revert_hunk(
     stage::revert_hunk(&worktree_path, &path, hunk_index)
 }
 
+// Runs off the main thread: directory listings and file reads must not freeze the window.
+#[tauri::command(async)]
+#[specta::specta]
+fn fs_tree(
+    store: State<'_, Store>,
+    worktree_path: String,
+    options: fs::FsTreeOptions,
+) -> Result<fs::FsTree, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    fs::tree(&worktree_path, &options)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn fs_read(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+) -> Result<fs::FsReadResult, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    fs::read(&worktree_path, &path)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn fs_write(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    bytes: Vec<u8>,
+    expected_mtime: u64,
+) -> Result<u64, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    fs::write(&worktree_path, &path, bytes, expected_mtime)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn fs_create(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    kind: fs::FsEntryKind,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    fs::create(&worktree_path, &path, kind)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn fs_rename(
+    store: State<'_, Store>,
+    worktree_path: String,
+    from: String,
+    to: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    fs::rename(&worktree_path, &from, &to)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn fs_delete(store: State<'_, Store>, worktree_path: String, path: String) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    fs::delete(&worktree_path, &path)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn reveal_in_finder(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    fs::reveal_in_finder(&worktree_path, &path)
+}
+
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
 // one async worker, not a blocking-threadpool thread), which frees the main thread. A true
 // `spawn_blocking` move is deferred to the cancellable-clone work (spec §7).
@@ -530,12 +605,38 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             stage_hunks,
             unstage_hunks,
             stage_lines,
-            revert_hunk
+            revert_hunk,
+            fs_tree,
+            fs_read,
+            fs_write,
+            fs_create,
+            fs_rename,
+            fs_delete,
+            reveal_in_finder
         ])
         // `git:changed` (emitted in `run()`'s setup below) carries this payload; registering it
         // here (rather than as a tauri-specta `Event`) exports its TS type without changing how
         // it's emitted/listened to.
         .typ::<worktree::WorktreeChanged>()
+}
+
+/// S3-M1: rejects any top-level webview navigation off the app's own origin. Defence in depth
+/// against an untrusted `<form>`/`<area>` in a rendered Markdown README navigating the main
+/// window to an attacker page (the DOMPurify/CSP fixes close the sanitizer side of this).
+fn is_local_navigation(url: &Url) -> bool {
+    match url.scheme() {
+        // Production: the WKWebView serves the bundled app under this scheme on macOS.
+        "tauri" => url.host_str() == Some("localhost"),
+        // Windows uses this origin instead; harmless to allow on macOS too.
+        "https" => url.host_str() == Some("tauri.localhost"),
+        "http" => {
+            // Dev server only: `tauri.conf.json`'s `build.devUrl`.
+            cfg!(debug_assertions)
+                && url.host_str() == Some("localhost")
+                && url.port() == Some(1420)
+        }
+        _ => false,
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -553,6 +654,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
+                .on_navigation(|_webview, url| is_local_navigation(url))
+                .build(),
+        )
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;

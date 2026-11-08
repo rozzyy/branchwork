@@ -92,6 +92,19 @@ function unchangedLabel(count: number): string {
 // header) so an off-screen hunk reserves close to its real height instead of the old flat 240px,
 // which made the scrollbar/scrollHeight jump as hunks scrolled into view.
 const DIFF_ROW_HEIGHT_PX = 20;
+
+/** Long lines scroll sideways per hunk (`.diff-lines`) instead of wrapping: wrapping would
+ * break the fixed 20px row height the virtualizer relies on. Width = gutters + cell padding +
+ * the longest line in `ch` (tabs counted at the default `tab-size` of 8). */
+function hunkContentWidth(hunk: Hunk, mode: DiffMode): string {
+  let longest = 0;
+  for (const line of hunk.lines) {
+    let width = line.text.length;
+    for (let i = line.text.indexOf("\t"); i !== -1; i = line.text.indexOf("\t", i + 1)) width += 7;
+    if (width > longest) longest = width;
+  }
+  return mode === "split" ? `calc(104px + ${longest * 2}ch)` : `calc(88px + ${longest}ch)`;
+}
 const DIFF_HEADER_HEIGHT_PX = 30;
 const ROW_WINDOW_THRESHOLD = 240;
 const ROW_OVERSCAN_PX = 800;
@@ -407,7 +420,7 @@ export function DiffRenderer({
                         ))}
                       </div>
                     </header>
-                    <div className="diff-lines">
+                    <div className="diff-lines" style={{ "--diff-content-w": hunkContentWidth(hunk, mode) } as CSSProperties}>
                       {renderHunkRows({
                         hunk,
                         hunkIndex,

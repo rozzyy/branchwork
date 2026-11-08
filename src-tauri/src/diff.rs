@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use git2::{Diff, DiffDelta, DiffFlags, DiffOptions, ErrorCode, Oid, Patch, Repository};
+use git2::{Diff, DiffDelta, DiffFlags, DiffOptions, ErrorCode, Oid, Patch, Repository, Tree};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -16,6 +16,8 @@ type SpanRange = Option<(u32, u32)>;
 pub enum DiffArea {
     Staged,
     Unstaged,
+    /// Working tree vs HEAD, combining staged and unstaged changes for the file into one diff.
+    Head,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, specta::Type)]
@@ -89,9 +91,11 @@ pub fn read(worktree_path: &Path, file_path: &str, area: DiffArea) -> Result<Dif
     let worktree_path = worktree_path
         .canonicalize()
         .map_err(|error| AppError::io(format!("Cannot resolve worktree path: {error}")))?;
-    ensure_path_stays_in_worktree(&worktree_path, &path)?;
     let repository = Repository::open(&worktree_path)
         .map_err(|error| AppError::not_a_repo(format!("Invalid worktree: {error}")))?;
+    // Diffing a symlink shows its link text, same as staging — the leaf itself is never
+    // resolved, so a dangling or `.git`-aliasing leaf symlink does not block diffing it.
+    ensure_leaf_parent_stays_in_worktree(&worktree_path, &path, &repository)?;
 
     let mut options = DiffOptions::new();
     options
@@ -102,15 +106,7 @@ pub fn read(worktree_path: &Path, file_path: &str, area: DiffArea) -> Result<Dif
         .disable_pathspec_match(true);
     let diff = match area {
         DiffArea::Staged => {
-            let tree = match repository.head() {
-                Ok(head) => Some(head.peel_to_tree().map_err(AppError::from)?),
-                Err(error)
-                    if matches!(error.code(), ErrorCode::UnbornBranch | ErrorCode::NotFound) =>
-                {
-                    None
-                }
-                Err(error) => return Err(error.into()),
-            };
+            let tree = head_tree(&repository)?;
             repository
                 .diff_tree_to_index(tree.as_ref(), None, Some(&mut options))
                 .map_err(AppError::from)?
@@ -124,14 +120,49 @@ pub fn read(worktree_path: &Path, file_path: &str, area: DiffArea) -> Result<Dif
                 .diff_index_to_workdir(None, Some(&mut options))
                 .map_err(AppError::from)?
         }
+        DiffArea::Head => {
+            let tree = head_tree(&repository)?;
+            options
+                .include_untracked(true)
+                .recurse_untracked_dirs(true)
+                .show_untracked_content(true);
+            repository
+                .diff_tree_to_workdir_with_index(tree.as_ref(), Some(&mut options))
+                .map_err(AppError::from)?
+        }
     };
     model_from_diff(&repository, &worktree_path, &diff, file_path, area)
 }
 
-pub(crate) fn ensure_path_stays_in_worktree(root: &Path, path: &Path) -> Result<(), AppError> {
+/// `HEAD`'s tree, or `None` on an unborn/missing branch (brand-new repo with no commits yet) —
+/// shared by `Staged` and `Head`, both of which diff against it.
+fn head_tree(repository: &Repository) -> Result<Option<Tree<'_>>, AppError> {
+    match repository.head() {
+        Ok(head) => Ok(Some(head.peel_to_tree().map_err(AppError::from)?)),
+        Err(error) if matches!(error.code(), ErrorCode::UnbornBranch | ErrorCode::NotFound) => {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Resolves `root.join(path)` to its nearest existing ancestor and refuses it if that ancestor
+/// (symlinks followed) resolves outside `root`, into a `.git` path component (covers a tracked
+/// symlink alias such as `meta -> .git`), or inside the repository's gitdir(s) (covers linked
+/// worktrees and submodule gitdirs that don't literally contain a `.git` path segment).
+///
+/// Walks with `symlink_metadata` rather than `exists()`/`is_file()` so a symlink — including a
+/// dangling one whose target was deleted or never existed — counts as "the ancestor" instead of
+/// being skipped as "missing". A dangling symlink then fails `canonicalize` and is refused,
+/// rather than silently letting the walk continue past it to an unrelated parent directory.
+pub(crate) fn ensure_path_stays_in_worktree(
+    root: &Path,
+    path: &Path,
+    repository: &Repository,
+) -> Result<(), AppError> {
     let candidate = root.join(path);
     let mut existing = candidate.as_path();
-    while !existing.exists() {
+    while fs::symlink_metadata(existing).is_err() {
         existing = existing
             .parent()
             .ok_or_else(|| AppError::validation("Diff path is outside the worktree"))?;
@@ -142,6 +173,56 @@ pub(crate) fn ensure_path_stays_in_worktree(root: &Path, path: &Path) -> Result<
     if !resolved.starts_with(root) {
         return Err(AppError::validation(
             "Diff path resolves outside the worktree",
+        ));
+    }
+    reject_git_internals(root, &resolved, repository)
+}
+
+/// Same boundary and `.git` checks as `ensure_path_stays_in_worktree`, but the leaf itself is
+/// never resolved — only its parent directory chain is canonicalized and checked. Use this for
+/// operations that treat the leaf as an opaque entry rather than reading through it: index-only
+/// writes (stage/unstage/discard, which record a symlink's link text, never its target), diffing
+/// (same: a symlink's "content" is its link text), and delete / rename-`from` (the leaf itself
+/// is renamed or trashed, not followed). A dangling or `.git`-aliasing leaf symlink is legitimate
+/// here — staging a dangling symlink, or trashing a malicious `meta -> .git` link, must work.
+///
+/// Do **not** use this for anything that reads or writes through the leaf's resolved target
+/// (`fs_read`, `fs_write`, `fs_create`, `fs_rename`'s `to`, `fs_tree`, `reveal_in_finder`) — those
+/// keep the full `ensure_path_stays_in_worktree` check.
+pub(crate) fn ensure_leaf_parent_stays_in_worktree(
+    root: &Path,
+    path: &Path,
+    repository: &Repository,
+) -> Result<(), AppError> {
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => {
+            ensure_path_stays_in_worktree(root, parent, repository)
+        }
+        // The leaf lives directly in `root`, which is already canonical and known-safe.
+        _ => Ok(()),
+    }
+}
+
+fn reject_git_internals(
+    root: &Path,
+    resolved: &Path,
+    repository: &Repository,
+) -> Result<(), AppError> {
+    let relative = resolved.strip_prefix(root).unwrap_or(resolved);
+    let hits_git_component = relative
+        .components()
+        .any(|component| component.as_os_str().eq_ignore_ascii_case(".git"));
+    let gitdir = repository.path().canonicalize().ok();
+    let commondir = repository.commondir().canonicalize().ok();
+    let inside_gitdir = gitdir
+        .as_deref()
+        .is_some_and(|dir| resolved.starts_with(dir))
+        || commondir
+            .as_deref()
+            .is_some_and(|dir| resolved.starts_with(dir));
+    if hits_git_component || inside_gitdir {
+        return Err(AppError::validation(
+            "Diff path resolves inside .git and is refused",
         ));
     }
     Ok(())
@@ -204,10 +285,10 @@ fn model_from_diff(
     let patch = Patch::from_diff(diff, delta_index)
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::internal("Git diff patch is unavailable"))?;
-    // Unstaged compares index -> workdir, so the workdir file is the "new" side and worth a
-    // binary sniff. Staged compares HEAD -> index; the workdir file isn't part of that diff.
-    let working_file_binary =
-        area == DiffArea::Unstaged && working_file_is_binary(worktree_path, file_path)?;
+    // Unstaged and Head both end at the workdir file as the "new" side, so it's worth a binary
+    // sniff. Staged compares HEAD -> index; the workdir file isn't part of that diff.
+    let working_file_binary = matches!(area, DiffArea::Unstaged | DiffArea::Head)
+        && working_file_is_binary(worktree_path, file_path)?;
     if delta.flags().contains(DiffFlags::BINARY)
         || blob_is_binary(repository, &delta)?
         || working_file_binary
@@ -588,6 +669,24 @@ mod tests {
         assert!(model.truncated);
         assert!(model.hunks.is_empty());
         assert_eq!(model.bytes, 1_048_577);
+    }
+
+    #[test]
+    fn head_diff_combines_staged_and_unstaged_changes_against_head_tree() {
+        let dir = TestDir::new();
+        let _repository = init_repository(&dir.0, &[("file.txt", b"line1\n")]);
+        let repository = Repository::open(&dir.0).unwrap();
+        // Stage one change...
+        fs::write(dir.0.join("file.txt"), b"line2\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("file.txt")).unwrap();
+        index.write().unwrap();
+        // ...then leave a further unstaged change on top of it.
+        fs::write(dir.0.join("file.txt"), b"line3\n").unwrap();
+
+        let model = diff(&dir.0, "file.txt", DiffArea::Head);
+        assert_eq!(find_line(&model, DiffLineKind::Del).text, "line1");
+        assert_eq!(find_line(&model, DiffLineKind::Add).text, "line3");
     }
 
     #[test]

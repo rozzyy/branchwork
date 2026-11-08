@@ -19,8 +19,8 @@
 .diff-hunk-header code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
 .diff-hunk-header-current { box-shadow: inset 3px 0 var(--acc); }
 .diff-hunk-actions { display: flex; gap: 6px; margin-left: auto; }
-.diff-lines { display: grid; min-width: 0; }
-.diff-line { display: grid; min-width: 0; height: 20px; }
+.diff-lines { display: grid; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+.diff-line { display: grid; min-width: var(--diff-content-w, 0); height: 20px; }
 .diff-mode-split .diff-line { grid-template-columns: 44px minmax(0, 1fr) 44px minmax(0, 1fr); }
 .diff-mode-split .diff-line > :nth-child(2) { border-right: 1px solid var(--line); }
 .diff-mode-inline .diff-line { grid-template-columns: 40px 40px minmax(0, 1fr); }

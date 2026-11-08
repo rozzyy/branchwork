@@ -63,7 +63,11 @@ fn open_repository(worktree_path: &Path) -> Result<(PathBuf, Repository), AppErr
     Ok((root, repository))
 }
 
-fn validate_paths(root: &Path, paths: &[String]) -> Result<Vec<PathBuf>, AppError> {
+fn validate_paths(
+    root: &Path,
+    repository: &Repository,
+    paths: &[String],
+) -> Result<Vec<PathBuf>, AppError> {
     if paths.is_empty() {
         return Err(AppError::validation(
             "At least one repository-relative path is required",
@@ -76,7 +80,9 @@ fn validate_paths(root: &Path, paths: &[String]) -> Result<Vec<PathBuf>, AppErro
         if !seen.insert(relative.clone()) {
             return Err(AppError::validation("Paths must not contain duplicates"));
         }
-        diff::ensure_path_stays_in_worktree(root, &relative)?;
+        // Index-only writes (stage/unstage/discard) record a symlink leaf's link text and never
+        // follow it, so a dangling or `.git`-aliasing leaf symlink must not be refused here.
+        diff::ensure_leaf_parent_stays_in_worktree(root, &relative, repository)?;
         validated.push(relative);
     }
     Ok(validated)
@@ -123,7 +129,7 @@ fn remove_index_path(index: &mut Index, path: &Path) -> Result<(), AppError> {
 
 pub(crate) fn stage_paths(worktree_path: &Path, paths: &[String]) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
-    let paths = validate_paths(&root, paths)?;
+    let paths = validate_paths(&root, &repository, paths)?;
     let mut index = repository.index()?;
     for path in &paths {
         record_index_before(&repository, &index, &root, path, "stagePath")?;
@@ -169,7 +175,7 @@ fn head_index(repository: &Repository) -> Result<Index, AppError> {
 
 pub(crate) fn unstage_paths(worktree_path: &Path, paths: &[String]) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
-    let paths = validate_paths(&root, paths)?;
+    let paths = validate_paths(&root, &repository, paths)?;
     let mut index = repository.index()?;
     let head_index = head_index(&repository)?;
     for path in &paths {
@@ -186,19 +192,43 @@ pub(crate) fn unstage_paths(worktree_path: &Path, paths: &[String]) -> Result<()
     Ok(())
 }
 
-fn working_file_snapshot(root: &Path, path: &Path) -> Result<Option<Vec<u8>>, AppError> {
-    match fs::symlink_metadata(root.join(path)) {
-        Ok(metadata) if metadata.is_dir() => Err(AppError::validation(
-            "Discard paths must name files, not directories",
-        )),
-        Ok(_) => fs::read(root.join(path))
+/// S3-L1: reads a leaf's bytes without following it if it's a symlink, so a discard or an EOL
+/// sniff can't be made to read through a tracked symlink that now points outside the worktree
+/// (or at `/dev/zero`). For a symlink this is the link target text, which is also the correct
+/// "before" snapshot: `restore_blob` restores a symlink from that same text.
+fn leaf_bytes_without_following(full: &Path) -> Result<Option<Vec<u8>>, AppError> {
+    match fs::symlink_metadata(full) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            let target = fs::read_link(full)
+                .map_err(|error| AppError::io(format!("Could not read symlink target: {error}")))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::ffi::OsStrExt;
+                Ok(Some(target.as_os_str().as_bytes().to_vec()))
+            }
+            #[cfg(not(unix))]
+            Err(AppError::internal(
+                "Symlinks are not supported on this platform",
+            ))
+        }
+        Ok(_) => fs::read(full)
             .map(Some)
-            .map_err(|error| AppError::io(format!("Could not snapshot the working file: {error}"))),
+            .map_err(|error| AppError::io(format!("Could not read the working file: {error}"))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(AppError::io(format!(
             "Could not inspect the working file: {error}"
         ))),
     }
+}
+
+fn working_file_snapshot(root: &Path, path: &Path) -> Result<Option<Vec<u8>>, AppError> {
+    let full = root.join(path);
+    if matches!(fs::symlink_metadata(&full), Ok(metadata) if metadata.is_dir()) {
+        return Err(AppError::validation(
+            "Discard paths must name files, not directories",
+        ));
+    }
+    leaf_bytes_without_following(&full)
 }
 
 #[allow(dead_code)]
@@ -215,7 +245,7 @@ pub(crate) fn discard_paths(
     discard_untracked: bool,
 ) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
-    let paths = validate_paths(&root, paths)?;
+    let paths = validate_paths(&root, &repository, paths)?;
     let index = repository.index()?;
     let head_index = head_index(&repository)?;
     let mut targets = Vec::with_capacity(paths.len());
@@ -265,7 +295,10 @@ fn restore_blob(
         fs::create_dir_all(parent)
             .map_err(|error| AppError::io(format!("Could not create parent directory: {error}")))?;
     }
-    diff::ensure_path_stays_in_worktree(root, path)?;
+    // Discard replaces whatever sits at this exact leaf (remove, then rewrite from the git
+    // blob) without reading through it first, so a dangling or `.git`-aliasing leaf symlink
+    // must not be refused here.
+    diff::ensure_leaf_parent_stays_in_worktree(root, path, repository)?;
     match fs::symlink_metadata(&full_path) {
         Ok(metadata) if metadata.is_dir() => {
             return Err(AppError::validation(
@@ -341,11 +374,13 @@ fn validate_hunks(model: &DiffModel, indices: &[usize]) -> Result<Vec<usize>, Ap
 
 fn validate_diff_file(
     root: &Path,
+    repository: &Repository,
     path: &str,
     area: DiffArea,
 ) -> Result<(PathBuf, DiffModel), AppError> {
     let relative = diff::validate_file_path(path)?;
-    diff::ensure_path_stays_in_worktree(root, &relative)?;
+    // Hunk/line staging and revert are index-only writes, same as `validate_paths` above.
+    diff::ensure_leaf_parent_stays_in_worktree(root, &relative, repository)?;
     let model = diff::read(root, path, area)?;
     Ok((relative, model))
 }
@@ -357,15 +392,7 @@ fn eol_for_patch(
     area: DiffArea,
 ) -> Result<&'static str, AppError> {
     let bytes = if area == DiffArea::Unstaged {
-        match fs::read(root.join(path)) {
-            Ok(bytes) => Some(bytes),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => {
-                return Err(AppError::io(format!(
-                    "Could not inspect line endings for patch: {error}"
-                )));
-            }
-        }
+        leaf_bytes_without_following(&root.join(path))?
     } else {
         None
     };
@@ -568,7 +595,7 @@ pub(crate) fn stage_hunks(
         return Err(AppError::validation("Only unstaged hunks can be staged"));
     }
     let (root, repository) = open_repository(worktree_path)?;
-    let (relative, model) = validate_diff_file(&root, path, area)?;
+    let (relative, model) = validate_diff_file(&root, &repository, path, area)?;
     let indices = validate_hunks(&model, hunk_indices)?;
     if indices.len() == model.hunks.len() {
         return stage_paths(&root, &[path.to_owned()]);
@@ -586,7 +613,7 @@ pub(crate) fn unstage_hunks(
     hunk_indices: &[usize],
 ) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
-    let (relative, model) = validate_diff_file(&root, path, DiffArea::Staged)?;
+    let (relative, model) = validate_diff_file(&root, &repository, path, DiffArea::Staged)?;
     let indices = validate_hunks(&model, hunk_indices)?;
     if indices.len() == model.hunks.len() {
         return unstage_paths(&root, &[path.to_owned()]);
@@ -605,7 +632,7 @@ pub(crate) fn stage_lines(
     area: DiffArea,
 ) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
-    let (relative, model) = validate_diff_file(&root, path, area)?;
+    let (relative, model) = validate_diff_file(&root, &repository, path, area)?;
     let selected = parse_line_ids(&model, line_ids)?;
     let eol = eol_for_patch(&root, &repository, &relative, area)?;
     let patch = selected_line_patch(path, &model, &selected, eol);
@@ -620,7 +647,7 @@ pub(crate) fn revert_hunk(
     hunk_index: usize,
 ) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
-    let (relative, model) = validate_diff_file(&root, path, DiffArea::Unstaged)?;
+    let (relative, model) = validate_diff_file(&root, &repository, path, DiffArea::Unstaged)?;
     let indices = validate_hunks(&model, &[hunk_index])?;
     let eol = eol_for_patch(&root, &repository, &relative, DiffArea::Unstaged)?;
     let patch = hunk_patch(path, &model, &indices, eol);
@@ -722,6 +749,44 @@ mod tests {
                 .count(),
             3
         );
+    }
+
+    #[test]
+    fn stages_a_committed_symlink_that_has_since_gone_dangling() {
+        use std::os::unix::fs::symlink;
+        let temp = TestDir::new();
+        let repository = init_repository(&temp.0, &[("target.txt", b"content\n")]);
+        symlink("target.txt", temp.0.join("link")).unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("link")).unwrap();
+        let tree_id = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("Branchwork test", "test@example.com").unwrap();
+        let parent = repository.head().unwrap().peel_to_commit().unwrap();
+        repository
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "commit symlink",
+                &tree,
+                &[&parent],
+            )
+            .unwrap();
+        drop(tree);
+        drop(parent);
+
+        // The symlink's target is gone and its link text is repointed at another missing name,
+        // so `link` is now dangling and there is a real change to stage. The stricter validator
+        // must not refuse this: index writes record a symlink's link text and never follow it.
+        fs::remove_file(temp.0.join("target.txt")).unwrap();
+        fs::remove_file(temp.0.join("link")).unwrap();
+        symlink("missing.txt", temp.0.join("link")).unwrap();
+
+        stage_paths(&temp.0, &lines("link")).unwrap();
+
+        assert_eq!(content(&repository, "link"), Some(b"missing.txt".to_vec()));
     }
 
     #[test]
@@ -933,6 +998,59 @@ mod tests {
             json!([97, 102, 116, 101, 114, 10])
         );
         assert_eq!(content(&repository, "file.txt"), Some(b"before\n".to_vec()));
+    }
+
+    #[test]
+    fn discarding_a_symlink_repointed_outside_the_worktree_snapshots_the_link_text_not_the_outside_file()
+     {
+        use std::os::unix::fs::symlink;
+        let temp = TestDir::new();
+        let repository = init_repository(&temp.0, &[("target.txt", b"content\n")]);
+        symlink("target.txt", temp.0.join("link")).unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("link")).unwrap();
+        let tree_id = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("Branchwork test", "test@example.com").unwrap();
+        let parent = repository.head().unwrap().peel_to_commit().unwrap();
+        repository
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "commit symlink",
+                &tree,
+                &[&parent],
+            )
+            .unwrap();
+        drop(tree);
+        drop(parent);
+
+        // S3-L1: `link` now points at a file outside the worktree. Discard must snapshot the
+        // link's own text ("/outside/secret"), never the bytes of the file it points to.
+        let outside = std::env::temp_dir().join(format!(
+            "branchwork-m2-stage-outside-{}",
+            std::process::id()
+        ));
+        fs::write(&outside, b"TOP-SECRET-OUTSIDE").unwrap();
+        fs::remove_file(temp.0.join("link")).unwrap();
+        symlink(&outside, temp.0.join("link")).unwrap();
+
+        discard_paths(&temp.0, &lines("link"), false).unwrap();
+
+        let canonical = temp.0.canonicalize().unwrap();
+        let entry = oplog::entries_for(&canonical)
+            .into_iter()
+            .find(|entry| entry.operation == "discardPath")
+            .unwrap();
+        use std::os::unix::ffi::OsStrExt;
+        let expected_link_text: Vec<u8> = outside.as_os_str().as_bytes().to_vec();
+        assert_eq!(
+            entry.payload["beforeWorkingTree"],
+            serde_json::to_value(&expected_link_text).unwrap()
+        );
+        let _ = fs::remove_file(&outside);
     }
 
     #[test]

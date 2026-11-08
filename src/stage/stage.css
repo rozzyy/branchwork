@@ -12,6 +12,11 @@
 .stage.split-v { grid-template-rows: minmax(0, calc((100% - 8px) * var(--r))) 8px minmax(0, 1fr); }
 .pane.focus { box-shadow: var(--spec), 0 0 0 1.5px color-mix(in oklch, var(--acc) 70%, transparent), 0 10px 40px -20px var(--acc); }
 .pane-ctl { display: flex; gap: 2px; margin-left: auto; padding-left: 8px; }
+/* When the toolbar already has its own right-aligned action group (prototype's `.acts`), that
+ * group's own auto margin does the push — giving pane-ctl auto margin too would split the free
+ * space between both, leaving a gap between the actions and the split control instead of flush
+ * against it (prototype's `.acts ~ .pctl`). */
+.pane-actions ~ .pane-ctl { margin-left: 8px; border-left: 1px solid var(--line); }
 .divider { position: relative; cursor: col-resize; }
 .split-v .divider { cursor: row-resize; }
 .divider::after { content: ""; position: absolute; inset: 0; margin: auto; width: 3px; height: 44px; border-radius: 2px; background: var(--line2); transition: all .2s var(--spring); }

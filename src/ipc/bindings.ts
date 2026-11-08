@@ -43,6 +43,13 @@ export const commands = {
 	unstageHunks: (worktreePath: string, path: string, hunkIndices: number[]) => __TAURI_INVOKE<null>("unstage_hunks", { worktreePath, path, hunkIndices }),
 	stageLines: (worktreePath: string, path: string, lineIds: string[], area: DiffArea) => __TAURI_INVOKE<null>("stage_lines", { worktreePath, path, lineIds, area }),
 	revertHunk: (worktreePath: string, path: string, hunkIndex: number) => __TAURI_INVOKE<null>("revert_hunk", { worktreePath, path, hunkIndex }),
+	fsTree: (worktreePath: string, options: FsTreeOptions) => __TAURI_INVOKE<FsTree_Serialize>("fs_tree", { worktreePath, options }),
+	fsRead: (worktreePath: string, path: string) => __TAURI_INVOKE<FsReadResult>("fs_read", { worktreePath, path }),
+	fsWrite: (worktreePath: string, path: string, bytes: number[], expectedMtime: number) => __TAURI_INVOKE<number>("fs_write", { worktreePath, path, bytes, expectedMtime }),
+	fsCreate: (worktreePath: string, path: string, kind: FsEntryKind) => __TAURI_INVOKE<null>("fs_create", { worktreePath, path, kind }),
+	fsRename: (worktreePath: string, from: string, to: string) => __TAURI_INVOKE<null>("fs_rename", { worktreePath, from, to }),
+	fsDelete: (worktreePath: string, path: string) => __TAURI_INVOKE<null>("fs_delete", { worktreePath, path }),
+	revealInFinder: (worktreePath: string, path: string) => __TAURI_INVOKE<null>("reveal_in_finder", { worktreePath, path }),
 };
 
 /* Types */
@@ -68,7 +75,9 @@ export type CommitOptions = {
 	stageAll: boolean,
 };
 
-export type DiffArea = "staged" | "unstaged";
+export type DiffArea = "staged" | "unstaged" | 
+/**  Working tree vs HEAD, combining staged and unstaged changes for the file into one diff. */
+"head";
 
 export type DiffLine = DiffLine_Serialize | DiffLine_Deserialize;
 
@@ -111,6 +120,52 @@ export type DiffModel_Serialize = {
  *  for input validation, stale-write detection and unknown-id lookups.
  */
 export type ErrorKind = "gitConflict" | "gitAuth" | "gitHook" | "notARepo" | "network" | "rateLimited" | "ptySpawn" | "cliMissing" | "profileAuth" | "io" | "internal" | "validation" | "conflict" | "notFound";
+
+export type FsEncoding = "utf-8" | "utf-16" | "binary";
+
+export type FsEntry = FsEntry_Serialize | FsEntry_Deserialize;
+
+export type FsEntryKind = "file" | "folder";
+
+export type FsEntry_Deserialize = {
+	name: string,
+	isDir: boolean,
+	status?: string | null,
+	size: number,
+	mtime: number,
+};
+
+export type FsEntry_Serialize = {
+	name: string,
+	isDir: boolean,
+	status: string | null,
+	size: number,
+	mtime: number,
+};
+
+export type FsEol = "LF" | "CRLF" | "MIXED";
+
+export type FsReadResult = {
+	bytes: number[],
+	encoding: FsEncoding,
+	eol: FsEol,
+	mtime: number,
+};
+
+export type FsTree = FsTree_Serialize | FsTree_Deserialize;
+
+export type FsTreeOptions = {
+	path: string,
+	showIgnored: boolean,
+};
+
+export type FsTree_Deserialize = {
+	entries: FsEntry_Deserialize[],
+};
+
+export type FsTree_Serialize = {
+	entries: FsEntry_Serialize[],
+};
 
 export type GraphCommit = GraphCommit_Serialize | GraphCommit_Deserialize;
 

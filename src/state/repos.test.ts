@@ -13,6 +13,7 @@ import {
 } from "../ipc/catalog";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { useStage } from "./stage";
+import { useFiles } from "./files";
 import { initialStage } from "../stage/stageModel";
 import { useToasts } from "../ui/toast";
 
@@ -300,4 +301,18 @@ it("deleteGroup leaves state untouched and toasts on failure", async () => {
   expect(useRepos.getState().groups).toEqual(groups);
   expect(useRepos.getState().projects).toEqual(projects);
   expect(useToasts.getState().toasts).toHaveLength(1);
+});
+
+it("refuses to change the active project while an editor buffer is dirty (R7)", () => {
+  useRepos.setState({ groups, projects, status: "ready", activeProjectId: "p1", openProjectIds: ["p1", "p3"] });
+  useFiles.setState({ dirty: { "a.ts": true } });
+
+  useRepos.getState().selectProject("p3");
+  useRepos.getState().closeTab("p1");
+  expect(useRepos.getState().activeProjectId).toBe("p1");
+  expect(useRepos.getState().openProjectIds).toEqual(["p1", "p3"]);
+
+  useFiles.setState({ dirty: {} });
+  useRepos.getState().selectProject("p3");
+  expect(useRepos.getState().activeProjectId).toBe("p3");
 });

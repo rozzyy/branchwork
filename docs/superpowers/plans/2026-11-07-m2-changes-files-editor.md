@@ -35,7 +35,7 @@ Make local edits first-class: inspect the working-tree status with a shared diff
 Each has a recommended default so planning can proceed. Confirm these at the first Stage 1 review.
 
 1. **Discard backup mechanism.** Spec §7 says "content is stashed or copied before discard". Options: (a) write a per-file blob into the oplog SQLite row (cheap; no Git state mutation); (b) stash onto a dedicated `refs/branchwork/discard-backup` ref (richer; survives app reinstall). **Default: (a)**, because it keeps undo scoped to one process, matches M1's oplog expectations in §3.4, and avoids surprising the user's stash list. Revisit in Stage 2 if it fails any acceptance case. **✅ Resolved 2026-11-07 (user): (a) oplog blob.**
-2. **Trash integration crate.** Options: (a) `trash` crate 3.x (cross-platform, used by many Tauri apps); (b) Objective-C FFI to `NSWorkspace.recycle`. **Default: (a)**, because it keeps the Rust surface small and is already macOS-10.13-safe. Pin the version and add it as an allowed dependency.
+2. **Trash integration crate.** Options: (a) `trash` crate 3.x (cross-platform, used by many Tauri apps); (b) Objective-C FFI to `NSWorkspace.recycle`. **Default: (a)**, because it keeps the Rust surface small and is already macOS-10.13-safe. Pin the version and add it as an allowed dependency. **✅ Implemented 2026-11-08: (a) `trash` crate, pinned `~5.3.0` (Cargo.lock 5.3.0 with checksum; 5.x is the current line, 3.x was outdated). Confirmed by user 2026-11-08.**
 3. **External file-system changes while editing.** Spec §6.4 requires a reload banner when the file is dirty and silent reload when clean. Two watch sources: the M1 `git:changed` debounced watcher (already emitted per worktree), and `notify` on each open editor file. **Default:** reuse the M1 `git:changed` payload plus a lightweight mtime check when the editor regains focus; do not spin up a per-file watcher in M2. If users report lag, add a per-file watcher in M3. **✅ Resolved 2026-11-07 (user): reuse `git:changed` + focus mtime check.**
 4. **Line-level staging patch synthesis.** `git apply --cached` with a hand-built patch is the spec's chosen path. The alternative is to update the index entry in Rust (`git2::Index::add_frombuffer`). **Default:** `git apply --cached --unidiff-zero --whitespace=nowarn` with argument arrays, in the isolated-config pattern. The Rust-only path is faster but harder to keep correct across renames and permission changes; defer it.
 5. **Blame scope for v1.** Spec §6.4 Blame shows age, author, message, heat stripe, consecutive-line collapse, and links to PR. **Default:** ship everything except the PR link (M4). Ship the "View commit" link to the Graph screen using the M1 inspector.
@@ -131,7 +131,7 @@ Add Rust IPC: `commit({ worktree, message, amend, stage_all })`, `commit_and_pus
 - [x] `./init.sh` — Test Files 28 passed (28), Tests 186 passed (186), Rust 78 passed/0 failed/2 ignored; Clippy and `cargo fmt --check` clean.
 - Commit step _(skipped: no-commit rule)_.
 
-### Task 08 — Stashes
+### Task 08 — Stashes ✅
 
 Add Rust IPC: `stash_list(worktree)`, `stash_push(worktree, { message?, include_untracked })`, `stash_apply(worktree, index)`, `stash_pop(worktree, index)`, `stash_drop(worktree, index)`. `stash_push` uses `git stash push` with argument arrays; the others use `git stash` subcommands similarly. `stash_drop` records the dropped stash's ref SHA in the oplog so `undo_last` can `git stash apply <sha>` to recover. Add the Stashes section to the Changes screen with apply/pop/drop and a stash-all entry in the ⋯ menu.
 
@@ -143,15 +143,15 @@ Add Rust IPC: `stash_list(worktree)`, `stash_push(worktree, { message?, include_
 
 ## Stage 3: Files & editor
 
-### Task 09 — Filesystem IPC
+### Task 09 — Filesystem IPC ✅
 
-Add Rust IPC: `fs_tree(worktree, { show_ignored })` returning a lazy tree (direct children per expanded node; the frontend expands on click) with Git status letters joined in from the `status` read model; `fs_read(worktree, path)` returning bytes + detected encoding + EOL; `fs_write(worktree, path, bytes, expected_mtime)` with optimistic-concurrency rejection on mtime mismatch; `fs_create(worktree, path, kind)` (file or folder); `fs_rename(worktree, from, to)`; `fs_delete(worktree, path)` sending to the macOS Trash via the `trash` crate; `reveal_in_finder(absolute_path)` invoking `open -R` with the absolute path (argument array). Gitignore matching uses `git2::Repository::is_path_ignored`. Every path is resolved and refused if it escapes the active worktree or points under `.git/`.
+Add Rust IPC: `fs_tree(worktree, { show_ignored })` returning a lazy tree (direct children per expanded node; the frontend expands on click) with Git status letters joined in from the `status` read model; `fs_read(worktree, path)` returning bytes + detected encoding + EOL; `fs_write(worktree, path, bytes, expected_mtime)` with optimistic-concurrency rejection on mtime mismatch; `fs_create(worktree, path, kind)` (file or folder); `fs_rename(worktree, from, to)`; `fs_delete(worktree, path)` sending to the macOS Trash via the `trash` crate; `reveal_in_finder(worktree, path)` resolving the path inside the worktree, then invoking `open -R` with the absolute path (argument array). Gitignore matching uses `git2::Repository::is_path_ignored`. Every path is resolved and refused if it escapes the active worktree or points under `.git/`.
 
 **Tests:** temporary-repository Rust tests for tree listing (including the ignored-toggle), read/write round-trip with mtime guard, create, rename, delete to Trash (asserts the file is gone and the Trash contains the inode on macOS CI — fall back to asserting the `trash` call shape if macOS CI is unavailable), path-escape refusal.
 
 **Security-relevant surfaces:** filesystem writes, delete-to-Trash, `open -R` with a validated absolute path. New Tauri capabilities: none beyond what M1 exposes; the frontend still goes through typed IPC.
 
-### Task 10 — File manager UI
+### Task 10 — File manager UI ✅
 
 Replace the Files placeholder with the two-column layout: left side worktree selector, fuzzy file search (`⌘P`, reuse the M0 fuzzy ranker), Open Editors list, project tree with Git status letters + dirty dots, show-ignored toggle, context menu limited to M2 actions (New file, New folder, Rename F2, Duplicate, Delete-to-Trash confirmed, Reveal in Finder, Copy path, Blame, File history, Discard changes). Disabled-with-tooltip for "Open terminal here" (`deferred_m3`), "Ask agent about this" (`deferred_m3`). Right side is the editor host (Task 11). Double-click on a Changes file row (from Stage 2) opens here. The ⌘P search uses the same `fuzzyRank` as the palette and walks the current fs-tree worktree.
 
@@ -159,7 +159,7 @@ Replace the Files placeholder with the two-column layout: left side worktree sel
 
 **Security-relevant surfaces:** none beyond consuming the new IPC.
 
-### Task 11 — CodeMirror editor
+### Task 11 — CodeMirror editor ✅
 
 Add `src/editor/` with a CodeMirror 6 editor host: tabs (bound to `src/state/files.ts` open-editors list), dirty indicator, breadcrumbs, Git gutter (added / modified / deleted markers computed from the `DiffModel` for that file against HEAD), bracket matching + auto-close, status bar (Ln/Col, selection, Spaces/Tabs, UTF-8, LF/CRLF, language, branch from M1 worktree store). Language modes: TS/JS/JSX/TSX, JSON, Markdown, CSS, HTML, Rust, Go, Python, YAML, TOML — using `@codemirror/lang-*` packages. ⌘S saves via `fs_write` with the editor's remembered mtime (optimistic concurrency; on mismatch surface the external-change banner). **Diff vs HEAD** toggles the editor out for the shared diff renderer. External-change banner (silent reload on clean; "Reload / Keep mine / Compare" on dirty) triggered by `git:changed` events plus an mtime check on focus. **Open in Finder** button wires to `reveal_in_finder`. The `Open in VS Code / Cursor / Zed` menu is omitted; a tooltipped `Open in` button renders only `Finder` and a `deferred_m4` entry.
 
@@ -167,7 +167,7 @@ Add `src/editor/` with a CodeMirror 6 editor host: tabs (bound to `src/state/fil
 
 **Security-relevant surfaces:** CodeMirror is a known dependency; new npm packages (`codemirror`, `@codemirror/lang-*`) land in a single pin set. No remote fetches at runtime. Keep `vite-plugin-pwa` and dynamic-import semantics as M1 left them.
 
-**Stage 3 gate.** `./init.sh`; full Playwright E2E including a `files.spec.ts`; `code-reviewer`; `security-reviewer` (fs writes, `open -R`, Trash, mtime guard); §9 perf check for cold start (<1.5 s) and editor load for a 5 000-line TS file (first paint target: under 150 ms after `fs_read` resolve, documented as a non-§9 note); updated `docs/testing/m2-manual-e2e.md` Stage 3 section. 🛑 **Manual Checkpoint M2.3.**
+**Stage 3 gate.** ✅ (reviews passed 2026-11-08; awaiting manual checkpoint) `./init.sh`; full Playwright E2E including a `files.spec.ts`; `code-reviewer`; `security-reviewer` (fs writes, `open -R`, Trash, mtime guard); §9 perf check for cold start (<1.5 s) and editor load for a 5 000-line TS file (first paint target: under 150 ms after `fs_read` resolve, documented as a non-§9 note); updated `docs/testing/m2-manual-e2e.md` Stage 3 section. 🛑 **Manual Checkpoint M2.3.**
 
 ## Stage 4: Blame, history, and oplog undo
 

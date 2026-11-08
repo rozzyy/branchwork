@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export type MenuItem =
-  | { kind: "item"; label: string; icon?: string; kbd?: string; danger?: boolean; disabled?: boolean; onSelect(): void; extra?: ReactNode }
+  | { kind: "item"; label: string; icon?: string; kbd?: string; danger?: boolean; disabled?: boolean; title?: string; onSelect(): void; extra?: ReactNode }
   | { kind: "separator" }
   | { kind: "header"; label: string }
   | { kind: "note"; label: string };
@@ -38,6 +38,7 @@ export function Menu({ x, y, items, onClose, width = 240 }: { x: number; y: numb
             role="menuitem"
             className={"menu-item" + (it.danger ? " danger" : "")}
             disabled={it.disabled}
+            title={it.title}
             onClick={() => { onClose(); it.onSelect(); }}
           >
             {it.icon && <span className="menu-ic" aria-hidden>{it.icon}</span>}

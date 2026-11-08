@@ -62,10 +62,7 @@ fn branch_from_message(message: &str) -> String {
         .to_owned()
 }
 
-fn read_stashes(
-    _root: &Path,
-    repository: &git2::Repository,
-) -> Result<Vec<StashEntry>, AppError> {
+fn read_stashes(_root: &Path, repository: &git2::Repository) -> Result<Vec<StashEntry>, AppError> {
     let reflog = match repository.reflog("refs/stash") {
         Ok(reflog) => reflog,
         Err(error) if error.code() == git2::ErrorCode::NotFound => return Ok(Vec::new()),
@@ -94,10 +91,7 @@ pub(crate) fn stash_list(worktree_path: &Path) -> Result<Vec<StashEntry>, AppErr
     read_stashes(&root, &repository)
 }
 
-pub(crate) fn stash_push(
-    worktree_path: &Path,
-    options: &StashPushOptions,
-) -> Result<(), AppError> {
+pub(crate) fn stash_push(worktree_path: &Path, options: &StashPushOptions) -> Result<(), AppError> {
     let (root, _) = open_worktree(worktree_path)?;
     let mut args: Vec<OsString> = vec!["stash".into(), "push".into()];
     if let Some(message) = options
@@ -291,11 +285,10 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].index, 0);
         assert!(entries[0].message.contains("one"));
-        let branch = String::from_utf8_lossy(
-            &git(&temp.0, &["rev-parse", "--abbrev-ref", "HEAD"]).stdout,
-        )
-        .trim()
-        .to_owned();
+        let branch =
+            String::from_utf8_lossy(&git(&temp.0, &["rev-parse", "--abbrev-ref", "HEAD"]).stdout)
+                .trim()
+                .to_owned();
         assert_eq!(entries[0].branch, branch);
         assert!(entries[0].time > 0);
     }
@@ -365,11 +358,12 @@ mod tests {
             .find(|entry| entry.operation == "stash_drop")
             .expect("stash_drop oplog row");
         assert_eq!(entry.payload["sha"], sha);
-        assert!(entry
-            .payload["message"]
-            .as_str()
-            .unwrap()
-            .contains("drop-me"));
+        assert!(
+            entry.payload["message"]
+                .as_str()
+                .unwrap()
+                .contains("drop-me")
+        );
         assert!(entry.payload["time"].as_i64().unwrap() > 0);
     }
 

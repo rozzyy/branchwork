@@ -611,8 +611,8 @@
       "dependencies": [
         "m2-task-07"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Stash list/push/apply/pop/drop IPC (git2 reflog list; git stash argument arrays; drop records SHA in oplog) and Stashes section with row actions, Stash All, drop Undo toast. Committed in 1a71e1b (Checkpoint M2.2)."
     },
     {
       "id": "m2-stage-2-review",
@@ -622,8 +622,8 @@
       "dependencies": [
         "m2-task-08"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Code review APPROVE WITH NITS (.agent/reviews/m2-stage-2-code.md); security APPROVE (.agent/reviews/m2-stage-2-security.md); status::read 10k files median 72.7 ms < 200 ms; e2e 70/70; manual doc M2-S2-01..16. Committed 1a71e1b. Follow-up 9ff1188: sidebar flicker fix + bindings regen; ./init.sh Test Files 29 passed (29), Tests 194 passed (194), Rust 84 passed 0 failed 3 ignored."
     },
     {
       "id": "m2-task-09",
@@ -633,8 +633,8 @@
       "dependencies": [
         "m2-stage-2-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "fs_tree/fs_read/fs_write/fs_create/fs_rename/fs_delete/reveal_in_finder IPC in src-tauri/src/fs.rs; trash ~5.3.0; src/ipc/fs.ts + contract test. Spec review PASS after fix (rename oplog inverse) (.agent/reviews/m2-task-09-spec.md). Security APPROVE WITH FIXES -> re-review Clear: H1 .git symlink alias, M1 dangling-symlink write, L1 reveal bound to worktree, L3 non-regular files, L5 ms mtime fixed in shared validator diff.rs; leaf-not-followed variant for index/delete/rename-from; L2 (oplog blob cap) -> Task 14, L4 TOCTOU deferred (.agent/reviews/m2-task-09-security.md). stash.rs cargo fmt (formatting only, coordinator) for AC-6. ./init.sh: Test Files 30 passed (30); Tests 196 passed (196); Rust 95 passed, 0 failed, 3 ignored; Clippy clean; cargo fmt --check clean."
     },
     {
       "id": "m2-task-10",
@@ -644,8 +644,8 @@
       "dependencies": [
         "m2-task-09"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Files screen (src/screens/files/FilesScreen.tsx, files.css), src/state/files.ts, EditorHost placeholder, views.tsx wired; ⌘P via palette fuzzy rank; context menu with deferred items disabled (ui.deferred_m3/m4). Prototype parity fixes: disabled Terminal button, folder change dots, shared toolbar alignment fix (.pane-actions ~ .pane-ctl, also fixes Changes). Spec review FAIL (title, folder rename) -> PASS (.agent/reviews/m2-task-10-spec.md). Deviation: Rename shown for folders (prototype hides it) per AC-3. Screenshots .agent/reviews/m2-task-10-ui*.png. ./init.sh: Test Files 31 passed (31); Tests 202 passed (202); Rust 95 passed, 0 failed, 3 ignored."
     },
     {
       "id": "m2-task-11",
@@ -655,8 +655,8 @@
       "dependencies": [
         "m2-task-10"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "src/editor/ (CodeMirrorEditor lazy-loaded via EditorHost dynamic import, languages, gutter w/ staged fallback, indentation detect, theme), DiffArea::Head in diff.rs for true Diff vs HEAD, external-change re-read of all open files + parked banner for background dirty tabs, Markdown preview (user request; marked+DOMPurify, links rel=noopener, no webview nav). e2e/m2-stage3-editor.spec.ts. Bundle: main-entry JS gzip 101.88 -> 105.98 KB (+4.10 KB); CodeMirror chunk 309.78 KB gzip separate. Spec review FAIL (8 missing, 2 misread) -> FAIL (AC-7 bg tab) -> PASS (.agent/reviews/m2-task-11-spec-review.md). Stage-gate fixes: binary/non-UTF-8 read-only, buffers in files store keyed by worktree+path (unsaved edits survive navigation, split panes share), CRLF preserved, app edits annotated (no false dirty), discard via dirty dot. ./init.sh at task PASS: Tests 253 passed; at stage gate: 271 passed, Rust 100 passed."
     },
     {
       "id": "m2-stage-3-review",
@@ -666,8 +666,8 @@
       "dependencies": [
         "m2-task-11"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Gate fixes landed; awaiting user Checkpoint M2.3 before the stage commit. Code review REQUEST CHANGES x3 -> APPROVE WITH NITS (.agent/reviews/m2-stage-3-code-review.md); security FAIL (Medium sanitizer, Low symlink/atomic write) -> FAIL (High temp-file symlink) -> PASS (.agent/reviews/m2-stage-3-security-review.md); e2e PASS (.agent/reviews/m2-stage-3-e2e.md, e2e/files.spec.ts). User decisions: trash 5.3.0 OK; lazy file tree now (I7/R4 fixed). User requests in-stage: diff long lines scroll horizontally per hunk; sidebar grouped Workspace/Code/AI/GitHub (Inbox stays in Workspace). Bundle: main JS gzip 101.88 -> 105.98 KB (+4.10), CodeMirror chunk 309.8 KB gzip lazy. Editor first paint ~44 ms (5k-line TS, Chromium, mocked IPC). Cold start: manual. ./init.sh: Test Files 32 passed (32); Tests 271 passed (271); Rust 100 passed, 0 failed, 3 ignored. Playwright 74/74."
     },
     {
       "id": "m2-task-12",

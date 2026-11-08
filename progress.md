@@ -2,6 +2,45 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-08: M2 Stage 3 gate → 🛑 Checkpoint M2.3
+
+- **Reviews:** code REQUEST CHANGES ×3 → APPROVE WITH NITS; security FAIL → FAIL (High: predictable temp file followed symlinks) → PASS; e2e PASS (`e2e/files.spec.ts`, stale `stage1-shell` Files test fixed).
+- **Fixed in the gate:** binary/UTF-16 files read-only (save destroyed them); buffers moved into the files store keyed by worktree+path (edits lost on navigation/worktree/project switch); dirty guard on every worktree and project switch; discard path for dirty tabs; CRLF preserved; Markdown Source mode; Duplicate (I4) and binary Duplicate refused; Changes double-click opens file; tree refresh on `git:changed`; lazy tree + stale guard (user decision); ⌘P index kept across reloads; `fs_read` 10 MiB cap; rename blocked when dirty; symlink-safe discard snapshot; atomic write with O_EXCL temp + kept permissions + writes through in-worktree symlinks; DOMPurify forbids form/style/etc + Rust `on_navigation` local-only guard; false dirty from app edits; i18n for editor strings.
+- **User requests:** diff long lines scroll horizontally per hunk (virtualizer needs fixed rows, so no wrap); sidebar grouped Workspace / Code / AI / GitHub (Inbox stays in Workspace).
+- **Decisions:** `trash` 5.3.0 confirmed; lazy tree now.
+- **Perf:** main JS gzip +4.10 KB; CodeMirror chunk 309.8 KB gzip lazy; editor first paint ~44 ms (mocked IPC). Cold start + real-IPC paint: manual.
+- **Still open:** `e2e/m2-stage2-changes.spec.ts` 17 vacuous tests (dead `__bwTest` mock) — rewrite pending user OK. Minors listed in the review reports.
+- **Gate:** `./init.sh` — `Test Files 32 passed (32)`, `Tests 271 passed (271)`, Rust `100 passed; 0 failed; 3 ignored`. Playwright `74 passed`.
+- **Next:** user runs `docs/testing/m2-manual-e2e.md` Stage 3; on go-ahead, one Stage 3 commit on `m2-stage-3`, ff into `main`.
+
+## 2026-11-08: M2 Task 11 — CodeMirror editor (branch `m2-stage-3`)
+
+- **Built:** `src/editor/` CodeMirror 6 host (lazy chunk), tabs/breadcrumbs, Git gutter (unstaged, staged fallback), status bar with detected indentation, ⌘S with mtime guard + conflict banner, Diff vs HEAD via new `DiffArea::Head` (Rust) + shared DiffRenderer, external-change re-read of every open file (background dirty tabs park the banner until shown).
+- **User-requested extra:** Markdown preview (`marked` + `DOMPurify`, full width, loader). Fixed bug: reopening a cached `.md` stuck on spinner (reset effect ran after cache hit); regression test added.
+- **Review:** spec FAIL (8 missing, 2 misread) → FAIL (AC-7 background tab) → PASS.
+- **Bundle:** main-entry JS gzip 101.88 → 105.98 KB (+4.10 KB); CodeMirror chunk 309.78 KB gzip, loaded only on Files.
+- **Found:** `e2e/stage1-shell.spec.ts` nav test still expects the Files placeholder (stale since Task 10) — fix at Stage 3 gate.
+- **Gate:** `./init.sh` — `Test Files 32 passed (32)`, `Tests 253 passed (253)`, Rust `96 passed; 0 failed; 3 ignored`.
+- **Next:** Stage 3 gate (code-reviewer, security-reviewer, e2e-testing, manual spec) → 🛑 Checkpoint M2.3.
+
+## 2026-11-07: M2 Task 10 — File manager UI (branch `m2-stage-3`)
+
+- **Built:** Files screen (toolbar, worktree select, ⌘P fuzzy search, OPEN EDITORS, status tree with folder change dots, show-ignored, context menu), `src/state/files.ts`, `<EditorHost/>` placeholder.
+- **Parity fixes (coordinator):** disabled ❯_ Terminal button, folder dots, shared toolbar alignment bug in `stage.css` (also fixed Changes).
+- **Review:** spec FAIL (title "Files", folder Rename) → PASS. Rename for folders deviates from prototype per AC-3.
+- **Found:** `e2e/m2-stage2-changes.spec.ts` mock `window.__bwTest` is dead code; its 17 tests early-return and pass vacuously. Rewrite at Stage 3 gate (pending user OK).
+- **Gate:** `./init.sh` — `Test Files 31 passed (31)`, `Tests 202 passed (202)`, Rust `95 passed; 0 failed; 3 ignored`.
+- **Next:** Task 11 — CodeMirror editor.
+
+## 2026-11-07: M2 Task 09 — Filesystem IPC (branch `m2-stage-3`)
+
+- **Built:** `src-tauri/src/fs.rs` (`fs_tree`, `fs_read`, `fs_write` with ms mtime guard, `fs_create`, `fs_rename` with inverse oplog row, `fs_delete` via `trash ~5.3.0`, `reveal_in_finder(worktree, path)` via `open -R` argument array); `src/ipc/fs.ts` + contract test.
+- **Reviews:** spec PASS after one fix (rename oplog inverse). Security APPROVE WITH FIXES → re-review Clear. Fixed in the shared validator (`diff.rs`): `.git` symlink alias (H1), dangling-symlink write escape (M1); plus L1/L3/L5. Added a leaf-not-followed variant for index ops, discard, delete and rename-from so dangling or `.git`-aliasing links can still be staged and trashed. Deferred: L2 oplog blob cap (Task 14), L4 TOCTOU.
+- **Coordinator:** `cargo fmt` on `stash.rs` (formatting only) so AC-6 passes. Fixed `feature_list.json` (Task 08 + Stage 2 review were still `not-started`). Added the Git workflow section to `CLAUDE.md`; deleted local `master`/`dev`; tagged and pushed `v0.1.0` (M1).
+- **Gate:** `./init.sh` — `Test Files 30 passed (30)`, `Tests 196 passed (196)`, Rust `95 passed; 0 failed; 3 ignored`, Clippy clean; `cargo fmt --check` clean.
+- **Open:** `stage.rs` TODO "discard untracked to Trash" referencing Task 09 not wired — out of Task 09 scope; decide placement.
+- **Next:** Task 10 — File manager UI.
+
 ## 2026-11-07: M2 Stage 2 gate → 🛑 Checkpoint M2.2
 
 - **Code review** (`.agent/reviews/m2-stage-2-code.md`): APPROVE WITH NITS. All Task 05–08 AC met. Clippy lifetime elision warning in `diff.rs` fixed. N-1 oplog blob cap deferred to Task 14.

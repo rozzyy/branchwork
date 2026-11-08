@@ -23,6 +23,7 @@ import { t } from "../../i18n/t";
 import { useStage } from "../../state/stage";
 import { useWorktrees } from "../../state/worktrees";
 import { useChanges } from "../../state/changes";
+import { useFiles } from "../../state/files";
 import { toast } from "../../ui/toast";
 import { ChangesView } from "./ChangesScreen";
 
@@ -138,19 +139,17 @@ it("renders status classes and strikes through deleted paths", async () => {
   expect(screen.getByText("D", { selector: ".changes-file-status" })).toHaveClass("changes-status-D");
 });
 
-it("opens a file through the files.open intent when a row is double-clicked", async () => {
+it("opens the file in the Files store and navigates when a row is double-clicked", async () => {
   await setup();
-  const onIntent = vi.fn();
-  window.addEventListener("branchwork:files-intent", onIntent);
+  act(() => useFiles.setState({ open: [], current: null }));
 
   fireEvent.doubleClick(screen.getByText("callback.ts"));
 
   await waitFor(() => {
-    expect(onIntent).toHaveBeenCalledOnce();
-    expect((onIntent.mock.calls[0][0] as CustomEvent).detail).toEqual({ type: "files.open", path: "src/auth/callback.ts" });
+    expect(useFiles.getState().open).toContain("src/auth/callback.ts");
+    expect(useFiles.getState().current).toBe("src/auth/callback.ts");
     expect(useStage.getState().go).toHaveBeenCalledWith("files");
   });
-  window.removeEventListener("branchwork:files-intent", onIntent);
 });
 
 it("lists all six commit actions in the split-button menu", async () => {
@@ -322,4 +321,23 @@ it("stashes all changes from the Changes ⋯ menu", async () => {
   await waitFor(() =>
     expect(stashPush).toHaveBeenCalledWith("/repos/main", { includeUntracked: true }),
   );
+});
+
+it("renders Staged Changes section with count 0 when no files are staged", async () => {
+  await setup(statusSummary({ staged: [] }));
+  const stagedSection = screen.getByRole("button", { name: /Staged Changes/i });
+  expect(within(stagedSection).getByText("0")).toBeVisible();
+});
+
+it("stages all unstaged files from Changes section header action", async () => {
+  await setup();
+  const stageAllButton = screen.getByRole("button", { name: "Stage all" });
+  await userEvent.click(stageAllButton);
+  await waitFor(() =>
+    expect(stagePaths).toHaveBeenCalledWith("/repos/main", [
+      "src/auth/callback.ts",
+      "src/auth/old.ts",
+    ]),
+  );
+  expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Stage complete" }));
 });

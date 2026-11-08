@@ -3,7 +3,7 @@ import { t } from "../../i18n/t";
 import { screenById } from "../registry";
 import { useWorktrees } from "../../state/worktrees";
 import { useChanges, type ChangesSelection } from "../../state/changes";
-import { dispatchFilesIntent, type FilesIntent } from "../../state/filesIntents";
+import { useFiles } from "../../state/files";
 import { useStage } from "../../state/stage";
 import { onGitChanged } from "../../ipc/worktrees";
 import type { DiffArea } from "../../ipc/diff";
@@ -32,9 +32,10 @@ function statusClass(letter: string): string {
 type MenuPosition = { x: number; y: number; kind: "commit" | "more" };
 type CommitKind = "commit" | "amend" | "push" | "sync" | "all";
 
+// Opens `path` in the Files store directly (not via a window event) because the Files screen's
+// own listener doesn't exist until it mounts, which drops the event (I5).
 function filesOpen(path: string): void {
-  const intent: FilesIntent = { type: "files.open", path };
-  dispatchFilesIntent(intent);
+  useFiles.getState().openFile(path);
   useStage.getState().go("files");
 }
 
@@ -53,7 +54,7 @@ export function ChangesToolbar() {
           </span>
         )}
       </h1>
-      <div className="changes-toolbar-actions">
+      <div className="changes-toolbar-actions pane-actions">
         <Segmented
           label={t("changes.viewMode")}
           onChange={setDiffMode}
@@ -545,22 +546,20 @@ export function ChangesView() {
           )}
         </div>
         <div className="changes-scroll">
-          {entries.staged.length > 0 && (
-            <ChangesSection
-              actions={[{ id: "unstageAll", icon: "−", label: t("changes.unstageAll") }]}
-              onAction={(action) => void onSectionAction(action)}
-              onFileAction={onFileAction}
-              area="staged"
-              closed={!!closed.staged}
-              entries={entries.staged}
-              onToggle={() => toggle("staged")}
-              select={select}
-              selection={selection}
-              title={t("changes.sectionStaged")}
-              treeView={treeView}
-              onOpenFile={filesOpen}
-            />
-          )}
+          <ChangesSection
+            actions={entries.staged.length > 0 ? [{ id: "unstageAll", icon: "−", label: t("changes.unstageAll") }] : undefined}
+            onAction={(action) => void onSectionAction(action)}
+            onFileAction={onFileAction}
+            area="staged"
+            closed={!!closed.staged}
+            entries={entries.staged}
+            onToggle={() => toggle("staged")}
+            select={select}
+            selection={selection}
+            title={t("changes.sectionStaged")}
+            treeView={treeView}
+            onOpenFile={filesOpen}
+          />
           <ChangesSection
             actions={[
               { id: "discardAll", icon: "↶", label: t("changes.discardAll") },

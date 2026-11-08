@@ -255,3 +255,133 @@ Expected:
 | M2-S2-14 | | |
 | M2-S2-15 | | |
 | M2-S2-16 | | |
+
+## Stage 3: Files & editor
+
+Stage 3 adds the Files screen, filesystem writes, and the CodeMirror editor. Use the same scratch repository as Stage 2.
+
+> **Prerequisites:** Stage 2 manual checks passed. Active worktree set to the scratch repository with at least one tracked `.ts` file and one `README.md`.
+
+### M2-S3-01 · Open a file
+
+1. Open **Files** in the sidebar. Click a tracked `.ts` file in the project tree.
+
+Expected:
+- A tab opens with the file icon and name; breadcrumbs show the path segments.
+- Syntax highlighting is TypeScript. Status bar shows `Ln 1, Col 1`, indentation (`Spaces: N` or `Tabs`), `UTF-8`, `LF`/`CRLF`, `TypeScript`, and the branch name.
+- The editor loads in under ~150 ms for a normal file; a 5 000-line file still opens without a visible freeze.
+
+### M2-S3-02 · Edit and save
+
+1. Type a change in the editor.
+2. Press **⌘S**.
+
+Expected:
+- While unsaved, the tab shows the dirty dot instead of `×`, and the tree row shows a dirty dot.
+- After save, the dirty dot clears. The Git gutter shows an added/modified marker on the changed line.
+- The **Changes** count in the sidebar goes up by one; the file appears in Changes as modified.
+
+### M2-S3-03 · External change
+
+1. With the file open and clean, change it in another editor and save.
+2. Make an unsaved edit in Branchwork, then change the file externally again.
+3. Open two files, make an unsaved edit in file A, switch to file B, change A externally, then switch back to A.
+
+Expected:
+- Step 1: the buffer silently reloads with the external content, no banner.
+- Step 2: the banner shows **Reload / Keep mine / Compare**. Reload takes the disk version; Keep mine keeps your edit and the next ⌘S saves it.
+- Step 3: the banner appears when you return to A.
+
+### M2-S3-04 · Diff vs HEAD
+
+1. With a modified file open, click **Diff vs HEAD** in the toolbar.
+2. Click **Editor**.
+
+Expected:
+- The editor is replaced by the shared diff renderer showing all changes against HEAD (staged and unstaged together).
+- **Editor** restores the CodeMirror view with the cursor and edits intact.
+
+### M2-S3-05 · Markdown preview
+
+1. Open `README.md`. Click **Source**, then **Preview**.
+2. Switch to another file and back to `README.md`.
+3. Click a link inside the preview.
+
+Expected:
+- Opens in Preview (full width) with a short loader; headings, lists, code blocks, and tables render.
+- Switching back shows the preview again, not a stuck loader.
+- Clicking a link does not navigate the app window away.
+
+### M2-S3-06 · Create, rename, duplicate
+
+1. Right-click a folder → **New file**, enter a name. Then **New folder**.
+2. Right-click the new file → **Rename** (or **F2**), then **Duplicate**.
+
+Expected:
+- Each item appears in the tree immediately and as untracked in Changes.
+- Names containing `..` or `/` that leave the worktree are refused with an error toast.
+
+### M2-S3-07 · Delete to Trash
+
+1. Right-click the duplicated file → **Delete**. Confirm.
+2. In Finder, open the Trash and use **Put Back** on that file.
+
+Expected:
+- A confirmation dialog appears first; Cancel leaves the file untouched.
+- After confirm, the file disappears from the tree and a "Deleted" toast shows. The file is in the macOS Trash (not permanently deleted).
+- After Put Back, the file reappears in the tree. (An in-app Undo arrives with the oplog in Task 14.)
+
+### M2-S3-08 · Reveal in Finder and deferred items
+
+1. Right-click a file → **Reveal in Finder**. Also try the toolbar **Open in** → **Finder**.
+2. Inspect the context menu and toolbar for **Open terminal here**, **Ask agent**, and editor-app entries.
+
+Expected:
+- Finder opens with the file selected.
+- Deferred items are visible but disabled, with a tooltip naming the milestone (M3/M4).
+
+### M2-S3-09 · Unsaved edits are protected
+
+1. Edit a file without saving. Switch to **Changes**, then back to **Files**.
+2. With the edit still unsaved, pick another worktree, then another project tab.
+3. Click the dirty dot on the tab (or focus it and press Enter).
+
+Expected:
+- Step 1: the unsaved text is still there and the tab still shows the dirty dot.
+- Step 2: both switches are refused with a "Save or discard unsaved changes…" toast; title bar and sidebar stay on the same project.
+- Step 3: a "Discard unsaved changes in …?" dialog appears; Discard closes the tab, Cancel keeps it.
+- A clean open file changed by another editor reloads silently and does **not** get a dirty dot.
+
+### M2-S3-10 · Lazy file tree and ⌘P
+
+1. Open Files in a large repo. Expand a few folders. Turn **Show ignored files** on.
+2. Focus **Find file**, type part of a file name, then save a file in another editor.
+
+Expected:
+- The tree appears quickly; a folder shows a brief loading row only on first expand.
+- ⌘P results stay listed after the external save (no "No matching files" flash).
+
+### M2-S3-11 · Long diff lines and grouped sidebar
+
+1. Change a file so one line is longer than the diff pane. Open it in **Changes** (split and inline) and in Files → **Diff vs HEAD**.
+2. Look at the sidebar.
+
+Expected:
+- Each hunk scrolls sideways to show the whole line; the hunk header stays in place.
+- Sidebar sections read **Workspace** (Launchpad, Inbox), **Code** (Graph, Files & editor, Changes), **AI** (Agents, Terminal), **GitHub** (Pull requests, Repository), then Worktrees and Tools. Number keys 1–9 still open the same screens as before.
+
+### M2 Stage 3 results
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M2-S3-01 | | |
+| M2-S3-02 | | |
+| M2-S3-03 | | |
+| M2-S3-04 | | |
+| M2-S3-05 | | |
+| M2-S3-06 | | |
+| M2-S3-07 | | |
+| M2-S3-08 | | |
+| M2-S3-09 | | |
+| M2-S3-10 | | |
+| M2-S3-11 | | |

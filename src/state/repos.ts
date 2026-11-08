@@ -15,6 +15,7 @@ import { errorMessage } from "../ipc/errors";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { toast } from "../ui/toast";
 import { t } from "../i18n/t";
+import { useFiles } from "./files";
 
 /** What's needed to put a deleted group (and its projects) back. */
 export interface GroupSnapshot {
@@ -152,6 +153,14 @@ function persistRepos(state: Pick<ReposStore, "activeGroupId" | "activeProjectId
   });
 }
 
+/** R7: editor buffers belong to the active project's worktree. Refuse (with a toast) any change of
+ * active project while an editor buffer is dirty, before the title bar and sidebar can diverge. */
+function dirtySwitchBlocked(currentId: string | null, nextId: string | null): boolean {
+  if (nextId === currentId || Object.keys(useFiles.getState().dirty).length === 0) return false;
+  toast({ title: t("files.switchDirtyBlocked"), icon: "⚠" });
+  return true;
+}
+
 export const useRepos = create<ReposStore>((set, get) => ({
   groups: [],
   projects: [],
@@ -188,7 +197,7 @@ export const useRepos = create<ReposStore>((set, get) => ({
   },
   selectProject(id) {
     const project = get().projects.find((p) => p.id === id);
-    if (!project) return;
+    if (!project || dirtySwitchBlocked(get().activeProjectId, project.id)) return;
     revision++;
     const openProjectIds = get().openProjectIds.includes(id) ? get().openProjectIds : [...get().openProjectIds, id];
     set({ activeGroupId: effectiveGroupId(project, get().groups), activeProjectId: project.id, openProjectIds });
@@ -199,6 +208,7 @@ export const useRepos = create<ReposStore>((set, get) => ({
     const { projects, groups, openProjectIds } = get();
     const inGroup = projectsForGroup(projects, id, groups);
     const first = inGroup.find((p) => openProjectIds.includes(p.id)) ?? inGroup[0] ?? null;
+    if (dirtySwitchBlocked(get().activeProjectId, first?.id ?? null)) return;
     const nextOpenIds = first && !openProjectIds.includes(first.id) ? [...openProjectIds, first.id] : openProjectIds;
     set({ activeGroupId: id, activeProjectId: first?.id ?? null, openProjectIds: nextOpenIds });
     persistRepos(get());
@@ -210,6 +220,7 @@ export const useRepos = create<ReposStore>((set, get) => ({
     const nextOpenIds = openProjectIds.filter((pid) => pid !== id);
     const nextActiveId =
       activeProjectId === id ? neighborAfterRemoval(projects, openProjectIds, groups, project) : activeProjectId;
+    if (dirtySwitchBlocked(activeProjectId, nextActiveId)) return;
     revision++;
     set({ openProjectIds: nextOpenIds, activeProjectId: nextActiveId });
     persistRepos(get());
@@ -219,6 +230,7 @@ export const useRepos = create<ReposStore>((set, get) => ({
     if (!project) return undefined;
     const wasOpen = get().openProjectIds.includes(id);
     const wasActive = get().activeProjectId === id;
+    if (wasActive && dirtySwitchBlocked(id, null)) return undefined;
     try {
       await deleteProjectIpc(id);
       revision++;
@@ -246,8 +258,9 @@ export const useRepos = create<ReposStore>((set, get) => ({
       set({
         projects: [...get().projects.filter((p) => p.id !== project.id), project],
         openProjectIds,
-        activeProjectId: wasActive ? project.id : get().activeProjectId,
-        activeGroupId: wasActive ? effectiveGroupId(project, get().groups) : get().activeGroupId,
+        ...(wasActive && !dirtySwitchBlocked(get().activeProjectId, project.id)
+          ? { activeProjectId: project.id, activeGroupId: effectiveGroupId(project, get().groups) }
+          : {}),
       });
       persistRepos(get());
     } catch (e) {
@@ -266,7 +279,12 @@ export const useRepos = create<ReposStore>((set, get) => ({
       const project = await openRepository(path);
       revision++;
       const openProjectIds = get().openProjectIds.includes(project.id) ? get().openProjectIds : [...get().openProjectIds, project.id];
-      set({ projects: [...get().projects.filter((p) => p.id !== project.id), project], activeGroupId: effectiveGroupId(project, get().groups), activeProjectId: project.id, openProjectIds });
+      const activate = !dirtySwitchBlocked(get().activeProjectId, project.id);
+      set({
+        projects: [...get().projects.filter((p) => p.id !== project.id), project],
+        openProjectIds,
+        ...(activate ? { activeGroupId: effectiveGroupId(project, get().groups), activeProjectId: project.id } : {}),
+      });
       persistRepos(get());
       return project;
     } catch (e) {
@@ -279,7 +297,12 @@ export const useRepos = create<ReposStore>((set, get) => ({
       const project = await cloneRepository(url, destination);
       revision++;
       const openProjectIds = get().openProjectIds.includes(project.id) ? get().openProjectIds : [...get().openProjectIds, project.id];
-      set({ projects: [...get().projects.filter((p) => p.id !== project.id), project], activeGroupId: effectiveGroupId(project, get().groups), activeProjectId: project.id, openProjectIds });
+      const activate = !dirtySwitchBlocked(get().activeProjectId, project.id);
+      set({
+        projects: [...get().projects.filter((p) => p.id !== project.id), project],
+        openProjectIds,
+        ...(activate ? { activeGroupId: effectiveGroupId(project, get().groups), activeProjectId: project.id } : {}),
+      });
       persistRepos(get());
       return project;
     } catch (e) {

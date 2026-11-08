@@ -5,6 +5,7 @@ import { listWorktrees, type Worktree } from "../ipc/worktrees";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { t } from "../i18n/t";
 import { toast } from "../ui/toast";
+import { useFiles } from "./files";
 
 interface WorktreesStore {
   projectId: string | null;
@@ -31,12 +32,19 @@ export const useWorktrees = create<WorktreesStore>((set, get) => ({
   error: null,
   async load(project) {
     const request = ++revision;
+    const projectChanged = get().projectId !== (project?.id ?? null);
+    // R5b: load() also switches the active worktree (and so the editor's buffers) when the
+    // project changes — it must refuse the same way select() does instead of silently dropping
+    // unsaved edits and leaving the dirty flag stuck on another project's file.
+    if (projectChanged && Object.keys(useFiles.getState().dirty).length > 0) {
+      toast({ title: t("files.switchDirtyBlocked"), icon: "⚠" });
+      return;
+    }
     if (!project) {
       set({ projectId: null, worktrees: [], pinnedPaths: [], activePath: null, loading: false, error: null });
       return;
     }
 
-    const projectChanged = get().projectId !== project.id;
     set({
       projectId: project.id,
       ...(projectChanged ? { worktrees: [], pinnedPaths: [], activePath: null } : {}),
@@ -86,6 +94,11 @@ export const useWorktrees = create<WorktreesStore>((set, get) => ({
   select(path) {
     const { projectId, worktrees, selections } = get();
     if (!projectId || !worktrees.some((worktree) => worktree.path === path)) return;
+    // Editor buffers belong to the active worktree; switching would drop unsaved edits.
+    if (path !== get().activePath && Object.keys(useFiles.getState().dirty).length > 0) {
+      toast({ title: t("files.switchDirtyBlocked"), icon: "⚠" });
+      return;
+    }
     const nextSelections = { ...selections, [projectId]: path };
     set({ activePath: path, selections: nextSelections });
     void saveSetting("activeWorktrees", nextSelections).catch((error: unknown) => {

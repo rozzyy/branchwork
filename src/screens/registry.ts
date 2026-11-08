@@ -4,23 +4,32 @@ export type ScreenId =
   | "launchpad" | "graph" | "files" | "changes" | "agents" | "terminal" | "prs" | "repo" | "inbox"
   | "conflicts" | "rebase" | "blame" | "compare" | "settings";
 
+/** Sidebar categories above the worktree list, in display order (header key + member screens). */
+export type NavSection = "workspace" | "code" | "ai" | "github";
+export const NAV_SECTIONS: { id: NavSection; label: MsgKey }[] = [
+  { id: "workspace", label: "sidebar.sectionWorkspace" },
+  { id: "code", label: "sidebar.sectionCode" },
+  { id: "ai", label: "sidebar.sectionAi" },
+  { id: "github", label: "sidebar.sectionGithub" },
+];
+
 export interface ScreenDef {
   id: ScreenId;
   icon: string;
   label: MsgKey;
-  section: "nav" | "tools" | "footer";
+  section: NavSection | "tools" | "footer";
 }
 
 export const SCREENS: ScreenDef[] = [
-  { id: "launchpad", icon: "⌂", label: "nav.launchpad", section: "nav" },
-  { id: "graph", icon: "⎇", label: "nav.graph", section: "nav" },
-  { id: "files", icon: "▤", label: "nav.files", section: "nav" },
-  { id: "changes", icon: "±", label: "nav.changes", section: "nav" },
-  { id: "agents", icon: "✦", label: "nav.agents", section: "nav" },
-  { id: "terminal", icon: "❯_", label: "nav.terminal", section: "nav" },
-  { id: "prs", icon: "⇄", label: "nav.prs", section: "nav" },
-  { id: "repo", icon: "◫", label: "nav.repo", section: "nav" },
-  { id: "inbox", icon: "◉", label: "nav.inbox", section: "nav" },
+  { id: "launchpad", icon: "⌂", label: "nav.launchpad", section: "workspace" },
+  { id: "inbox", icon: "◉", label: "nav.inbox", section: "workspace" },
+  { id: "graph", icon: "⎇", label: "nav.graph", section: "code" },
+  { id: "files", icon: "▤", label: "nav.files", section: "code" },
+  { id: "changes", icon: "±", label: "nav.changes", section: "code" },
+  { id: "agents", icon: "✦", label: "nav.agents", section: "ai" },
+  { id: "terminal", icon: "❯_", label: "nav.terminal", section: "ai" },
+  { id: "prs", icon: "⇄", label: "nav.prs", section: "github" },
+  { id: "repo", icon: "◫", label: "nav.repo", section: "github" },
   { id: "conflicts", icon: "⚠", label: "tools.conflicts", section: "tools" },
   { id: "rebase", icon: "↕", label: "tools.rebase", section: "tools" },
   { id: "blame", icon: "≡", label: "tools.blame", section: "tools" },

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { SCREENS, screenById, type ScreenDef, type ScreenId } from "../screens/registry";
+import { NAV_SECTIONS, SCREENS, screenById, type ScreenDef, type ScreenId } from "../screens/registry";
 import { useStage } from "../state/stage";
 import { useRepos } from "../state/repos";
 import { useWorktrees } from "../state/worktrees";
@@ -384,7 +384,12 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <nav className="side-scroll">
-        {SCREENS.filter((s) => s.section === "nav").map(item)}
+        {NAV_SECTIONS.map((section) => (
+          <Fragment key={section.id}>
+            <div className="side-h">{t(section.label)}</div>
+            {SCREENS.filter((s) => s.section === section.id).map(item)}
+          </Fragment>
+        ))}
         <WorktreeSection />
         <div className="side-h">{t("sidebar.tools")}</div>
         {SCREENS.filter((s) => s.section === "tools").map(item)}
