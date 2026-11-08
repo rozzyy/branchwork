@@ -1,0 +1,293 @@
+.term-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--surf);
+}
+
+.term-screen-empty {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--fg3);
+}
+
+.term-screen-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  flex: none;
+}
+
+.term-screen-tab {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 8px;
+  color: var(--fg3);
+  white-space: nowrap;
+}
+
+.term-screen-tab.on {
+  background: var(--s2);
+  color: var(--fg);
+}
+
+.term-screen-tab-main {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.term-screen-tab-close {
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+}
+
+.term-screen-tab:hover .term-screen-tab-close,
+.term-screen-tab.on .term-screen-tab-close {
+  opacity: 1;
+}
+
+.term-screen-tab-close:hover {
+  background: var(--s3);
+}
+
+.term-screen-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  padding: 6px;
+}
+
+.term-screen-split {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.term-screen-split.horizontal {
+  flex-direction: row;
+}
+
+.term-screen-cell {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.term-screen-pane {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surf);
+  overflow: hidden;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+}
+
+.term-screen-pane.focused {
+  outline-color: var(--acc);
+}
+
+.term-screen-pane.broadcasting {
+  outline-color: oklch(.68 .18 70);
+}
+
+.term-screen-pane-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+.term-screen-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.term-screen-worktree {
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  max-width: 160px;
+  padding: 1px 0;
+}
+
+.term-screen-pane-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg3);
+  font-size: 12px;
+}
+
+.term-screen-pane-actions {
+  flex: none;
+  display: flex;
+  gap: 1px;
+  opacity: 0;
+}
+
+.term-screen-pane:hover .term-screen-pane-actions,
+.term-screen-pane:focus-within .term-screen-pane-actions {
+  opacity: 1;
+}
+
+.term-screen-split-down {
+  transform: rotate(90deg);
+}
+
+.term-screen-pane-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
+.term-screen-pane-body .cli-pane {
+  flex: 1;
+  min-width: 0;
+}
+
+.term-screen-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--fg3);
+  padding: 12px;
+  text-align: center;
+}
+
+.term-screen-gutter {
+  position: absolute;
+  z-index: 5;
+  cursor: col-resize;
+}
+
+.term-screen-split.horizontal > .term-screen-cell > .term-screen-gutter {
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+}
+
+.term-screen-split:not(.horizontal) > .term-screen-cell > .term-screen-gutter {
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 8px;
+  cursor: row-resize;
+}
+
+.term-screen-gutter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 2px;
+  background: var(--line2);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.term-screen-split.horizontal > .term-screen-cell > .term-screen-gutter::after {
+  width: 3px;
+  top: 12px;
+  bottom: 12px;
+}
+
+.term-screen-split:not(.horizontal) > .term-screen-cell > .term-screen-gutter::after {
+  height: 3px;
+  left: 12px;
+  right: 12px;
+}
+
+.term-screen-gutter:hover::after,
+.term-screen-gutter:focus-visible::after {
+  opacity: 1;
+  background: var(--acc);
+}
+
+.term-screen-status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--fg3);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.term-screen-status-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.term-screen-status-dim {
+  opacity: 0.75;
+}
+
+.term-screen-broadcast {
+  margin-left: auto;
+  flex: none;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--fg3);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.term-screen-broadcast.on {
+  border-color: oklch(.68 .18 70);
+  color: oklch(.68 .18 70);
+}

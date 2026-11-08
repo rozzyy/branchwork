@@ -22,6 +22,7 @@ import { readDiff, type DiffModel } from "../../ipc/diff";
 import { readStatus } from "../../ipc/status";
 import { onGitChanged } from "../../ipc/worktrees";
 import { useDock } from "../../terminal/dock";
+import { useTerminalScreen } from "../../terminal/screen";
 import { errorMessage } from "../../ipc/errors";
 import { rank } from "../../palette/fuzzy";
 import { DiffRenderer } from "../../diff/DiffRenderer";
@@ -650,6 +651,15 @@ export function FilesView() {
       onSelect: () => {
         const target = useWorktrees.getState().activePath;
         if (target) void useDock.getState().openHere(target);
+      },
+    });
+    items.push({
+      kind: "item",
+      label: t("files.openTerminalScreen"),
+      icon: "❯_",
+      onSelect: () => {
+        const target = useWorktrees.getState().activePath;
+        if (target) void useTerminalScreen.getState().openHere(target);
       },
     });
     items.push({ kind: "item", label: t("files.revealInFinder"), icon: "⌘", onSelect: () => void handleReveal(path) });

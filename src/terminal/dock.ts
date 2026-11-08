@@ -69,6 +69,27 @@ const pendingSpawns = new Set<string>();
 // the handler looks tabs up live, so it stays correct across reloads.
 let exitSubscription: Promise<() => void> | null = null;
 
+// Remove a tab and repair selection/split; the caller decides whether the
+// PTY session is closed (closeTab) or handed to a new owner (detachTab).
+function dropTab(
+  get: () => DockStore,
+  set: (partial: Partial<DockStore>) => void,
+  save: () => void,
+  id: string,
+): void {
+  const { tabs, selectedId, splitIds } = get();
+  const remaining = tabs.filter((item) => item.id !== id);
+  let nextSelected = selectedId;
+  let nextSplit = splitIds;
+  if (nextSplit && nextSplit.includes(id)) nextSplit = null;
+  if (nextSelected === id) {
+    const previousIndex = tabs.findIndex((item) => item.id === id);
+    nextSelected = remaining[Math.min(previousIndex, remaining.length - 1)]?.id ?? null;
+  }
+  set({ tabs: remaining, selectedId: nextSelected, splitIds: nextSplit });
+  save();
+}
+
 interface DockStore {
   open: boolean;
   mode: DockMode;
@@ -96,6 +117,10 @@ interface DockStore {
   toggleSplit(): Promise<void>;
   swapSplit(): void;
   closeTab(id: string): Promise<void>;
+  /** Add a tab around a live session owned by someone else; never spawns. */
+  adoptExisting(worktreePath: string, sessionId: string): string;
+  /** Remove a tab without closing its PTY so a new owner can adopt the session. */
+  detachTab(id: string): DockTab | null;
   load(): Promise<void>;
 }
 
@@ -303,15 +328,21 @@ export const useDock = create<DockStore>((set, get) => {
           toast({ title: errorMessage(error), icon: "⚠" });
         }
       }
-      const remaining = get().tabs.filter((item) => item.id !== id);
-      let { selectedId, splitIds } = get();
-      if (splitIds && splitIds.includes(id)) splitIds = null;
-      if (selectedId === id) {
-        const previousIndex = get().tabs.findIndex((item) => item.id === id);
-        selectedId = remaining[Math.min(previousIndex, remaining.length - 1)]?.id ?? null;
-      }
-      set({ tabs: remaining, selectedId, splitIds });
+      dropTab(get, set, save, id);
+    },
+
+    adoptExisting(worktreePath, sessionId) {
+      const tab: DockTab = { id: nextTabId(), worktreePath, sessionId, error: null };
+      set({ tabs: [...get().tabs, tab], selectedId: tab.id, open: true });
       save();
+      return tab.id;
+    },
+
+    detachTab(id) {
+      const tab = get().tabs.find((item) => item.id === id);
+      if (!tab || !tab.sessionId) return null;
+      dropTab(get, set, save, id);
+      return tab;
     },
 
     async load() {

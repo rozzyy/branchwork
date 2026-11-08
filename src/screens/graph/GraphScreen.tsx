@@ -13,6 +13,7 @@ import {
 } from "../../ipc/graph";
 import { createWorktreeAtCommit, onGitChanged } from "../../ipc/worktrees";
 import { useDock } from "../../terminal/dock";
+import { useTerminalScreen } from "../../terminal/screen";
 import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
 import { useStage } from "../../state/stage";
@@ -599,6 +600,9 @@ export function GraphView() {
     } },
     { kind: "item", label: t("graph.action.terminal"), icon: "❯_", onSelect: () => {
       if (activePath) void useDock.getState().openHere(activePath);
+    } },
+    { kind: "item", label: t("graph.openTerminalScreen"), icon: "❯_", onSelect: () => {
+      if (activePath) void useTerminalScreen.getState().openHere(activePath);
     } },
     { kind: "separator" },
     { kind: "header", label: t("graph.deferredActions") },

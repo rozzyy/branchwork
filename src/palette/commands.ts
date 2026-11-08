@@ -7,6 +7,7 @@ import { toast } from "../ui/toast";
 import { useSidebar } from "../state/sidebar";
 import { useWorktrees } from "../state/worktrees";
 import { useDock } from "../terminal/dock";
+import { useTerminalScreen } from "../terminal/screen";
 import { undoLast } from "../ipc/undo";
 import { useChanges } from "../state/changes";
 import { ask } from "../ui/dialog";
@@ -104,6 +105,11 @@ export function buildCommands(): Command[] {
   const terminal: Command[] = [
     { id: "terminal.toggle", group: "palette.group.navigate", icon: "❯_", title: t("palette.toggleTerminal"), kbd: "⌃`", run: () => useDock.getState().toggle() },
     { id: "terminal.newTab", group: "palette.group.navigate", icon: "＋", title: t("palette.newTerminalTab"), run: () => { void useDock.getState().newTab(); } },
+    { id: "terminal.screen", group: "palette.group.navigate", icon: "❯_", title: t("palette.terminalScreen"), run: () => useStage.getState().go("terminal") },
+    { id: "terminal.screenNewTab", group: "palette.group.navigate", icon: "＋", title: t("palette.terminalNewTab"), run: () => { void useTerminalScreen.getState().newTab(); } },
+    { id: "terminal.screenSplitRight", group: "palette.group.navigate", icon: "⫴", title: t("palette.terminalSplitRight"), run: () => { const s = useTerminalScreen.getState(); if (s.selectedTabId) void s.splitFocusedPane(s.selectedTabId, "h"); } },
+    { id: "terminal.screenSplitDown", group: "palette.group.navigate", icon: "⫴", title: t("palette.terminalSplitDown"), run: () => { const s = useTerminalScreen.getState(); if (s.selectedTabId) void s.splitFocusedPane(s.selectedTabId, "v"); } },
+    { id: "terminal.screenBroadcast", group: "palette.group.navigate", icon: "◉", title: t("palette.terminalBroadcast"), run: () => { const s = useTerminalScreen.getState(); if (s.selectedTabId) s.toggleBroadcast(s.selectedTabId); } },
   ];
   const git: Command[] = [
     {

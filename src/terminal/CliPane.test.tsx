@@ -209,6 +209,41 @@ describe("CliPane", () => {
     expect(mocks.resizeCalls).toEqual([{ sessionId: "pty-1", columns: 80, rows: 24 }]);
   });
 
+  it("consumes input through interceptInput without writing to the session", async () => {
+    const seen: string[] = [];
+    render(
+      <CliPane
+        sessionId="pty-1"
+        interceptInput={(data) => {
+          seen.push(data);
+          return true;
+        }}
+      />,
+    );
+    await waitFor(() => expect(attachTerminal).toHaveBeenCalledWith("pty-1", expect.any(Number)));
+
+    act(() => {
+      mocks.input?.("ls\n");
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+
+    expect(seen).toEqual(["ls\n"]);
+    expect(mocks.writes).toEqual([]);
+  });
+
+  it("reports fitted dimensions through onResize", async () => {
+    const sizes: Array<[number, number]> = [];
+    render(<CliPane sessionId="pty-1" onResize={(cols, rows) => sizes.push([cols, rows])} />);
+    await waitFor(() => expect(attachTerminal).toHaveBeenCalledWith("pty-1", expect.any(Number)));
+
+    act(() => {
+      resizeCallbacks[0]?.([], {} as ResizeObserver);
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+
+    expect(sizes).toEqual([[80, 24]]);
+  });
+
   it("does not send invalid terminal dimensions to the PTY", async () => {
     await renderAttached();
     mocks.terminals[0].cols = 501;

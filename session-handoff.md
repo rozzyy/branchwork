@@ -1,15 +1,15 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-08
-- **Current Objective:** M3 Stage 1, Checkpoint M3.1: user manual test
+- **Current Objective:** M3 Stage 3 — agent registry and session lifecycle (starting)
 
-- **Milestone / stage:** M1 and M2 released through M2.5. M3 Stage 1 implementation + reviews complete (Tasks 01–03 done); stopped at the user checkpoint.
-- **Branch:** `m3-stage-1` from `main` at Stage 5 commit `1336afb`; Stage 4 commit `300a23a`, release `v0.2.0`. No push, no stage commit yet.
-- **Active task:** `m3-stage-1-review` — manual E2E M3-S1-01..07 awaiting the user (`docs/testing/m0-manual-e2e.md`).
+- **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–2 committed and fast-forwarded into `main`. No push.
+- **Branch:** `m3-stage-3` (to be created from `main` after the Stage 2 merge). No push.
+- **Active task:** `m3-task-06-cli-registry` — next (Stage 3 starting).
 
 ## Recommended Next Step
 
-🛑 STOP — Checkpoint M3.1. The user runs the manual E2E spec (M3-S1-01..07, plus M0/M1 regression checks). On go-ahead AND an explicit commit order: make the single stage commit (Tasks 01–03) on `m3-stage-1`, then fast-forward into `main`. Never start M3 Stage 2 (Tasks 04–05) without the user's go-ahead. No push.
+Start M3 Stage 3 (Tasks 06–10) on a new `m3-stage-3` branch. No commit or push until the user approves the Stage 3 checkpoint and orders it.
 
 ## M2 structure
 
@@ -18,8 +18,9 @@
 - Stage 3 — Files & editor: fs IPC, File manager UI, CodeMirror (Tasks 09–11) → Checkpoint M2.3 ✅ committed `ad0ff87`
 - Stage 4 — Blame, history, oplog undo, polish, Graph WIP inspector (Tasks 12–16) → Checkpoint M2.4 ✅ committed `300a23a`; M2 release `v0.2.0`
 - Stage 5 follow-up — Graph commit history diff inspector (Task 17) → committed as `1336afb` and fast-forwarded into `main`, no push
-- M3 Stage 1 — PTY foundation and terminal dock (Tasks 01–03) → active on `m3-stage-1`; Tasks 01–02 complete
-- M3 Stage 2 — Full-screen Terminal workspace (Tasks 04–05) → not started
+- M3 Stage 1 — PTY foundation and terminal dock (Tasks 01–03) → ✅ committed `a95e38f`, merged into `main`
+- M3 Stage 2 — Full-screen Terminal workspace (Tasks 04–05) → ✅ manual OK, committed, merged into `main`
+- M3 Stage 3 — Agent registry and session lifecycle (Tasks 06–10) → starting
 - M3 Stage 3 — Agent registry and session lifecycle (Tasks 06–10) → not started
 - M3 Stage 4 — Agent workflows (Tasks 11–12) → not started
 

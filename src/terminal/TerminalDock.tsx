@@ -2,6 +2,7 @@ import { useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { CliPane } from "./CliPane";
 import { dockTabName, useDock, type DockTab } from "./dock";
 import { worktreeColor } from "../shell/Sidebar";
+import { useTerminalScreen } from "./screen";
 import { t } from "../i18n/t";
 
 function TabPane({ tab }: { tab: DockTab }) {
@@ -182,6 +183,15 @@ export function TerminalDock() {
                   onClick={() => store.select(tab.id)}
                 >
                   {dockTabName(tab.worktreePath)}
+                </button>
+                <button
+                  type="button"
+                  className="term-dock-tab-move"
+                  aria-label={t("dock.moveToScreen", { name: dockTabName(tab.worktreePath) })}
+                  title={t("dock.moveToScreen", { name: dockTabName(tab.worktreePath) })}
+                  onClick={() => useTerminalScreen.getState().adoptDockTab(tab.id)}
+                >
+                  ⤴
                 </button>
                 <button
                   type="button"

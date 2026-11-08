@@ -115,7 +115,8 @@
   cursor: pointer;
 }
 
-.term-dock-tab-close {
+.term-dock-tab-close,
+.term-dock-tab-move {
   flex: none;
   width: 20px;
   height: 20px;
@@ -131,11 +132,15 @@
 
 .term-dock-tab:hover .term-dock-tab-close,
 .term-dock-tab.on .term-dock-tab-close,
-.term-dock-tab-close:focus-visible {
+.term-dock-tab-close:focus-visible,
+.term-dock-tab:hover .term-dock-tab-move,
+.term-dock-tab.on .term-dock-tab-move,
+.term-dock-tab-move:focus-visible {
   opacity: 1;
 }
 
-.term-dock-tab-close:hover {
+.term-dock-tab-close:hover,
+.term-dock-tab-move:hover {
   background: var(--glass2);
 }
 

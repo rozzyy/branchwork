@@ -489,3 +489,60 @@ Expected: all 8 sessions stay responsive with no dropped frames; record any lag.
 | M3-S1-05 | | |
 | M3-S1-06 | | |
 | M3-S1-07 | | 8-PTY target: ___ |
+
+### M3-S2-01 · Tabs and keyboard access
+
+1. Open the Terminal screen from the sidebar; confirm the empty state and open a tab with ＋.
+2. Open a second tab with ⌘T; confirm each tab shows its worktree name and pane count.
+3. Close the focused pane with ⌘W; confirm closing the last pane closes the tab and selects a neighbor.
+
+Expected: tabs open shells in the focused pane's worktree (or the active worktree); ×/⌘W agree.
+
+### M3-S2-02 · Nested splits, resize, and maximize
+
+1. Split right (⌘D), then split one pane down (⇧⌘D) to nest; split again in the parent direction.
+2. Drag a gutter and confirm siblings clamp at 8%; double-click a gutter to equalize.
+3. Maximize the focused pane (⇧⌘↵); confirm only it shows, then restore.
+
+Expected: splits nest and halve correctly; resize never collapses a pane; maximize restores the exact layout.
+
+### M3-S2-03 · Focus movement
+
+1. Click panes and confirm the accent outline follows.
+2. Move with ⌥⌘←↑→↓ across nested splits; confirm diagonal neighbors are never picked for a side they do not border.
+
+Expected: focus always lands on the visually nearest pane in the pressed direction.
+
+### M3-S2-04 · Worktree switching and status bar
+
+1. Change a pane's worktree from its header selector; confirm the shell runs `cd` there.
+2. Read the status bar: worktree, cwd, "pane i/n", and live columns × rows after resizing the window.
+
+### M3-S2-05 · Broadcast input
+
+1. Toggle broadcast (⌥⌘I or the status button); confirm orange outlines and the "Broadcasting to N panes" status.
+2. Type in one pane and confirm every pane receives it; toggle off and confirm input stays local.
+
+### M3-S2-06 · Moves and running-process confirmation
+
+1. From a pane's ⋯ menu, move it to a new tab and to the dock; from a dock tab's ⤴ button, move it back to the Terminal screen — confirm the same live session continues in each place without respawning.
+2. With `sleep 60` running, close the pane (⌘W) and the tab (×); confirm both ask first, Cancel keeps the session, and confirming closes it.
+
+### M3-S2-07 · Restore and entry points
+
+1. Build two tabs with splits, broadcast on, and distinct worktrees/cwds; quit and relaunch.
+2. Open the Terminal screen from the palette and from the Files/Graph/Changes "Open in Terminal screen" items.
+
+Expected: fresh shells start for registered worktrees, layouts/sizes/focus/broadcast restore, missing worktrees report errors without dropping tabs, and entries land on the screen without extra sessions.
+
+### M3 Stage 2 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M3-S2-01 | | |
+| M3-S2-02 | | |
+| M3-S2-03 | | |
+| M3-S2-04 | | |
+| M3-S2-05 | | |
+| M3-S2-06 | | |
+| M3-S2-07 | | |

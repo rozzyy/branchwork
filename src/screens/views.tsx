@@ -6,6 +6,7 @@ import { GraphToolbar, GraphView } from "./graph/GraphScreen";
 import { ChangesToolbar, ChangesView } from "./changes/ChangesScreen";
 import { FilesToolbar, FilesView } from "./files/FilesScreen";
 import { BlameToolbar, BlameView } from "./blame/BlameScreen";
+import { TerminalScreen, TerminalToolbar } from "../terminal/TerminalScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -33,3 +34,4 @@ VIEWS.graph = { Toolbar: GraphToolbar, View: GraphView };
 VIEWS.changes = { Toolbar: ChangesToolbar, View: ChangesView };
 VIEWS.files = { Toolbar: FilesToolbar, View: FilesView };
 VIEWS.blame = { Toolbar: BlameToolbar, View: BlameView };
+VIEWS.terminal = { Toolbar: TerminalToolbar, View: TerminalScreen };

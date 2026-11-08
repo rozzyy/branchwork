@@ -7,6 +7,7 @@ import { useFiles } from "../../state/files";
 import { useStage } from "../../state/stage";
 import { onGitChanged } from "../../ipc/worktrees";
 import { useDock } from "../../terminal/dock";
+import { useTerminalScreen } from "../../terminal/screen";
 import { undoLast } from "../../ipc/undo";
 import type { DiffArea } from "../../ipc/diff";
 import type { CommitOptions } from "../../ipc/changes";
@@ -405,6 +406,13 @@ export function ChangesView() {
       icon: "❯_",
       disabled: !activePath,
       onSelect: () => { if (activePath) void useDock.getState().openHere(activePath); },
+    },
+    {
+      kind: "item",
+      label: t("changes.openTerminalScreen"),
+      icon: "❯_",
+      disabled: !activePath,
+      onSelect: () => { if (activePath) void useTerminalScreen.getState().openHere(activePath); },
     },
   ];
 

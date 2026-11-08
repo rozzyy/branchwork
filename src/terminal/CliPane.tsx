@@ -52,9 +52,23 @@ function exitMessage(exit: PtyExit): string {
   return t("terminal.exited");
 }
 
-export function CliPane({ sessionId }: { sessionId: string }) {
+export interface CliPaneHooks {
+  /**
+   * Intercept typed input before it reaches the session. Return true when the
+   * input was consumed elsewhere (e.g. broadcast to every pane of a tab).
+   */
+  interceptInput?: (data: string) => boolean;
+  /** Report the fitted terminal size after each resize. */
+  onResize?: (cols: number, rows: number) => void;
+}
+
+export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: string } & CliPaneHooks) {
   const containerRef = useRef<HTMLDivElement>(null);
   const exitedRef = useRef(false);
+  // The effect below is keyed on sessionId only, so route optional hooks
+  // through a ref to always call the latest callbacks.
+  const hooksRef = useRef({ interceptInput, onResize });
+  hooksRef.current = { interceptInput, onResize };
   const [exit, setExit] = useState<PtyExit | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +116,7 @@ export function CliPane({ sessionId }: { sessionId: string }) {
         fitAddon.fit();
         const { cols, rows } = terminal;
         if (!validDimension(cols) || !validDimension(rows)) return;
+        hooksRef.current.onResize?.(cols, rows);
         void resizeTerminal(sessionId, cols, rows).catch(showError);
       } catch (reason) {
         showError(reason);
@@ -167,6 +182,7 @@ export function CliPane({ sessionId }: { sessionId: string }) {
       terminal.loadAddon(webglAddon);
       inputSubscription = terminal.onData((data) => {
         if (disposed || exitedRef.current) return;
+        if (hooksRef.current.interceptInput?.(data)) return;
         void writeTerminal(sessionId, new TextEncoder().encode(data)).catch(showError);
       });
       resizeObserver = new ResizeObserver(scheduleResize);

@@ -504,3 +504,24 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **m0-task-01 (scaffold):** DONE. Spec-reviewer PASS. `pnpm typecheck` exit 0. `pnpm test` reports "No test files found" (expected).
 - **m0-task-02 (window config):** edits applied (`tauri.conf.json` productName/overlay/vibrancy/CSP, `tauri` `macos-private-api` feature, `core:window:allow-start-dragging`). The executor hit an API rate limit while `cargo check` was compiling, so it is **not yet verified or spec-reviewed**.
 - **Next:** run `cd src-tauri && cargo check`, then spec-review m0-task-02, then m0-task-03.
+
+## 2026-11-08: Checkpoint M3.1 approved → Stage 1 committed, Stage 2 started
+
+- **Manual OK:** user approved M3-S1-01..07 and ordered "commit & lanjut Stage 2".
+- **Stage commit:** `a95e38f feat: complete M3 Stage 1` (39 files, +4014/-36) on `m3-stage-1`, fast-forwarded into `main`, branch deleted. No push.
+- **Stage 2:** branch `m3-stage-2` from `a95e38f`; `m3-stage-1-review` → done; `m3-task-04-layout-reducer` → in-progress.
+- **Next:** M3-04 pure layout-tree reducer (spec §6.5a) + unit tests, then M3-05. No commit/push until Stage 2 checkpoint approval + order.
+
+## 2026-11-08: M3 Stage 2 implementation complete → 🛑 Checkpoint M3.2
+
+- **M3-04 layout reducer** (`src/terminal/layout.ts` + 18 tests): split/nest, close/collapse, gutter clamp 8%, equalize, edge-bordered focus, maximize toggle, deep-freeze immutability. Spec PASS. M3-04 file authored from spec §6.5a (was missing).
+- **M3-05 Terminal screen**: store (`screen.ts`, 19 tests), UI (`TerminalScreen.tsx`, 3 tests, `terminal-screen.css`), CliPane input/resize hooks, dock adopt/detach + ⤴ move button, 5 palette commands, Files/Graph/Changes "Open in Terminal screen" items, `VIEWS.terminal` wired, `screen.*` i18n. Reviews: task spec PASS, stage code PASS (fixed gutter-drag reference-box defect), security PASS (no new IPC/backend; cd quoting tested).
+- **Deferred:** shell display name (backend reports no shell), "Run Claude Code here" (Stage 3), sidebar-hover/toolbar screen entries (context menus + palette covered).
+- **Gate:** `./init.sh` green — 45 Vitest files / 376 tests; Rust 139 passed / 3 ignored; typecheck + Clippy clean. `pnpm test:e2e` 76/76 (nav assertion updated for the real screen).
+- **Manual spec:** M3-S2-01..07 written in `docs/testing/m0-manual-e2e.md`.
+- **Next:** user runs manual M3-S2-01..07 (+ M3-S1 regression). On go-ahead + order: single stage commit on `m3-stage-2`, ff into `main`. No push. Never start Stage 3 without go-ahead.
+
+## 2026-11-08: Checkpoint M3.2 approved → Stage 2 committed, Stage 3 starting
+
+- **Manual OK:** user approved M3-S2-01..07 and ordered "commit & lanjutkan".
+- Tracking finalized: `m3-stage-2-review` → done; handoff/progress moved to Stage 3.

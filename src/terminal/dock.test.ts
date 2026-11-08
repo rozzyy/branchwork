@@ -121,6 +121,30 @@ it("splits two sessions side by side and swaps them", async () => {
   expect(useDock.getState().splitIds).toBeNull();
 });
 
+it("adopts and detaches live sessions without touching their PTY", async () => {
+  const id = useDock.getState().adoptExisting("/wt/a", "pty-live");
+  expect(spawnTerminal).not.toHaveBeenCalled();
+  const tab = useDock.getState().tabs.find((t) => t.id === id);
+  expect(tab).toMatchObject({ worktreePath: "/wt/a", sessionId: "pty-live", error: null });
+  expect(useDock.getState().selectedId).toBe(id);
+  expect(useDock.getState().open).toBe(true);
+
+  const detached = useDock.getState().detachTab(id);
+  expect(detached).toMatchObject({ worktreePath: "/wt/a", sessionId: "pty-live" });
+  expect(useDock.getState().tabs).toHaveLength(0);
+  expect(closeTerminal).not.toHaveBeenCalled();
+
+  expect(useDock.getState().detachTab("missing")).toBeNull();
+  // A tab without a live session has nothing to hand over.
+  vi.mocked(spawnTerminal).mockRejectedValueOnce(new Error("nope"));
+  useWorktrees.setState({ activePath: "/wt/b" });
+  await useDock.getState().newTab();
+  const failed = useDock.getState().tabs[0];
+  expect(failed.sessionId).toBeNull();
+  expect(useDock.getState().detachTab(failed.id)).toBeNull();
+  expect(closeTerminal).not.toHaveBeenCalled();
+});
+
 it("restores fresh shells and keeps tabs whose worktree is gone", async () => {
   vi.mocked(loadSetting).mockResolvedValue({
     mode: "bottom",

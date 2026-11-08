@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useDock } from "./dock";
+import { useTerminalScreen } from "./screen";
 import { closeTerminal, spawnTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { TerminalDock } from "./TerminalDock";
@@ -97,6 +98,17 @@ it("ignores Escape from inside terminal input", () => {
   expect(useDock.getState().open).toBe(true);
   fireEvent.keyDown(screen.getByLabelText("Terminal"), { key: "Escape" });
   expect(useDock.getState().open).toBe(false);
+});
+
+it("moves a dock tab to the Terminal screen without killing its session", async () => {
+  useTerminalScreen.setState({ tabs: [], selectedTabId: null, loaded: true });
+  render(<TerminalDock />);
+  await userEvent.click(screen.getByRole("button", { name: "Move tab to Terminal screen b" }));
+  expect(closeTerminal).not.toHaveBeenCalled();
+  expect(screen.queryByRole("tab", { name: "Terminal in b" })).not.toBeInTheDocument();
+  const moved = useTerminalScreen.getState().tabs;
+  expect(moved).toHaveLength(1);
+  expect(Object.values(moved[0].panes)[0]).toMatchObject({ worktreePath: "/wt/b", sessionId: "pty-b" });
 });
 
 it("switches modes and persists the selection", async () => {

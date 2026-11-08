@@ -787,8 +787,8 @@
       "dependencies": [
         "m3-task-03-terminal-dock"
       ],
-      "status": "in-progress",
-      "evidence": "Gate work done: spec/security/code reviews PASS (reports in .agent/reviews/), ./init.sh green (41/320; Rust 138/3), e2e 76/76, manual spec M3-S1-01..07 written. Awaiting user manual test at Checkpoint M3.1; commit only on go-ahead + order."
+      "status": "done",
+      "evidence": "User approved manual M3-S1-01..07 OK and ordered commit. Single stage commit a95e38f (39 files, +4014/-36: PTY manager, CliPane, terminal dock, manual spec) created on m3-stage-1 and fast-forwarded into main; branch deleted. No push."
     },
     {
       "id": "m3-task-04-layout-reducer",
@@ -798,8 +798,8 @@
       "dependencies": [
         "m3-stage-1-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Pure recursive layout tree (src/terminal/layout.ts + layout.test.ts, 18 tests): split same-direction/nesting, close redistribution/collapse/null-on-last, gutter resize clamped to 8%, equalize, edge-bordered directional focus, maximize toggle, deep-freeze immutability. Spec review PASS (.agent/reviews/m3-task-04-spec.md). ./init.sh green: 43 Vitest files/350 tests; Rust 139 passed/3 ignored; typecheck+Clippy clean. No commit (Stage 2 rule)."
     },
     {
       "id": "m3-task-05-terminal-screen",
@@ -810,8 +810,8 @@
         "m3-task-03-terminal-dock",
         "m3-task-04-layout-reducer"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Full-screen Terminal screen (screen store + 19 tests, TerminalScreen + 3 tests, dock adopt/detach + move button, CliPane hooks, palette x5, Files/Graph/Changes entries, manual spec M3-S2-01..07). Task spec review PASS; stage code review PASS (1 gutter-drag defect fixed); security PASS. ./init.sh green: 45 Vitest files/376 tests; Rust 139 passed/3 ignored. e2e 76/76. No commit; awaiting Checkpoint M3.2."
     },
     {
       "id": "m3-stage-2-review",
@@ -821,8 +821,8 @@
       "dependencies": [
         "m3-task-05-terminal-screen"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "User approved manual M3-S2-01..07 OK and ordered commit + continue. Single stage commit (Tasks 04-05) created on m3-stage-2 and fast-forwarded into main; branch deleted. No push."
     },
     {
       "id": "m3-task-06-cli-registry",
