@@ -1,15 +1,15 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-08
-- **Current Objective:** M2 complete; awaiting the next user instruction
+- **Current Objective:** Close Stage 5, then prepare the M3 task list
 
-- **Milestone / stage:** M1 and M2 complete. M2 Stage 4 checkpoint approved with manual tests and native memory explicitly unverified.
-- **Branch:** `main`; Stage 4 commit `300a23a`, release commit `c5e4589`, tag `v0.2.0`.
-- **Active task:** None. Task 16 Graph WIP inspector is complete with coordinator acceptance review PASS (`.agent/reviews/m2-task-16-spec.md`); Tasks 12–15 and the Stage 4 review are complete. User approved Stage 4 + the E2E rewrite ("ya untuk semuanya").
+- **Milestone / stage:** M1 and M2 Stage 4 released. User approved manual Checkpoint M2.5 and ordered Stage 5 closeout; then prepare an M3 plan and task list before implementation.
+- **Branch:** `m2-stage-5` from `main` at v0.2.0; Stage 4 commit `300a23a`, release commit `c5e4589`.
+- **Completed task:** `m2-task-17-graph-history-diff` (`.agent/tasks/m2-task-17-graph-history-diff.md`).
 
 ## Recommended Next Step
 
-M2 is complete and tagged `v0.2.0`. Stage 4 implementation and release commits are on `main`; `m2-stage-4` was deleted. Manual M2-S4-01..05 and native memory remain unverified by user approval. Do not push.
+Create the single Stage 5 commit on `m2-stage-5`, fast-forward it into `main`, and delete the stage branch. Do not push. Then draft the M3 implementation plan and task breakdown from spec §6.5–6.6. Present the list to the user and stop before implementing M3.
 
 ## M2 structure
 
@@ -17,6 +17,7 @@ M2 is complete and tagged `v0.2.0`. Stage 4 implementation and release commits a
 - Stage 2 — Changes screen: staging, commit variants, stashes (Tasks 05–08) → Checkpoint M2.2 ✅ committed
 - Stage 3 — Files & editor: fs IPC, File manager UI, CodeMirror (Tasks 09–11) → Checkpoint M2.3 ✅ committed `ad0ff87`
 - Stage 4 — Blame, history, oplog undo, polish, Graph WIP inspector (Tasks 12–16) → Checkpoint M2.4 ✅ committed `300a23a`; M2 release `v0.2.0`
+- Stage 5 follow-up — Graph commit history diff inspector (Task 17) → checkpoint approved; closeout ordered on `m2-stage-5`
 
 ## Decisions this session (user)
 
@@ -34,4 +35,6 @@ M2 is complete and tagged `v0.2.0`. Stage 4 implementation and release commits a
 - The user approved Checkpoint M2.4 while accepting that manual M2-S4-01..05 and the native memory budget remain unverified. `.agent/reviews/m2-stage-4-e2e.md` records this explicitly; the unknown-state process sample is not valid evidence.
 - `e2e/m2-stage2-changes.spec.ts`: rewritten (real `__TAURI_INTERNALS__` mock, invoke-call assertions) — 16/16 pass, debt closed in Stage 4.
 - Prior Stage 3 deferred nits remain recorded in `.agent/reviews/m2-stage-3-code-review.md`; no new Stage 3 scope was changed.
-- M2 stage and release commits are complete. Do not push. Wait for the user's next milestone instruction.
+- M2 Stage 4's manual E2E and native memory checks remain unverified by user approval. Do not alter the v0.2.0 release; this follow-up is tracked separately. Do not push.
+- Stage 5 validation: `./init.sh` passed (37 Vitest files / 297 tests; Rust 128 passed / 3 ignored; Clippy/typecheck clean); `pnpm test:e2e` passed 76/76; `cargo fmt --check` and `git diff --check` clean. See `.agent/reviews/m2-stage-5-code-review.md`, `.agent/reviews/m2-stage-5-security-review.md`, and `.agent/reviews/m2-stage-5-e2e.md`.
+- Manual M2-S5-01 and Checkpoint M2.5 were approved by the user; Stage 5 commit and fast-forward are authorized. Do not push.

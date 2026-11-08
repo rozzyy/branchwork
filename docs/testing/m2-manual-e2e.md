@@ -452,3 +452,24 @@ Expected:
 | M2-S4-03 | | |
 | M2-S4-04 | | |
 | M2-S4-05 | | |
+
+## Stage 5: Graph commit-history diff inspector
+
+> **Prerequisites:** Stage 4 checks passed. Use a scratch repository with at least two commits that modify the same tracked file, plus its root commit.
+
+### M2-S5-01 · Open historical file diffs
+
+1. In Graph, select a commit that changed the tracked file and click that file in the inspector.
+2. Select another commit that changed the same path and open its file diff too.
+3. Switch between Graph and both commit-diff tabs, then close one. Finally, select the root commit and open one of its files.
+
+Expected:
+- Each file opens in Graph's main editor area while the inspector remains visible. Tabs for the same path in different commits remain distinct and show their respective commit-to-first-parent diffs.
+- Historical tabs have no stage, unstage, revert, or line-staging actions. Closing a tab leaves the other commit diff or Graph available.
+- The root commit diff shows additions against an empty tree.
+
+### M2 Stage 5 results
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M2-S5-01 | | |

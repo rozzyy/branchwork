@@ -2,6 +2,14 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-08: M2 Stage 5 Task 17 — Graph commit history diffs (branch `m2-stage-5`)
+
+- **Built:** Changed files in the selected-commit inspector are accessible buttons that open/activate commit-specific diff tabs in Graph's main editor. Tabs retain SHA/path, coexist with WIP tabs, stay read-only, and compare with the first parent (root commits against an empty tree). The new Tauri IPC validates the project, registered worktree, commit SHA, and repository-relative path; shared binary/size summaries are reused.
+- **Tests:** Rust fixtures cover first-parent and root diffs; Vitest covers IPC, clickable inspector paths, commit-specific tabs beside WIP tabs, switching/closing, and the absence of stage/unstage/revert/line-staging controls. Stage 5 manual check M2-S5-01 is documented.
+- **Review:** Code review follow-up PASS after hiding the selected-lines staging button on read-only diffs (`.agent/reviews/m2-stage-5-code-review.md`). Focused security review PASS, no findings (`.agent/reviews/m2-stage-5-security-review.md`).
+- **Verification:** `./init.sh` — `=== Verification Complete ===`; typecheck and Clippy clean; Test Files 37 passed (37), Tests 297 passed (297), Rust 128 passed/0 failed/3 ignored. `pnpm test:e2e` — 76 passed. `cargo fmt --check` and `git diff --check` clean.
+- **Checkpoint:** The user approved M2-S5-01 and ordered Stage 5 closeout. Create the single stage commit and fast-forward into `main`; do not push. M2 v0.2.0 remains unchanged.
+
 ## 2026-11-08: M2 Stage 4 review follow-ups (branch `m2-stage-4`)
 
 - **Fixed:** Failed file create/write/rename attempts now remove their pre-write oplog rows. If `git rebase --abort` fails, the sync row is marked non-undoable before the failure callback refreshes UI state. Regression tests cover both paths.

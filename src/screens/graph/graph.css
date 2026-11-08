@@ -96,6 +96,8 @@ button.graph-chip:hover { background: var(--s4); color: var(--fg); }
 .graph-file-row { display: flex; align-items: center; min-width: 0; padding: 6px 4px; border-radius: 7px; font-size: 12px; overflow: hidden; }
 .graph-file-row:hover { background: var(--s2); }
 .graph-file-row code { overflow: hidden; color: var(--fg); text-overflow: ellipsis; white-space: nowrap; font: 11px var(--font-mono); }
+.graph-file-open { display: flex; min-width: 0; width: 100%; padding: 0; overflow: hidden; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.graph-file-open:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .graph-wip-file-row { display: flex; align-items: center; min-width: 0; }
 .graph-wip-file { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; padding: 4px 2px; overflow: hidden; border: 0; border-radius: 5px; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
 .graph-wip-file:hover { background: var(--s3); }

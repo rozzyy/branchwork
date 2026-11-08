@@ -616,9 +616,10 @@ export function GraphView() {
 
   return (
     <GraphEditorTabs
-      key={activePath}
+      key={`${projectId}:${activePath}`}
+      projectId={projectId}
       worktreePath={activePath}
-      renderInspector={(openDiff) => (
+      renderInspector={(openDiff, openCommitDiff) => (
         <aside className="graph-inspector" aria-label={t("graph.inspector")}>
           {selection.kind === "wip" ? (
             <WipInspector
@@ -636,6 +637,10 @@ export function GraphView() {
               detail={detail}
               loading={detailLoading}
               error={detailError}
+              onOpenFile={(path) => {
+                setMenu(null);
+                openCommitDiff(selectedCommit.sha, path);
+              }}
               onRetry={() => {
                 const commit = selectedCommit;
                 if (!projectId || !activePath) return;
@@ -874,12 +879,14 @@ function CommitInspector({
   detail,
   loading,
   error,
+  onOpenFile,
   onRetry,
 }: {
   commit: GraphCommit;
   detail: GraphCommitDetail | null;
   loading: boolean;
   error: string | null;
+  onOpenFile(path: string): void;
   onRetry(): void;
 }) {
   const color = avatarColor(commit.authorEmail ?? commit.authorName ?? commit.sha);
@@ -902,7 +909,13 @@ function CommitInspector({
         {error && <div role="alert" className="graph-inline-error"><span>{t("graph.pathsError", { message: error })}</span><button className="btn sm" onClick={onRetry}>{t("graph.retry")}</button></div>}
         {!loading && !error && detail?.changedPaths.length === 0 && <p className="graph-muted">{t("graph.noFiles")}</p>}
         {detail?.changedPaths.length ? (
-          <ul>{detail.changedPaths.map((path) => <li key={path} className="graph-file-row" title={path}><code>{path}</code></li>)}</ul>
+          <ul>{detail.changedPaths.map((path) => (
+            <li key={path} className="graph-file-row" title={path}>
+              <button type="button" className="graph-file-open" onClick={() => onOpenFile(path)} aria-label={t("graph.openCommitDiff", { path })}>
+                <code>{path}</code>
+              </button>
+            </li>
+          ))}</ul>
         ) : null}
       </section>
       <div className="graph-commit-actions">

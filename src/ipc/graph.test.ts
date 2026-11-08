@@ -1,5 +1,10 @@
 import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import { readGraphCommitDetail, readGraphPage, type GraphPage } from "./graph";
+import {
+  readGraphCommitDetail,
+  readGraphCommitFileDiff,
+  readGraphPage,
+  type GraphPage,
+} from "./graph";
 
 const graphPage: GraphPage = {
   page: 1,
@@ -81,6 +86,30 @@ it("reads changed paths through the typed commit-detail command", async () => {
     {
       command: "graph_commit_detail",
       payload: { projectId: "project-1", worktreePath: "/repos/repo", sha: "0123456789abcdef" },
+    },
+  ]);
+});
+
+it("reads historical file diffs through the typed commit-file command", async () => {
+  mockWindows("main");
+  const calls: Array<{ command: string; payload: unknown }> = [];
+  mockIPC((command, payload) => {
+    calls.push({ command, payload });
+    return { hunks: [], binary: false, truncated: false, bytes: 0 };
+  });
+
+  await expect(
+    readGraphCommitFileDiff("project-1", "/repos/repo", "0123456789abcdef", "src/main.ts"),
+  ).resolves.toEqual({ hunks: [], binary: false, truncated: false, bytes: 0 });
+  expect(calls).toEqual([
+    {
+      command: "graph_commit_file_diff",
+      payload: {
+        projectId: "project-1",
+        worktreePath: "/repos/repo",
+        sha: "0123456789abcdef",
+        path: "src/main.ts",
+      },
     },
   ]);
 });

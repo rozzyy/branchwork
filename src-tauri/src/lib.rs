@@ -301,6 +301,21 @@ fn graph_commit_detail(
     )
 }
 
+#[tauri::command(async)]
+#[specta::specta]
+fn graph_commit_file_diff(
+    store: State<'_, Store>,
+    project_id: String,
+    worktree_path: String,
+    sha: String,
+    path: String,
+) -> Result<diff::DiffModel, AppError> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    graph::read_commit_file_diff(Path::new(&project.local_path), &worktree_path, &sha, &path)
+}
+
 // Runs off the main thread: large trees and diffs must not freeze the window.
 #[tauri::command(async)]
 #[specta::specta]
@@ -723,6 +738,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             worktree_prune,
             log_graph,
             graph_commit_detail,
+            graph_commit_file_diff,
             status,
             diff_file,
             commit,

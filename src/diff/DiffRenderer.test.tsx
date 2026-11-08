@@ -84,6 +84,18 @@ describe("DiffRenderer", () => {
     expect(screen.queryByText("@@ -3,1 +3,1 @@")).not.toBeInTheDocument();
   });
 
+  it("omits line-staging controls when the diff has no staging handler", () => {
+    render(
+      <DiffRenderer
+        area="all"
+        fileName="src/main.ts"
+        mode="inline"
+        model={model([changedHunk])}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Stage selected lines" })).not.toBeInTheDocument();
+  });
+
   it("collapses long context runs and expands them on click", () => {
     const lines = Array.from({ length: 8 }, (_, index) => ({
       kind: "context" as const,

@@ -26,6 +26,7 @@ export const commands = {
 	worktreePrune: (projectId: string) => __TAURI_INVOKE<null>("worktree_prune", { projectId }),
 	logGraph: (projectId: string, worktreePath: string, page: number) => __TAURI_INVOKE<GraphPage_Serialize>("log_graph", { projectId, worktreePath, page }),
 	graphCommitDetail: (projectId: string, worktreePath: string, sha: string) => __TAURI_INVOKE<GraphCommitDetail>("graph_commit_detail", { projectId, worktreePath, sha }),
+	graphCommitFileDiff: (projectId: string, worktreePath: string, sha: string, path: string) => __TAURI_INVOKE<DiffModel_Serialize>("graph_commit_file_diff", { projectId, worktreePath, sha, path }),
 	status: (worktreePath: string) => __TAURI_INVOKE<StatusSummary_Serialize>("status", { worktreePath }),
 	diffFile: (worktreePath: string, path: string, area: DiffArea) => __TAURI_INVOKE<DiffModel_Serialize>("diff_file", { worktreePath, path, area }),
 	commit: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit", { worktreePath, options }),

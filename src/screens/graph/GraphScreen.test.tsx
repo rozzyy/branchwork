@@ -7,12 +7,17 @@ import { useStage } from "../../state/stage";
 import { useWorktrees } from "../../state/worktrees";
 import { GraphToolbar, GraphView, filterGraphCommits, graphLaneRows } from "./GraphScreen";
 import { useGraphUi } from "./graphState";
-import { readGraphCommitDetail, readGraphPage } from "../../ipc/graph";
+import {
+  readGraphCommitDetail,
+  readGraphCommitFileDiff,
+  readGraphPage,
+} from "../../ipc/graph";
 import { createWorktreeAtCommit, onGitChanged } from "../../ipc/worktrees";
 import { ask } from "../../ui/dialog";
 
 vi.mock("../../ipc/graph", () => ({
   readGraphCommitDetail: vi.fn(),
+  readGraphCommitFileDiff: vi.fn(),
   readGraphPage: vi.fn(),
 }));
 vi.mock("../../ipc/worktrees", () => ({ createWorktreeAtCommit: vi.fn(), onGitChanged: vi.fn() }));
@@ -75,6 +80,12 @@ function setupGraph(pageReader: typeof readGraphPage = async () => initialPage) 
   vi.mocked(readGraphCommitDetail).mockResolvedValue({
     sha: page0Commits[0].sha,
     changedPaths: ["src/main.ts"],
+  });
+  vi.mocked(readGraphCommitFileDiff).mockResolvedValue({
+    hunks: [],
+    binary: false,
+    truncated: false,
+    bytes: 0,
   });
   return render(<><GraphToolbar /><GraphView /></>);
 }
@@ -241,6 +252,14 @@ it("shows all worktree file groups, opens Changes, and inspects commit details",
 
   await userEvent.click(screen.getByRole("option", { name: /Initial commit/ }));
   expect(await screen.findByText("src/main.ts")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Open commit diff for src/main.ts" }));
+  expect(readGraphCommitFileDiff).toHaveBeenCalledWith(
+    "project-1",
+    "/repos/main",
+    page0Commits[0].sha,
+    "src/main.ts",
+  );
+  expect(await screen.findByRole("tab", { name: "src/main.ts (Commit 0000000 diff)" })).toBeVisible();
   const shaChip = screen.getByRole("button", { name: page0Commits[0].shortSha });
   expect(shaChip).toHaveAttribute("title", page0Commits[0].sha);
   expect(screen.getByText("Initial commit", { selector: ".graph-commit-heading" })).toBeVisible();

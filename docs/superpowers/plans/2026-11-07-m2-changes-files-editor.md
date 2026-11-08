@@ -247,6 +247,23 @@ Make Graph's WIP inspector a compact source-control surface: clicking status-gro
 
 **Stage 4 gate.** `./init.sh`; full Playwright E2E; `code-reviewer`; `security-reviewer` (oplog SQLite, undo paths, cross-stage regression sweep); §9 perf check for memory (<400 MB open with 2 repos and the editor loaded — approximate measurement documented); final `docs/testing/m2-manual-e2e.md` update. 🛑 **Manual Checkpoint M2.4** (M2 done).
 
+## Stage 5 follow-up: Graph commit history diff
+
+M2 was released as `v0.2.0`. This user-requested follow-up is tracked separately on `m2-stage-5`; it adds commit-history file diffs without changing the prior release tag.
+
+### Task 17 — Graph commit history diff inspector ✅
+
+Make changed paths in the selected-commit inspector clickable. Open each selected commit's file diff as a read-only tab in Graph's main editor area, alongside existing WIP diff tabs. Compare against the commit's first parent; compare a root commit against an empty tree. Keep the inspector and Graph history available, and do not route historical diffs to Files.
+
+**Tests:** Rust tests for parent and root commit diff models; Vitest for commit diff tab lifecycle, separation from WIP context, and read-only rendering; one Stage 5 manual E2E check.
+
+**Security-relevant surfaces:** New read-only Tauri IPC for a validated registered worktree, commit SHA, and repository-relative path. No filesystem mutation.
+
+- [x] Implement commit file-diff IPC, Graph tabs, and inspector file actions.
+- [x] Add focused Rust/Vitest coverage and the manual E2E check.
+- [x] `./init.sh`, full Playwright E2E, code review, and focused security review.
+- Commit step _(skipped: no-commit rule; awaiting manual Checkpoint M2.5 approval; do not push)_.
+
 ## Harness check
 
 | Task | Instructions | Scope | Verification | Lifecycle | State |

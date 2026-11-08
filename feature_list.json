@@ -734,6 +734,17 @@
       ],
       "status": "done",
       "evidence": "Code review follow-up PASS (.agent/reviews/m2-stage-4-code-review.md); security review PASS, no vulnerabilities (.agent/reviews/m2-stage-4-security-review.md). ./init.sh: typecheck/Clippy clean, 37 Vitest files/294 tests passed, Rust 126 passed/3 ignored. pnpm test:e2e: 76 passed. cargo fmt --check and git diff --check clean. User confirmed Open Question 5 (defer PR links to M4; retain Blame/History/Diff tabs; View commit opens Graph) and Open Question 7 (undo commit, discard, delete-to-Trash, stash-drop). User approved Checkpoint M2.4 and the stage commit while accepting that manual M2-S4-01..05 and native memory (<400 MB, two repositories + 5,000-line editor) remain unverified. Stage commit 300a23a; release commit c5e4589; tag v0.2.0."
+    },
+    {
+      "id": "m2-task-17-graph-history-diff",
+      "stage": 12,
+      "name": "Graph commit history diff inspector",
+      "description": ".agent/tasks/m2-task-17-graph-history-diff.md",
+      "dependencies": [
+        "m2-stage-4-review"
+      ],
+      "status": "done",
+      "evidence": "Implemented validated read-only commit-file-diff IPC, commit-specific Graph editor tabs, and accessible clickable inspector paths. Rust parent/root diff fixtures and Vitest tab/read-only tests pass. Code review follow-up PASS (.agent/reviews/m2-stage-5-code-review.md); security review PASS with no findings (.agent/reviews/m2-stage-5-security-review.md). ./init.sh: 37 Vitest files/297 tests passed; Rust 128 passed/3 ignored; Clippy clean. pnpm test:e2e: 76 passed. User approved Checkpoint M2.5 and ordered Stage 5 closeout; no push."
     }
   ]
 }

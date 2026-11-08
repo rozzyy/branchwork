@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::{diff, error::AppError};
 use git2::{BranchType, Oid, Repository, Status, StatusOptions};
 use serde::Serialize;
 use std::{
@@ -186,6 +186,16 @@ pub fn read_commit_detail(
         sha: oid.to_string(),
         changed_paths,
     })
+}
+
+pub fn read_commit_file_diff(
+    project_path: &Path,
+    worktree_path: &Path,
+    sha: &str,
+    file_path: &str,
+) -> Result<diff::DiffModel, AppError> {
+    let (repository, _, _) = open_project_worktrees(project_path, worktree_path)?;
+    diff::read_commit_file_diff(&repository, worktree_path, sha, file_path)
 }
 
 fn open_project_worktrees(

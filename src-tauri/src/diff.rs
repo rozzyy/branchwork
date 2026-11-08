@@ -131,7 +131,45 @@ pub fn read(worktree_path: &Path, file_path: &str, area: DiffArea) -> Result<Dif
                 .map_err(AppError::from)?
         }
     };
-    model_from_diff(&repository, &worktree_path, &diff, file_path, area)
+    model_from_diff(&repository, &worktree_path, &diff, file_path, Some(area))
+}
+
+pub(crate) fn read_commit_file_diff(
+    repository: &Repository,
+    worktree_path: &Path,
+    commit_sha: &str,
+    file_path: &str,
+) -> Result<DiffModel, AppError> {
+    let path = validate_file_path(file_path)?;
+    let oid = Oid::from_str(commit_sha)
+        .map_err(|error| AppError::validation(format!("Invalid commit SHA: {error}")))?;
+    let commit = repository.find_commit(oid).map_err(|error| {
+        AppError::not_found(format!("Cannot read commit {commit_sha}: {error}"))
+    })?;
+    let commit_tree = commit.tree().map_err(AppError::from)?;
+    let parent_tree = if commit.parent_count() == 0 {
+        None
+    } else {
+        Some(
+            commit
+                .parent(0)
+                .map_err(AppError::from)?
+                .tree()
+                .map_err(AppError::from)?,
+        )
+    };
+
+    let mut options = DiffOptions::new();
+    options
+        .patience(true)
+        .context_lines(3)
+        .interhunk_lines(0)
+        .pathspec(&path)
+        .disable_pathspec_match(true);
+    let diff = repository
+        .diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), Some(&mut options))
+        .map_err(AppError::from)?;
+    model_from_diff(repository, worktree_path, &diff, file_path, None)
 }
 
 /// `HEAD`'s tree, or `None` on an unborn/missing branch (brand-new repo with no commits yet) —
@@ -261,7 +299,7 @@ fn model_from_diff(
     worktree_path: &Path,
     diff: &Diff<'_>,
     file_path: &str,
-    area: DiffArea,
+    area: Option<DiffArea>,
 ) -> Result<DiffModel, AppError> {
     let delta_index = diff
         .deltas()
@@ -287,7 +325,8 @@ fn model_from_diff(
         .ok_or_else(|| AppError::internal("Git diff patch is unavailable"))?;
     // Unstaged and Head both end at the workdir file as the "new" side, so it's worth a binary
     // sniff. Staged compares HEAD -> index; the workdir file isn't part of that diff.
-    let working_file_binary = matches!(area, DiffArea::Unstaged | DiffArea::Head)
+    let working_file_binary = area
+        .is_some_and(|area| matches!(area, DiffArea::Unstaged | DiffArea::Head))
         && working_file_is_binary(worktree_path, file_path)?;
     if delta.flags().contains(DiffFlags::BINARY)
         || blob_is_binary(repository, &delta)?
@@ -704,6 +743,79 @@ mod tests {
         let model = diff(&dir.0, "file.txt", DiffArea::Staged);
         assert!(!model.binary);
         assert_eq!(find_line(&model, DiffLineKind::Add).text, "after");
+    }
+
+    #[test]
+    fn reads_commit_file_diff_against_first_parent() {
+        let dir = TestDir::new();
+        let repository = init_repository(&dir.0, &[("file.txt", b"before\n")]);
+        let signature = Signature::now("Branchwork test", "test@example.com").unwrap();
+        fs::write(dir.0.join("file.txt"), b"after\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("file.txt")).unwrap();
+        let tree_id = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let parent = repository.head().unwrap().peel_to_commit().unwrap();
+        let commit_id = repository
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "change file",
+                &tree,
+                &[&parent],
+            )
+            .unwrap();
+        let model =
+            read_commit_file_diff(&repository, &dir.0, &commit_id.to_string(), "file.txt").unwrap();
+
+        assert_eq!(find_line(&model, DiffLineKind::Del).text, "before");
+        assert_eq!(find_line(&model, DiffLineKind::Add).text, "after");
+        assert_eq!(
+            read_commit_file_diff(&repository, &dir.0, "not-a-sha", "file.txt")
+                .unwrap_err()
+                .kind,
+            crate::error::ErrorKind::Validation
+        );
+        assert_eq!(
+            read_commit_file_diff(
+                &repository,
+                &dir.0,
+                &commit_id.to_string(),
+                "../outside.txt"
+            )
+            .unwrap_err()
+            .kind,
+            crate::error::ErrorKind::Validation
+        );
+    }
+
+    #[test]
+    fn reads_root_commit_file_diff_against_empty_tree() {
+        let dir = TestDir::new();
+        let repository = Repository::init(&dir.0).unwrap();
+        let signature = Signature::now("Branchwork test", "test@example.com").unwrap();
+        fs::write(dir.0.join("root.txt"), b"root content\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("root.txt")).unwrap();
+        let tree_id = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let commit_id = repository
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "root commit",
+                &tree,
+                &[],
+            )
+            .unwrap();
+
+        let model =
+            read_commit_file_diff(&repository, &dir.0, &commit_id.to_string(), "root.txt").unwrap();
+        assert_eq!(find_line(&model, DiffLineKind::Add).text, "root content");
     }
 
     #[cfg(unix)]

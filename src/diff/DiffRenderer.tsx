@@ -310,14 +310,16 @@ export function DiffRenderer({
           {labels.chip && <span className="chip">{t(labels.chip)}</span>}
           <span className="diff-file-path">{fileName}</span>
           <span className="diff-file-spacer" />
-          <Button
-            disabled={!onStageSelectedLines || selectedLineIds.length === 0 || area === "staged"}
-            onClick={() => onStageSelectedLines?.()}
-            size="sm"
-            variant="ghost"
-          >
-            {t("diff.stageSelectedLines")}
-          </Button>
+          {onStageSelectedLines && (
+            <Button
+              disabled={selectedLineIds.length === 0 || area === "staged"}
+              onClick={() => onStageSelectedLines()}
+              size="sm"
+              variant="ghost"
+            >
+              {t("diff.stageSelectedLines")}
+            </Button>
+          )}
           <button
             aria-label={t("diff.previousHunk")}
             className="ib2"

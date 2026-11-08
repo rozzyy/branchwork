@@ -30,10 +30,12 @@ const checkedKeys = [
   "graph.diffTab",
   "graph.closeDiffTab",
   "graph.openDiff",
+  "graph.openCommitDiff",
+  "graph.files.commit",
   "graph.stageFile",
   "graph.unstageFile",
   "graph.loadingDiff",
-  "graph.wipDiffError",
+  "graph.diffError",
 ] satisfies readonly MsgKey[];
 
 describe("t", () => {

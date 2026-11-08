@@ -5,6 +5,7 @@ import {
   type GraphWorktreeHead_Serialize,
   type WipSummary_Serialize,
   type GraphPage_Serialize,
+  type DiffModel,
 } from "./bindings";
 
 export type { GraphRef, GraphRefKind, GraphNode, GraphEdge, GraphCommitDetail } from "./bindings";
@@ -33,4 +34,16 @@ export function readGraphCommitDetail(
     return Promise.reject(new Error("Reading commit details requires the desktop app"));
   }
   return commands.graphCommitDetail(projectId, worktreePath, sha);
+}
+
+export function readGraphCommitFileDiff(
+  projectId: string,
+  worktreePath: string,
+  sha: string,
+  path: string,
+): Promise<DiffModel> {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    return Promise.reject(new Error("Reading commit file diffs requires the desktop app"));
+  }
+  return commands.graphCommitFileDiff(projectId, worktreePath, sha, path);
 }

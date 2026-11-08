@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { DiffRenderer } from "../../diff/DiffRenderer";
 import { errorMessage } from "../../ipc/errors";
 import { readDiff, type DiffArea, type DiffModel } from "../../ipc/diff";
+import { readGraphCommitFileDiff } from "../../ipc/graph";
 import { t } from "../../i18n/t";
 import { useChanges, type ChangesCommand } from "../../state/changes";
 import { useFiles } from "../../state/files";
@@ -9,20 +10,35 @@ import { useStage } from "../../state/stage";
 
 const GRAPH_TAB_ID = "graph";
 
-interface DiffTab {
+interface WipDiffTab {
   id: string;
   path: string;
   area: DiffArea;
+  kind: "wip";
 }
 
+interface CommitDiffTab {
+  id: string;
+  path: string;
+  sha: string;
+  kind: "commit";
+}
+
+type DiffTab = WipDiffTab | CommitDiffTab;
+
 export function GraphEditorTabs({
+  projectId,
   worktreePath,
   children,
   renderInspector,
 }: {
+  projectId: string;
   worktreePath: string;
   children(openDiff: (path: string, area: DiffArea) => void): ReactNode;
-  renderInspector(openDiff: (path: string, area: DiffArea) => void): ReactNode;
+  renderInspector(
+    openDiff: (path: string, area: DiffArea) => void,
+    openCommitDiff: (sha: string, path: string) => void,
+  ): ReactNode;
 }) {
   const dispatch = useChanges((state) => state.dispatch);
   const [tabs, setTabs] = useState<DiffTab[]>([]);
@@ -44,7 +60,10 @@ export function GraphEditorTabs({
     setDiffError(null);
     setDiffLoading(true);
     setSelectedLineIds([]);
-    void readDiff(worktreePath, tab.path, tab.area)
+    const request = tab.kind === "commit"
+      ? readGraphCommitFileDiff(projectId, worktreePath, tab.sha, tab.path)
+      : readDiff(worktreePath, tab.path, tab.area);
+    void request
       .then((model) => {
         if (requestId.current === currentRequest) setDiff(model);
       })
@@ -54,10 +73,22 @@ export function GraphEditorTabs({
       .finally(() => {
         if (requestId.current === currentRequest) setDiffLoading(false);
       });
-  }, [worktreePath]);
+  }, [projectId, worktreePath]);
 
   const openDiff = useCallback((path: string, area: DiffArea) => {
-    const tab: DiffTab = { id: JSON.stringify([area, path]), path, area };
+    const tab: WipDiffTab = { id: JSON.stringify(["wip", area, path]), path, area, kind: "wip" };
+    setTabs((current) => current.some((existing) => existing.id === tab.id) ? current : [...current, tab]);
+    setActiveTabId(tab.id);
+    loadDiff(tab);
+  }, [loadDiff]);
+
+  const openCommitDiff = useCallback((sha: string, path: string) => {
+    const tab: CommitDiffTab = {
+      id: JSON.stringify(["commit", sha, path]),
+      path,
+      sha,
+      kind: "commit",
+    };
     setTabs((current) => current.some((existing) => existing.id === tab.id) ? current : [...current, tab]);
     setActiveTabId(tab.id);
     loadDiff(tab);
@@ -86,6 +117,7 @@ export function GraphEditorTabs({
   };
 
   const runAction = async (command: ChangesCommand) => {
+    if (activeTab?.kind !== "wip") return;
     const succeeded = await dispatch(command);
     if (succeeded && activeTab) loadDiff(activeTab);
   };
@@ -108,7 +140,10 @@ export function GraphEditorTabs({
             {t("nav.graph")}
           </button>
           {tabs.map((tab) => {
-            const label = t(tab.area === "staged" ? "graph.files.staged" : "graph.files.unstaged");
+            const label = tab.kind === "commit"
+              ? t("graph.files.commit")
+              : t(tab.area === "staged" ? "graph.files.staged" : "graph.files.unstaged");
+            const areaName = tab.kind === "commit" ? `${label} ${tab.sha.slice(0, 7)}` : label;
             return (
               <div className="graph-editor-tab-wrap" key={tab.id}>
                 <button
@@ -116,16 +151,16 @@ export function GraphEditorTabs({
                   className={"graph-editor-tab" + (activeTabId === tab.id ? " selected" : "")}
                   onClick={() => activateTab(tab)}
                   role="tab"
-                  title={tab.path}
+                  title={tab.kind === "commit" ? `${tab.path} (${tab.sha})` : tab.path}
                   type="button"
                 >
-                  {t("graph.diffTab", { path: tab.path, area: label })}
+                  {t("graph.diffTab", { path: tab.path, area: areaName })}
                 </button>
                 <button
-                  aria-label={t("graph.closeDiffTab", { path: tab.path, area: label.toLowerCase() })}
+                  aria-label={t("graph.closeDiffTab", { path: tab.path, area: areaName.toLowerCase() })}
                   className="graph-editor-tab-close"
                   onClick={() => closeTab(tab)}
-                  title={t("graph.closeDiffTab", { path: tab.path, area: label.toLowerCase() })}
+                  title={t("graph.closeDiffTab", { path: tab.path, area: areaName.toLowerCase() })}
                   type="button"
                 >
                   ×
@@ -137,20 +172,21 @@ export function GraphEditorTabs({
         {activeTab ? (
           <div className="graph-diff-editor" role="tabpanel">
             {diffLoading && <p className="graph-muted">{t("graph.loadingDiff")}</p>}
-            {diffError && <p className="graph-inline-error" role="alert">{t("graph.wipDiffError", { message: diffError })}</p>}
+            {diffError && <p className="graph-inline-error" role="alert">{t("graph.diffError", { message: diffError })}</p>}
             {diff && (
               <DiffRenderer
-                area={activeTab.area}
+                area={activeTab.kind === "commit" ? "all" : activeTab.area}
                 fileName={activeTab.path}
-                hunkAreas={diff.hunks.map(() => activeTab.area)}
+                hunkAreas={activeTab.kind === "wip" ? diff.hunks.map(() => activeTab.area) : undefined}
                 key={activeTab.id}
                 mode="inline"
                 model={diff}
-                onOpenFile={() => {
+                onOpenFile={activeTab.kind === "wip" ? () => {
                   useFiles.getState().openFile(activeTab.path);
                   useStage.getState().go("files");
-                }}
+                } : undefined}
                 onRequestHunkAction={(_hunk, action, hunkIndex) => {
+                  if (activeTab.kind !== "wip") return;
                   if (action === "stage") {
                     void runAction({
                       type: "stage-hunks",
@@ -168,26 +204,26 @@ export function GraphEditorTabs({
                     void runAction({ type: "revert-hunk", path: activeTab.path, hunkIndex });
                   }
                 }}
-                onStageSelectedLines={() => {
+                onStageSelectedLines={activeTab.kind === "wip" ? () => {
                   void runAction({
                     type: "stage-lines",
                     path: activeTab.path,
                     lineIds: selectedLineIds,
                     area: activeTab.area,
                   });
-                }}
-                onToggleLine={(_hunk, lineId) => {
+                } : undefined}
+                onToggleLine={activeTab.kind === "wip" ? (_hunk, lineId) => {
                   setSelectedLineIds((current) => current.includes(lineId)
                     ? current.filter((id) => id !== lineId)
                     : [...current, lineId]);
-                }}
+                } : undefined}
                 selectedLineIds={selectedLineIds}
               />
             )}
           </div>
         ) : children(openDiff)}
       </div>
-      {renderInspector(openDiff)}
+      {renderInspector(openDiff, openCommitDiff)}
     </div>
   );
 }
