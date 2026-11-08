@@ -25,17 +25,27 @@ after the last task of the stage:
   code-reviewer + security-reviewer (if security surfaces were touched) + e2e-testing  → reports in .agent/reviews/
   write/extend the manual E2E test spec: docs/testing/m0-manual-e2e.md
   🛑 STOP at the stage's MANUAL TEST CHECKPOINT and wait for the user
-  on go-ahead: commit the stage (one commit) on the stage branch, then branch again for the next stage
+  on go-ahead: commit the stage on its branch, fast-forward it into main (see Git workflow)
 ```
 
 ## Hard rules
 
-- **New branch per stage.** Before starting the first task of a new stage, create a branch from the latest `main` (`git switch -c m<N>-stage-<K>`, e.g. `m2-stage-3`), or a worktree (`git worktree add ../branchwork-m2-stage-3 -b m2-stage-3`) when parallel work is needed. Every task in that stage happens on that branch; never start a stage on `main`.
+- **Git workflow:** follow the "Git workflow" section below.
 - **No per-task commits, never `git push`.** Skip the plan's per-task "Commit" steps. After the user approves a stage checkpoint, make **one commit per stage** (the coordinator does this, not executors).
 - No over-engineering: build only what the task text specifies.
 - No over-testing: write only the tests in the task text. Add a regression test only for a bug that was actually found.
 - All UI strings are English and come from `src/i18n/en.ts`.
 - Stop at every 🛑 checkpoint. Never start the next stage without the user's go-ahead.
+
+## Git workflow (trunk + stage branches + milestone tags)
+
+- `main` is the only long-lived branch. No `develop`, `release/*` or `hotfix/*`.
+- **Stage branch:** before the first task of a stage, branch from the latest `main`: `git switch -c m<N>-stage-<K>` (e.g. `m2-stage-3`). Use a worktree (`git worktree add ../branchwork-m<N>-stage-<K> -b m<N>-stage-<K>`) only when parallel work is needed. Never start a stage on `main`.
+- **Finish a stage** (only after the user approves the checkpoint and orders the commit): make the one stage commit on the stage branch, then `git switch main && git merge --ff-only m<N>-stage-<K> && git branch -d m<N>-stage-<K>`.
+- **Small fixes outside a stage** go straight to `main` as their own `fix:` / `docs:` / `chore:` commit.
+- **Commit messages:** Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`).
+- **Versioning:** bump only when a milestone is done. M`<N>` done → `0.<N>.0`; `1.0.0` is the first v1 release. Bump `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` together in one `chore(release): v0.<N>.0` commit on `main`, then `git tag -a v0.<N>.0 -m "M<N>: <name>"`.
+- **Commit and push only when the user orders it.** The "never `git push`" rule stands; a push the user orders includes tags only if they say so.
 
 ## Testing levels (keep each one proportional)
 
