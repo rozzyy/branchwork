@@ -10,7 +10,7 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Verification:** `./init.sh` — `=== Verification Complete ===`; typecheck and Clippy clean; Test Files 37 passed (37), Tests 294 passed (294), Rust 126 passed/0 failed/3 ignored. `pnpm test:e2e` — 76 passed. `cargo fmt --check` and `git diff --check` clean.
 - **Performance:** E2E's 5 000-line diff metric was 276.0 ms median / 814.8 ms max under four concurrent dev workers; not comparable to isolated production timing. Native memory under the required two-repository/5 000-line-editor setup remains unverified; `.agent/reviews/m2-stage-4-e2e.md` records the blocker.
 - **User decisions:** Confirmed Open Question 5 (defer PR links to M4; keep Blame/History/Diff tabs; View commit opens Graph) and Open Question 7 (undo commit, discard, delete-to-Trash, stash-drop). The plan records both decisions.
-- **Checkpoint:** User approved M2.4 and ordered the Stage 4 commit while explicitly accepting that manual M2-S4-01..05 and the native memory measurement remain unverified. M2 is approved complete with that limitation recorded. Commit and release steps are authorized; no push.
+- **Checkpoint/release:** User approved M2.4 and ordered the Stage 4 commit while explicitly accepting that manual M2-S4-01..05 and native memory remain unverified. Stage commit `300a23a` is on `main`; release commit `c5e4589` and annotated tag `v0.2.0` complete M2. No push.
 
 ## 2026-11-08: M2 Task 16 — Graph working-copy inspector (branch `m2-stage-4`)
 
