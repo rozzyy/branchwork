@@ -1,5 +1,5 @@
 //! Stash list/apply/pop/drop reads and writes (Task 08).
-use crate::{error::AppError, oplog, worktree};
+use crate::{error::AppError, oplog, store::Store, worktree};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -142,7 +142,11 @@ pub(crate) fn stash_pop(worktree_path: &Path, index: usize) -> Result<(), AppErr
     )
 }
 
-pub(crate) fn stash_drop(worktree_path: &Path, index: usize) -> Result<(), AppError> {
+pub(crate) fn stash_drop(
+    store: &Store,
+    worktree_path: &Path,
+    index: usize,
+) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
     let entry = read_stashes(&root, &repository)?
         .into_iter()
@@ -164,7 +168,8 @@ pub(crate) fn stash_drop(worktree_path: &Path, index: usize) -> Result<(), AppEr
         )));
     }
     let sha = String::from_utf8_lossy(&resolved.stdout).trim().to_owned();
-    oplog::record(
+    let record_id = oplog::record(
+        store,
         "stash_drop",
         &root,
         "",
@@ -174,17 +179,17 @@ pub(crate) fn stash_drop(worktree_path: &Path, index: usize) -> Result<(), AppEr
             "time": entry.time,
         }),
     )?;
-    require_success(
-        "stash drop",
-        run_git(
-            &root,
-            &[
-                OsStr::new("stash"),
-                OsStr::new("drop"),
-                OsStr::new(&reference),
-            ],
-        )?,
+    let output = run_git(
+        &root,
+        &[
+            OsStr::new("stash"),
+            OsStr::new("drop"),
+            OsStr::new(&reference),
+        ],
     )
+    .map_err(|error| oplog::remove_failed_record(store, record_id, error))?;
+    require_success("stash drop", output)
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))
 }
 
 #[cfg(test)]
@@ -194,10 +199,18 @@ mod tests {
     use std::{
         fs,
         process::Command,
-        sync::atomic::{AtomicUsize, Ordering},
+        sync::{
+            OnceLock,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
     static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+    static STORE: OnceLock<Store> = OnceLock::new();
+
+    fn test_store() -> &'static Store {
+        STORE.get_or_init(|| Store::in_memory().unwrap())
+    }
 
     struct TestDir(PathBuf);
 
@@ -350,10 +363,10 @@ mod tests {
         let sha = rev_parse(&temp.0, "stash@{0}");
         let root = temp.0.canonicalize().unwrap();
 
-        stash_drop(&temp.0, 0).unwrap();
+        stash_drop(test_store(), &temp.0, 0).unwrap();
 
         assert!(stash_list(&temp.0).unwrap().is_empty());
-        let entry = oplog::entries_for(&root)
+        let entry = oplog::entries_for(test_store(), &root)
             .into_iter()
             .find(|entry| entry.operation == "stash_drop")
             .expect("stash_drop oplog row");
@@ -368,13 +381,31 @@ mod tests {
     }
 
     #[test]
+    fn failed_stash_drop_removes_its_undo_record() {
+        let temp = TestDir::new("drop-failure");
+        init_repo(&temp.0);
+        fs::write(temp.0.join("README.md"), b"two\n").unwrap();
+        push(&temp.0, Some("blocked-drop"), false);
+        let root = temp.0.canonicalize().unwrap();
+        let store = Store::in_memory().unwrap();
+        fs::write(root.join(".git/refs/stash.lock"), b"locked").unwrap();
+
+        assert!(stash_drop(&store, &temp.0, 0).is_err());
+        assert_eq!(stash_list(&temp.0).unwrap().len(), 1);
+        assert_eq!(
+            store.latest_oplog_undoable(root.to_str().unwrap()).unwrap(),
+            None
+        );
+    }
+
+    #[test]
     fn a_dropped_stash_can_be_reapplied_by_sha() {
         let temp = TestDir::new("recover");
         init_repo(&temp.0);
         fs::write(temp.0.join("README.md"), b"two\n").unwrap();
         push(&temp.0, Some("recover-me"), false);
         let sha = rev_parse(&temp.0, "stash@{0}");
-        stash_drop(&temp.0, 0).unwrap();
+        stash_drop(test_store(), &temp.0, 0).unwrap();
         assert!(stash_list(&temp.0).unwrap().is_empty());
 
         let output = git(&temp.0, &["stash", "apply", &sha]);

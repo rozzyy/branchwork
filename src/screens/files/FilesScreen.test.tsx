@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { fsCreate, fsRead, fsTree, fsWrite, revealInFinder } from "../../ipc/fs";
+import { fsCreate, fsDelete, fsRead, fsTree, fsWrite, revealInFinder } from "../../ipc/fs";
 import { discardPaths } from "../../ipc/changes";
 import { readDiff } from "../../ipc/diff";
 import { readStatus } from "../../ipc/status";
@@ -42,7 +42,8 @@ async function setup(fileOverrides: Partial<ReturnType<typeof useFiles.getState>
   });
   vi.mocked(readStatus).mockResolvedValue({ staged: [], unstaged: [] });
   vi.mocked(readDiff).mockResolvedValue({ hunks: [], binary: false, truncated: false, bytes: 0 });
-  vi.mocked(discardPaths).mockResolvedValue(undefined);
+  vi.mocked(discardPaths).mockResolvedValue(false);
+  vi.mocked(fsDelete).mockResolvedValue(false);
 
   useWorktrees.setState({
     activePath: worktreePath,
@@ -175,7 +176,7 @@ it("the context menu shows live items alongside disabled deferred ones", async (
 
   const terminalItem = screen.getByRole("menuitem", { name: /Open terminal here/ });
   expect(terminalItem).toBeDisabled();
-  expect(terminalItem).toHaveAttribute("title", "Available in a later milestone");
+  expect(terminalItem).toHaveAttribute("title", "Available in M3 (Terminal & agents)");
 
   const agentItem = screen.getByRole("menuitem", { name: /Ask agent about this/ });
   expect(agentItem).toBeDisabled();

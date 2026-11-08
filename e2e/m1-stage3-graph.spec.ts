@@ -79,6 +79,22 @@ test("browses graph history and inspects the working copy and a commit", async (
             };
           case "graph_commit_detail":
             return { sha: args.sha, changedPaths: ["src/main.ts"] };
+          case "diff_file":
+            return {
+              hunks: [{
+                oldStart: 1,
+                newStart: 1,
+                oldLines: 1,
+                newLines: 1,
+                lines: [
+                  { kind: "del", old: 1, new: null, text: "old content", intra: null },
+                  { kind: "add", old: null, new: 1, text: "new content", intra: null },
+                ],
+              }],
+              binary: false,
+              truncated: false,
+              bytes: 24,
+            };
           default:
             throw new Error(`Unexpected mocked IPC command: ${command}`);
         }
@@ -101,6 +117,13 @@ test("browses graph history and inspects the working copy and a commit", async (
   await expect(page.getByRole("heading", { name: "Working copy" })).toBeVisible();
   await expect(page.getByText("staged.ts")).toBeVisible();
   await expect(page.getByText("edited.ts")).toBeVisible();
+  await page.getByRole("button", { name: "Open unstaged diff for edited.ts" }).click();
+  await expect(page.getByRole("tab", { name: "edited.ts (Unstaged diff)" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".graph-inspector")).toContainText("edited.ts");
+  await expect(page.locator(".graph-diff-editor")).toContainText("new content");
+  await page.getByRole("tab", { name: "Graph" }).click();
+  await expect(page.getByRole("heading", { name: "Working copy" })).toBeVisible();
+
   const commit = page.getByRole("option", { name: /Initial graph commit/ });
   await expect(commit).toBeVisible();
   await expect(page.getByText("End of history · 2 commits", { exact: true })).toBeVisible();

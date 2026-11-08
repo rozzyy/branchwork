@@ -2,16 +2,16 @@ import { commands, type CommitOptions, type DiffArea } from "./bindings";
 
 export type { CommitOptions };
 
-export function commit(worktreePath: string, options: CommitOptions): Promise<void> {
-  return commands.commit(worktreePath, options).then(() => undefined);
+export function commit(worktreePath: string, options: CommitOptions): Promise<boolean> {
+  return commands.commit(worktreePath, options);
 }
 
-export function commitAndPush(worktreePath: string, options: CommitOptions): Promise<void> {
-  return commands.commitAndPush(worktreePath, options).then(() => undefined);
+export function commitAndPush(worktreePath: string, options: CommitOptions): Promise<boolean> {
+  return commands.commitAndPush(worktreePath, options);
 }
 
-export function commitAndSync(worktreePath: string, options: CommitOptions): Promise<void> {
-  return commands.commitAndSync(worktreePath, options).then(() => undefined);
+export function commitAndSync(worktreePath: string, options: CommitOptions): Promise<boolean> {
+  return commands.commitAndSync(worktreePath, options);
 }
 
 export function stagePaths(worktreePath: string, paths: string[]): Promise<void> {
@@ -26,8 +26,8 @@ export function discardPaths(
   worktreePath: string,
   paths: string[],
   discardUntracked: boolean,
-): Promise<void> {
-  return commands.discardPaths(worktreePath, paths, discardUntracked).then(() => undefined);
+): Promise<boolean> {
+  return commands.discardPaths(worktreePath, paths, discardUntracked);
 }
 
 export function stageHunks(

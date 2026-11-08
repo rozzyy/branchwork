@@ -1,3 +1,4 @@
+mod blame;
 mod commit;
 mod diff;
 mod error;
@@ -12,9 +13,32 @@ mod store;
 mod worktree;
 
 use error::AppError;
+use serde::Serialize;
 use std::path::Path;
 use store::{Group, Project, Store, WorktreePin};
-use tauri::{Emitter, Manager, State, Url};
+use tauri::{AppHandle, Emitter, Manager, State, Url};
+
+#[derive(Debug, Clone, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct OpDone {
+    undoable: bool,
+}
+
+fn emit_op_done(app: &AppHandle, store: &Store, worktree: &Path) {
+    let undoable = worktree
+        .canonicalize()
+        .ok()
+        .and_then(|path| path.to_str().map(str::to_owned))
+        .and_then(|path| store.latest_oplog_undoable(&path).ok().flatten())
+        .unwrap_or(false);
+    emit_op_done_state(app, undoable);
+}
+
+fn emit_op_done_state(app: &AppHandle, undoable: bool) {
+    if let Err(error) = app.emit("op:done", OpDone { undoable }) {
+        eprintln!("Could not emit op:done event: {error}");
+    }
+}
 
 fn validate_id(id: &str, kind: &str) -> Result<(), AppError> {
     if id.trim().is_empty() {
@@ -304,34 +328,67 @@ fn diff_file(
 #[tauri::command(async)]
 #[specta::specta]
 fn commit(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     options: commit::CommitOptions,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    commit::commit(&worktree_path, &options)
+    commit::commit(&store, &worktree_path, &options)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(store
+        .latest_oplog_undoable(worktree_path.to_str().unwrap_or_default())?
+        .unwrap_or(false))
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn commit_and_push(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     options: commit::CommitOptions,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    commit::commit_and_push(&worktree_path, &options)
+    commit::commit_and_push_with_callback(&store, &worktree_path, &options, || {
+        emit_op_done(&app, &store, &worktree_path)
+    })?;
+    Ok(store
+        .latest_oplog_undoable(worktree_path.to_str().unwrap_or_default())?
+        .unwrap_or(false))
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn commit_and_sync(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     options: commit::CommitOptions,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    commit::commit_and_sync(&worktree_path, &options)
+    commit::commit_and_sync_with_callback(&store, &worktree_path, &options, || {
+        emit_op_done(&app, &store, &worktree_path)
+    })?;
+    Ok(store
+        .latest_oplog_undoable(worktree_path.to_str().unwrap_or_default())?
+        .unwrap_or(false))
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn undo_last(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<bool, AppError> {
+    let path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    oplog::undo_last(&store, &path)?;
+    let remaining_undoable = store
+        .latest_oplog_undoable(path.to_str().unwrap_or_default())?
+        .unwrap_or(false);
+    emit_op_done_state(&app, remaining_undoable);
+    Ok(remaining_undoable)
 }
 
 #[tauri::command(async)]
@@ -376,51 +433,71 @@ fn stash_pop(store: State<'_, Store>, worktree_path: String, index: usize) -> Re
 #[tauri::command(async)]
 #[specta::specta]
 fn stash_drop(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     index: usize,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stash::stash_drop(&worktree_path, index)
+    stash::stash_drop(&store, &worktree_path, index)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(store
+        .latest_oplog_undoable(worktree_path.to_str().unwrap_or_default())?
+        .unwrap_or(false))
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn stage_paths(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     paths: Vec<String>,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stage::stage_paths(&worktree_path, &paths)
+    let result = stage::stage_paths(&store, &worktree_path, &paths);
+    emit_op_done(&app, &store, &worktree_path);
+    result?;
+    Ok(())
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn unstage_paths(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     paths: Vec<String>,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stage::unstage_paths(&worktree_path, &paths)
+    let result = stage::unstage_paths(&store, &worktree_path, &paths);
+    emit_op_done(&app, &store, &worktree_path);
+    result?;
+    Ok(())
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn discard_paths(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     paths: Vec<String>,
     discard_untracked: bool,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stage::discard_paths(&worktree_path, &paths, discard_untracked)
+    let result = stage::discard_paths(&store, &worktree_path, &paths, discard_untracked);
+    emit_op_done(&app, &store, &worktree_path);
+    result?;
+    Ok(store
+        .latest_oplog_undoable(worktree_path.to_str().unwrap_or_default())?
+        .unwrap_or(false))
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn stage_hunks(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     path: String,
@@ -428,24 +505,32 @@ fn stage_hunks(
     area: diff::DiffArea,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stage::stage_hunks(&worktree_path, &path, &hunk_indices, area)
+    let result = stage::stage_hunks(&store, &worktree_path, &path, &hunk_indices, area);
+    emit_op_done(&app, &store, &worktree_path);
+    result?;
+    Ok(())
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn unstage_hunks(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     path: String,
     hunk_indices: Vec<usize>,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stage::unstage_hunks(&worktree_path, &path, &hunk_indices)
+    let result = stage::unstage_hunks(&store, &worktree_path, &path, &hunk_indices);
+    emit_op_done(&app, &store, &worktree_path);
+    result?;
+    Ok(())
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn stage_lines(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     path: String,
@@ -453,19 +538,26 @@ fn stage_lines(
     area: diff::DiffArea,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stage::stage_lines(&worktree_path, &path, &line_ids, area)
+    let result = stage::stage_lines(&store, &worktree_path, &path, &line_ids, area);
+    emit_op_done(&app, &store, &worktree_path);
+    result?;
+    Ok(())
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn revert_hunk(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     path: String,
     hunk_index: usize,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    stage::revert_hunk(&worktree_path, &path, hunk_index)
+    let result = stage::revert_hunk(&store, &worktree_path, &path, hunk_index);
+    emit_op_done(&app, &store, &worktree_path);
+    result?;
+    Ok(())
 }
 
 // Runs off the main thread: directory listings and file reads must not freeze the window.
@@ -494,6 +586,7 @@ fn fs_read(
 #[tauri::command(async)]
 #[specta::specta]
 fn fs_write(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     path: String,
@@ -501,38 +594,55 @@ fn fs_write(
     expected_mtime: u64,
 ) -> Result<u64, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    fs::write(&worktree_path, &path, bytes, expected_mtime)
+    let mtime = fs::write(&store, &worktree_path, &path, bytes, expected_mtime)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(mtime)
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn fs_create(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     path: String,
     kind: fs::FsEntryKind,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    fs::create(&worktree_path, &path, kind)
+    fs::create(&store, &worktree_path, &path, kind)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(())
 }
 
 #[tauri::command(async)]
 #[specta::specta]
 fn fs_rename(
+    app: AppHandle,
     store: State<'_, Store>,
     worktree_path: String,
     from: String,
     to: String,
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    fs::rename(&worktree_path, &from, &to)
+    fs::rename(&store, &worktree_path, &from, &to)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(())
 }
 
 #[tauri::command(async)]
 #[specta::specta]
-fn fs_delete(store: State<'_, Store>, worktree_path: String, path: String) -> Result<(), AppError> {
+fn fs_delete(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+) -> Result<bool, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    fs::delete(&worktree_path, &path)
+    fs::delete(&store, &worktree_path, &path)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(store
+        .latest_oplog_undoable(worktree_path.to_str().unwrap_or_default())?
+        .unwrap_or(false))
 }
 
 #[tauri::command(async)]
@@ -544,6 +654,30 @@ fn reveal_in_finder(
 ) -> Result<(), AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
     fs::reveal_in_finder(&worktree_path, &path)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn blame(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    options: blame::BlameRequest,
+) -> Result<blame::BlameResult, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    blame::blame(&worktree_path, &path, options)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn file_history(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    options: blame::FileHistoryRequest,
+) -> Result<Vec<blame::FileHistoryEntry>, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    blame::file_history(&worktree_path, &path, options)
 }
 
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
@@ -594,6 +728,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commit,
             commit_and_push,
             commit_and_sync,
+            undo_last,
             stash_list,
             stash_push,
             stash_apply,
@@ -612,12 +747,15 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             fs_create,
             fs_rename,
             fs_delete,
-            reveal_in_finder
+            reveal_in_finder,
+            blame,
+            file_history
         ])
         // `git:changed` (emitted in `run()`'s setup below) carries this payload; registering it
         // here (rather than as a tauri-specta `Event`) exports its TS type without changing how
         // it's emitted/listened to.
         .typ::<worktree::WorktreeChanged>()
+        .typ::<OpDone>()
 }
 
 /// S3-M1: rejects any top-level webview navigation off the app's own origin. Defence in depth

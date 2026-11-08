@@ -18,6 +18,6 @@ export function stashPop(worktreePath: string, index: number): Promise<void> {
   return commands.stashPop(worktreePath, index).then(() => undefined);
 }
 
-export function stashDrop(worktreePath: string, index: number): Promise<void> {
-  return commands.stashDrop(worktreePath, index).then(() => undefined);
+export function stashDrop(worktreePath: string, index: number): Promise<boolean> {
+  return commands.stashDrop(worktreePath, index);
 }

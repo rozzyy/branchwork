@@ -2,6 +2,59 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-08: M2 Stage 4 review follow-ups (branch `m2-stage-4`)
+
+- **Fixed:** Failed file create/write/rename attempts now remove their pre-write oplog rows. If `git rebase --abort` fails, the sync row is marked non-undoable before the failure callback refreshes UI state. Regression tests cover both paths.
+- **Code review:** Follow-up PASS (`.agent/reviews/m2-stage-4-code-review.md`); all findings from the initial review are fixed.
+- **Security review:** PASS, no vulnerabilities found (`.agent/reviews/m2-stage-4-security-review.md`); the final focused review covered the failure-path changes.
+- **Verification:** `./init.sh` — `=== Verification Complete ===`; typecheck and Clippy clean; Test Files 37 passed (37), Tests 294 passed (294), Rust 126 passed/0 failed/3 ignored. `pnpm test:e2e` — 76 passed. `cargo fmt --check` and `git diff --check` clean.
+- **Performance:** E2E's 5 000-line diff metric was 276.0 ms median / 814.8 ms max under four concurrent dev workers; not comparable to isolated production timing. Native memory under the required two-repository/5 000-line-editor setup remains unverified; `.agent/reviews/m2-stage-4-e2e.md` records the blocker.
+- **User decisions:** Confirmed Open Question 5 (defer PR links to M4; keep Blame/History/Diff tabs; View commit opens Graph) and Open Question 7 (undo commit, discard, delete-to-Trash, stash-drop). The plan records both decisions.
+- **Checkpoint:** User approved M2.4 and ordered the Stage 4 commit while explicitly accepting that manual M2-S4-01..05 and the native memory measurement remain unverified. M2 is approved complete with that limitation recorded. Commit and release steps are authorized; no push.
+
+## 2026-11-08: M2 Task 16 — Graph working-copy inspector (branch `m2-stage-4`)
+
+- **Spec:** Updated design spec §6.2 and added `.agent/tasks/m2-task-16-graph-wip-inspector.md`. Graph WIP gains selectable status files, independent staged/unstaged diff tabs, quick stage/unstage and shared hunk/line actions. Commit, stash, discard, and full source-control workflows remain in Changes.
+- **Built:** New `WipInspector` uses the existing `DiffRenderer`, Changes dispatch, and Files navigation. Tabs close individually and reset on active-worktree changes; failed diff reads report inline.
+- **Tests:** 3 focused files, 18 tests passed: WIP tab lifecycle and comparison context, stage/hunk dispatch, worktree reset, Graph integration, and i18n keys. Stage 4 manual check M2-S4-04 added.
+- **Review:** Coordinator acceptance review PASS (`.agent/reviews/m2-task-16-spec.md`, all 6 ACs).
+- **Gate:** `./init.sh` — `=== Verification Complete ===`; typecheck clean; Test Files 36 passed (36), Tests 292 passed (292); Rust 116 passed, 0 failed, 3 ignored; Clippy clean.
+- **Next:** Stage 4 review gate (`.agent/tasks/m2-stage-4-review.md`) → 🛑 Checkpoint M2.4. No commit or push.
+
+## 2026-11-08: M2 Task 15 — Wrap-up polish (branch `m2-stage-4`)
+
+- **Built:** Audited Changes, Files, Editor, and Blame for user-facing literals; localized the UTF-8 fallback and editor language names. Added the exact M3/M4/M6 tooltip strings, palette commands for Changes/Files/Blame, staged-view toggle and confirmed discard-all, and verified `undo.last_action`.
+- **Tests:** Palette tests cover rendering and dispatch for the new commands, active-worktree undo, and discard confirmation. The i18n test checks all introduced keys and missing-key warnings. Focused Vitest: 5 files, 90 tests passed.
+- **Manual spec:** Added Stage 4 palette, discard/undo, blame/history, and destructive-operation checks to `docs/testing/m2-manual-e2e.md`.
+- **Review:** Coordinator acceptance review PASS (`.agent/reviews/m2-task-15-spec.md`, all 5 ACs).
+- **Gate:** `./init.sh` — `=== Verification Complete ===`; typecheck clean; Test Files 35 passed (35), Tests 289 passed (289); Rust 116 passed, 0 failed, 3 ignored; Clippy clean.
+- **Next:** Stage 4 review gate (code/security/E2E, performance, final manual spec) → stop at Checkpoint M2.4. No commit or push.
+
+## 2026-11-08: M2 Task 14 — Oplog persistence and `undo_last` (branch `m2-stage-4`)
+
+- **Built:** SQLite v2 additive/idempotent `oplog` table and descending worktree index; persisted pre-write records across commit, discard, delete-to-Trash, stash-drop and existing Stage 2/3 oplog writers. Per-row BLOB payloads are capped at 16 MiB; oversized snapshots remain recorded as non-undoable. Added `undo_last` with soft reset, discard snapshot restore, Trash restore/inline file fallback, and stash apply; failed reversals retain their rows.
+- **Wired:** Typed Tauri `undo_last` and `op:done`; all oplog-recording forward mutations update toast Undo state. The newest non-undoable row blocks undo rather than skipping backward. Commit/rebase emits after the successful write even if a later push fails. Added the active-worktree `undo.last_action` palette command and replaced the old in-process undo intent.
+- **Review:** PASS (`.agent/reviews/m2-task-14-spec.md`, all 8 ACs). Review findings on row ordering, partial push failure, and stage-operation event state were fixed and regression-tested.
+- **Tests:** Rust migration/idempotence + catalog-preservation, payload cap, failed-insert abort, all four reverse round-trips, failed-reverse retention, non-undoable ordering, and commit-before-failed-push notification. Vitest verifies palette routing and event-driven toast action state.
+- **Gate:** `./init.sh` — Test Files 35 passed (35), Tests 283 passed (283), Rust 116 passed/0 failed/3 ignored, Clippy clean. `cargo fmt --manifest-path src-tauri/Cargo.toml --check` clean.
+- **Next:** Task 15 — M2 wrap-up polish. No per-task commit; Stage 4 stops at Checkpoint M2.4.
+
+## 2026-11-08: M2 Task 13 — Blame screen (branch `m2-stage-4`)
+
+- **Built:** `src/screens/blame/` — `BlameScreen.tsx` (`BlameToolbar`/`BlameView`), `blameState.ts` (zustand selected-line store), `blame.css`, `BlameScreen.test.tsx` (7 tests). Three columns: compact read-only file tree, grouped blame gutter (one row per Task 12 `groups` entry, per-line heat stripe for all five `age_bucket`s), detail panel with commit card + `FILE HISTORY`. `View commit` deep-links Graph at the SHA; `View PR` disabled with `ui.deferred_m4`. Toolbar segmented Blame|History|Diff + Open in editor. Files context menu now selects the clicked file before navigating to Blame. 20 `blame.*` keys in `en.ts`.
+- **Review:** spec-reviewer **PASS** (`.agent/reviews/m2-task-13-spec.md`), 4 non-blocking nits (compact tree duplicated instead of reusing unexported `TreeNode`; `hours→var(--red)` since no orange token exists; detail message is subject-line only per Task 12 IPC; File-history menu item doesn't auto-scroll on entry).
+- **Gate:** coordinator-ran `./init.sh` — `Test Files 34 passed (34)`, `Tests 281 passed (281)`, Rust `104 passed; 0 failed; 3 ignored`. Note: one earlier full-suite run flaked a single test; two subsequent full runs were 281/281.
+- **Next:** Task 14 — Oplog persistence and `undo_last`. No per-task commit.
+
+## 2026-11-08: M2 Task 12 — Blame and file history IPC (branch `m2-stage-4`)
+
+- **Resumed** from a prior session whose two executors died on a weekly API limit mid-task. Their partial work was in the tree and sound: `src-tauri/src/blame.rs` (419 lines), `lib.rs` registration, regenerated `bindings.ts`, and the `e2e/m2-stage2-changes.spec.ts` rewrite. Completed the missing piece this session.
+- **Built:** `blame` via `git2::Blame` (per-line sha/author/time/summary + `age_bucket` hours/days/weeks/months/older against now, consecutive-SHA `groups` collapse) and `file_history` via `Revwalk` `TOPOLOGICAL|TIME` path-scoped by tree diff with `limit`; `NotFound` on untracked paths; worktree validated via `validate_catalog_worktree`. Rename-follow off by default — libgit2's track-copies flags are documented upstream as unimplemented, so `followRenames: true` sets them as a no-op (module header documents this). Frontend: `src/ipc/blame.ts` (`readBlame`/`readFileHistory`, desktop-app guard like `status.ts`) + `blame.test.ts` contract test (3 tests).
+- **AC check (self-review vs `.agent/tasks/m2-task-12.md`):** AC-1…AC-8 all met. Rust tests 4/4 (three-commit SHA-per-line + group ranges, history newest-first + limit, age-bucket boundaries with injected `now`, NotFound for both commands).
+- **E2E debt closed:** `e2e/m2-stage2-changes.spec.ts` no longer uses the dead `__bwTest` stub or early-return guards; it drives the real Changes UI through a `__TAURI_INTERNALS__` mock with mutable stage/stash state and `__invokeCalls` assertions — **16/16 passed**.
+- **Gate:** `./init.sh` — `Test Files 33 passed (33)`, `Tests 274 passed (274)`, Rust `104 passed; 0 failed; 3 ignored`, Clippy clean; `cargo fmt --check` clean.
+- **Next:** Task 13 — Blame screen. No per-task commit; Stage 4 stops at Checkpoint M2.4 after Tasks 12–15 + review gate.
+
 ## 2026-11-08: M2 Stage 3 gate → 🛑 Checkpoint M2.3
 
 - **Reviews:** code REQUEST CHANGES ×3 → APPROVE WITH NITS; security FAIL → FAIL (High: predictable temp file followed symlinks) → PASS; e2e PASS (`e2e/files.spec.ts`, stale `stage1-shell` Files test fixed).

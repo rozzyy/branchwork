@@ -17,6 +17,7 @@ import {
   type FsEntry,
 } from "../../ipc/fs";
 import { discardPaths } from "../../ipc/changes";
+import { undoLast } from "../../ipc/undo";
 import { readDiff, type DiffModel } from "../../ipc/diff";
 import { readStatus } from "../../ipc/status";
 import { onGitChanged } from "../../ipc/worktrees";
@@ -561,13 +562,22 @@ export function FilesView() {
     });
     if (confirmed !== true) return;
     try {
-      await fsDelete(activePath, path);
+      const undoable = await fsDelete(activePath, path);
       const prefix = `${path}/`;
       for (const openPath of open.filter((p) => p === path || (isDir && p.startsWith(prefix)))) {
         closeFileAction(openPath);
       }
       await reloadTree();
-      toast({ title: t("files.deleted", { path }), icon: "🗑" });
+      toast({
+        title: t("files.deleted", { path }),
+        icon: "🗑",
+        action: {
+          label: t("toast.undo"),
+          undo: true,
+          enabled: undoable,
+          run: () => undoLast(activePath),
+        },
+      });
     } catch (error) {
       toast({ title: errorMessage(error), icon: "⚠" });
     }
@@ -584,9 +594,18 @@ export function FilesView() {
     });
     if (confirmed !== true) return;
     try {
-      await discardPaths(activePath, [path], false);
+      const undoable = await discardPaths(activePath, [path], false);
       await reloadTree();
-      toast({ title: t("files.discarded", { path }), icon: "↶" });
+      toast({
+        title: t("files.discarded", { path }),
+        icon: "↶",
+        action: {
+          label: t("toast.undo"),
+          undo: true,
+          enabled: undoable,
+          run: () => undoLast(activePath),
+        },
+      });
     } catch (error) {
       toast({ title: errorMessage(error), icon: "⚠" });
     }
@@ -606,7 +625,10 @@ export function FilesView() {
     toast({ title: t("files.copied", { path }), icon: "⧉" });
   };
 
-  const goToBlame = () => useStage.getState().go("blame");
+  const goToBlame = (path: string) => {
+    openFileAction(path);
+    useStage.getState().go("blame");
+  };
 
   const contextMenuItems = (path: string, isDir: boolean): MenuItem[] => {
     const base = isDir ? path : path.split("/").slice(0, -1).join("/");
@@ -632,8 +654,8 @@ export function FilesView() {
     items.push({ kind: "item", label: t("files.copyPath"), icon: "⧉", onSelect: () => handleCopyPath(path) });
     items.push({ kind: "separator" });
     if (!isDir) {
-      items.push({ kind: "item", label: t("files.blame"), icon: "≡", onSelect: goToBlame });
-      items.push({ kind: "item", label: t("files.fileHistory"), icon: "⟲", onSelect: goToBlame });
+      items.push({ kind: "item", label: t("files.blame"), icon: "≡", onSelect: () => goToBlame(path) });
+      items.push({ kind: "item", label: t("files.fileHistory"), icon: "⟲", onSelect: () => goToBlame(path) });
       if (entryStatus(path)) {
         items.push({ kind: "item", label: t("files.discardChanges"), icon: "↶", onSelect: () => void handleDiscard(path) });
       }

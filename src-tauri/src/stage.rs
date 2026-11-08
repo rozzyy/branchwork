@@ -1,7 +1,9 @@
 use crate::{
     diff::{self, DiffArea, DiffLine, DiffLineKind, DiffModel},
     error::AppError,
-    oplog, worktree,
+    oplog,
+    store::{OPLOG_MAX_PAYLOAD, Store},
+    worktree,
 };
 use git2::{ErrorCode as GitErrorCode, Index, IndexEntry, Repository};
 use serde_json::json;
@@ -101,17 +103,19 @@ fn previous_index_blob(
 }
 
 fn record_index_before(
+    store: &Store,
     repository: &Repository,
     index: &Index,
     worktree: &Path,
     path: &Path,
     operation: &str,
-) -> Result<(), AppError> {
+) -> Result<i64, AppError> {
     let path_text = path
         .to_str()
         .ok_or_else(|| AppError::validation("Repository path is not valid UTF-8"))?;
     let blob = previous_index_blob(repository, index, path)?;
     oplog::record(
+        store,
         operation,
         worktree,
         path_text,
@@ -127,32 +131,47 @@ fn remove_index_path(index: &mut Index, path: &Path) -> Result<(), AppError> {
     }
 }
 
-pub(crate) fn stage_paths(worktree_path: &Path, paths: &[String]) -> Result<(), AppError> {
+pub(crate) fn stage_paths(
+    store: &Store,
+    worktree_path: &Path,
+    paths: &[String],
+) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
     let paths = validate_paths(&root, &repository, paths)?;
     let mut index = repository.index()?;
+    let mut record_ids = Vec::with_capacity(paths.len());
     for path in &paths {
-        record_index_before(&repository, &index, &root, path, "stagePath")?;
-    }
-    for path in &paths {
-        match fs::symlink_metadata(root.join(path)) {
-            Ok(metadata) if metadata.is_dir() => {
-                return Err(AppError::validation(
-                    "Stage paths must name files, not directories",
-                ));
-            }
-            Ok(_) => index.add_path(path)?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                remove_index_path(&mut index, path)?;
-            }
+        match record_index_before(store, &repository, &index, &root, path, "stagePath") {
+            Ok(id) => record_ids.push(id),
             Err(error) => {
-                return Err(AppError::io(format!(
-                    "Could not inspect staged path: {error}"
-                )));
+                return Err(oplog::remove_failed_records(store, &record_ids, error));
             }
         }
     }
-    index.write()?;
+    let update_index = paths.iter().try_for_each(|path| -> Result<(), AppError> {
+        match fs::symlink_metadata(root.join(path)) {
+            Ok(metadata) if metadata.is_dir() => Err(AppError::validation(
+                "Stage paths must name files, not directories",
+            )),
+            Ok(_) => index.add_path(path).map_err(AppError::from),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                remove_index_path(&mut index, path)
+            }
+            Err(error) => Err(AppError::io(format!(
+                "Could not inspect staged path: {error}"
+            ))),
+        }
+    });
+    if let Err(error) = update_index {
+        return Err(oplog::remove_failed_records(store, &record_ids, error));
+    }
+    if let Err(error) = index.write() {
+        return Err(oplog::remove_failed_records(
+            store,
+            &record_ids,
+            AppError::from(error),
+        ));
+    }
     Ok(())
 }
 
@@ -173,22 +192,41 @@ fn head_index(repository: &Repository) -> Result<Index, AppError> {
     Ok(head_index)
 }
 
-pub(crate) fn unstage_paths(worktree_path: &Path, paths: &[String]) -> Result<(), AppError> {
+pub(crate) fn unstage_paths(
+    store: &Store,
+    worktree_path: &Path,
+    paths: &[String],
+) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
     let paths = validate_paths(&root, &repository, paths)?;
     let mut index = repository.index()?;
     let head_index = head_index(&repository)?;
+    let mut record_ids = Vec::with_capacity(paths.len());
     for path in &paths {
-        record_index_before(&repository, &index, &root, path, "unstagePath")?;
-    }
-    for path in &paths {
-        if let Some(entry) = head_index.get_path(path, 0) {
-            index.add(&entry)?;
-        } else {
-            remove_index_path(&mut index, path)?;
+        match record_index_before(store, &repository, &index, &root, path, "unstagePath") {
+            Ok(id) => record_ids.push(id),
+            Err(error) => {
+                return Err(oplog::remove_failed_records(store, &record_ids, error));
+            }
         }
     }
-    index.write()?;
+    let update_index = paths.iter().try_for_each(|path| -> Result<(), AppError> {
+        if let Some(entry) = head_index.get_path(path, 0) {
+            index.add(&entry).map_err(AppError::from)
+        } else {
+            remove_index_path(&mut index, path)
+        }
+    });
+    if let Err(error) = update_index {
+        return Err(oplog::remove_failed_records(store, &record_ids, error));
+    }
+    if let Err(error) = index.write() {
+        return Err(oplog::remove_failed_records(
+            store,
+            &record_ids,
+            AppError::from(error),
+        ));
+    }
     Ok(())
 }
 
@@ -231,54 +269,128 @@ fn working_file_snapshot(root: &Path, path: &Path) -> Result<Option<Vec<u8>>, Ap
     leaf_bytes_without_following(&full)
 }
 
-#[allow(dead_code)]
-fn discard_untracked_to_trash(_root: &Path, _path: &Path) -> Result<(), AppError> {
-    // TODO Task 09: route untracked discards through the filesystem Trash helper.
-    Err(AppError::internal(
-        "trash backend not yet wired, use delete-to-Trash flow",
-    ))
+fn unix_mode(metadata: &fs::Metadata) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        Some(metadata.permissions().mode() & 0o7777)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        None
+    }
 }
 
 pub(crate) fn discard_paths(
+    store: &Store,
     worktree_path: &Path,
     paths: &[String],
     discard_untracked: bool,
+) -> Result<(), AppError> {
+    discard_paths_with(store, worktree_path, paths, discard_untracked, |path| {
+        trash::delete(path)
+            .map_err(|error| AppError::io(format!("Could not move to Trash: {error}")))
+    })
+}
+
+fn discard_paths_with(
+    store: &Store,
+    worktree_path: &Path,
+    paths: &[String],
+    discard_untracked: bool,
+    mut trash_untracked: impl FnMut(&Path) -> Result<(), AppError>,
 ) -> Result<(), AppError> {
     let (root, repository) = open_repository(worktree_path)?;
     let paths = validate_paths(&root, &repository, paths)?;
     let index = repository.index()?;
     let head_index = head_index(&repository)?;
     let mut targets = Vec::with_capacity(paths.len());
+    let mut payload_budget = 256usize;
     for path in &paths {
         let entry = index
             .get_path(path, 0)
             .or_else(|| head_index.get_path(path, 0));
-        if entry.is_none() {
-            if !discard_untracked {
+        if entry.is_none() && !discard_untracked {
+            return Err(AppError::validation(
+                "Discarding untracked files requires discard_untracked=true",
+            ));
+        }
+        let metadata = match fs::symlink_metadata(root.join(path)) {
+            Ok(metadata) if metadata.is_dir() => {
                 return Err(AppError::validation(
-                    "Discarding untracked files requires discard_untracked=true",
+                    "Discard paths must name files, not directories",
                 ));
             }
-            discard_untracked_to_trash(&root, path)?;
-            unreachable!("the untracked Trash flow is not wired until Task 09");
+            Ok(metadata) => Some(metadata),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(AppError::io(format!(
+                    "Could not inspect the working file: {error}"
+                )));
+            }
+        };
+        if entry.is_none() && metadata.is_none() {
+            return Err(AppError::not_found("Untracked path does not exist"));
         }
-        let entry = entry.expect("tracked path was checked above");
-        let snapshot = working_file_snapshot(&root, path)?;
-        targets.push((path.clone(), entry, snapshot));
+        let payload_cost = metadata
+            .as_ref()
+            .map(|metadata| oplog::snapshot_payload_cost(path, metadata.len()))
+            .unwrap_or(0);
+        let oversized = payload_budget.saturating_add(payload_cost) > OPLOG_MAX_PAYLOAD;
+        let snapshot = if oversized {
+            None
+        } else {
+            payload_budget = payload_budget.saturating_add(payload_cost);
+            working_file_snapshot(&root, path)?
+        };
+        let was_symlink = metadata
+            .as_ref()
+            .is_some_and(|metadata| metadata.file_type().is_symlink());
+        let mode = metadata
+            .as_ref()
+            .filter(|metadata| metadata.is_file() && !was_symlink)
+            .and_then(unix_mode);
+        targets.push((path.clone(), entry, snapshot, was_symlink, mode, oversized));
     }
-    for (path, _, snapshot) in &targets {
-        let path_text = path
-            .to_str()
-            .ok_or_else(|| AppError::validation("Repository path is not valid UTF-8"))?;
-        oplog::record(
-            "discardPath",
-            &root,
-            path_text,
-            json!({ "beforeWorkingTree": snapshot }),
-        )?;
-    }
-    for (path, entry, _) in targets {
-        restore_blob(&root, &repository, &path, &entry)?;
+    let payload_too_large = targets.iter().any(|(_, _, _, _, _, oversized)| *oversized);
+    let items = targets
+        .iter()
+        .map(|(path, _, snapshot, was_symlink, mode, oversized)| {
+            let path_text = path
+                .to_str()
+                .ok_or_else(|| AppError::validation("Repository path is not valid UTF-8"))?;
+            Ok(json!({
+                "path": path_text,
+                "beforeWorkingTree": snapshot,
+                "wasSymlink": was_symlink,
+                "unixMode": mode,
+                "payloadTooLarge": oversized,
+            }))
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+    let record_id = oplog::record(
+        store,
+        "discard",
+        &root,
+        "",
+        json!({ "items": items, "payloadTooLarge": payload_too_large }),
+    )?;
+    let mut changed = false;
+    for (path, entry, _, _, _, _) in targets {
+        let result = if let Some(entry) = entry {
+            restore_blob(&root, &repository, &path, &entry)
+        } else {
+            trash_untracked(&root.join(path))
+        };
+        if let Err(error) = result {
+            return Err(if changed {
+                error
+            } else {
+                oplog::remove_failed_record(store, record_id, error)
+            });
+        }
+        changed = true;
     }
     Ok(())
 }
@@ -586,6 +698,7 @@ fn apply_patch(root: &Path, patch: &str, cached: bool, reverse: bool) -> Result<
 }
 
 pub(crate) fn stage_hunks(
+    store: &Store,
     worktree_path: &Path,
     path: &str,
     hunk_indices: &[usize],
@@ -598,16 +711,19 @@ pub(crate) fn stage_hunks(
     let (relative, model) = validate_diff_file(&root, &repository, path, area)?;
     let indices = validate_hunks(&model, hunk_indices)?;
     if indices.len() == model.hunks.len() {
-        return stage_paths(&root, &[path.to_owned()]);
+        return stage_paths(store, &root, &[path.to_owned()]);
     }
     let eol = eol_for_patch(&root, &repository, &relative, area)?;
     let patch = hunk_patch(path, &model, &indices, eol);
     let index = repository.index()?;
-    record_index_before(&repository, &index, &root, &relative, "stageHunks")?;
+    let record_id =
+        record_index_before(store, &repository, &index, &root, &relative, "stageHunks")?;
     apply_patch(&root, &patch, true, false)
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))
 }
 
 pub(crate) fn unstage_hunks(
+    store: &Store,
     worktree_path: &Path,
     path: &str,
     hunk_indices: &[usize],
@@ -616,16 +732,19 @@ pub(crate) fn unstage_hunks(
     let (relative, model) = validate_diff_file(&root, &repository, path, DiffArea::Staged)?;
     let indices = validate_hunks(&model, hunk_indices)?;
     if indices.len() == model.hunks.len() {
-        return unstage_paths(&root, &[path.to_owned()]);
+        return unstage_paths(store, &root, &[path.to_owned()]);
     }
     let eol = eol_for_patch(&root, &repository, &relative, DiffArea::Staged)?;
     let patch = hunk_patch(path, &model, &indices, eol);
     let index = repository.index()?;
-    record_index_before(&repository, &index, &root, &relative, "unstageHunks")?;
+    let record_id =
+        record_index_before(store, &repository, &index, &root, &relative, "unstageHunks")?;
     apply_patch(&root, &patch, true, true)
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))
 }
 
 pub(crate) fn stage_lines(
+    store: &Store,
     worktree_path: &Path,
     path: &str,
     line_ids: &[String],
@@ -637,11 +756,14 @@ pub(crate) fn stage_lines(
     let eol = eol_for_patch(&root, &repository, &relative, area)?;
     let patch = selected_line_patch(path, &model, &selected, eol);
     let index = repository.index()?;
-    record_index_before(&repository, &index, &root, &relative, "stageLines")?;
+    let record_id =
+        record_index_before(store, &repository, &index, &root, &relative, "stageLines")?;
     apply_patch(&root, &patch, true, area == DiffArea::Staged)
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))
 }
 
 pub(crate) fn revert_hunk(
+    store: &Store,
     worktree_path: &Path,
     path: &str,
     hunk_index: usize,
@@ -652,13 +774,15 @@ pub(crate) fn revert_hunk(
     let eol = eol_for_patch(&root, &repository, &relative, DiffArea::Unstaged)?;
     let patch = hunk_patch(path, &model, &indices, eol);
     let snapshot = working_file_snapshot(&root, &relative)?;
-    oplog::record(
+    let record_id = oplog::record(
+        store,
         "revertHunk",
         &root,
         path,
         json!({ "beforeWorkingTree": snapshot }),
     )?;
     apply_patch(&root, &patch, false, true)
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))
 }
 
 #[cfg(test)]
@@ -667,10 +791,18 @@ mod tests {
     use git2::Signature;
     use std::{
         path::PathBuf,
-        sync::atomic::{AtomicUsize, Ordering},
+        sync::{
+            OnceLock,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
     static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+    static STORE: OnceLock<Store> = OnceLock::new();
+
+    fn test_store() -> &'static Store {
+        STORE.get_or_init(|| Store::in_memory().unwrap())
+    }
 
     struct TestDir(PathBuf);
 
@@ -734,7 +866,12 @@ mod tests {
         fs::write(temp.0.join("added.txt"), b"new\n").unwrap();
         fs::remove_file(temp.0.join("deleted.txt")).unwrap();
 
-        stage_paths(&temp.0, &lines("modified.txt\nadded.txt\ndeleted.txt")).unwrap();
+        stage_paths(
+            test_store(),
+            &temp.0,
+            &lines("modified.txt\nadded.txt\ndeleted.txt"),
+        )
+        .unwrap();
 
         assert_eq!(
             content(&repository, "modified.txt"),
@@ -743,12 +880,24 @@ mod tests {
         assert_eq!(content(&repository, "added.txt"), Some(b"new\n".to_vec()));
         assert_eq!(content(&repository, "deleted.txt"), None);
         assert_eq!(
-            oplog::entries_for(&temp.0.canonicalize().unwrap())
+            oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
                 .iter()
                 .filter(|entry| entry.operation == "stagePath")
                 .count(),
             3
         );
+    }
+
+    #[test]
+    fn failed_stage_path_removes_its_oplog_record() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        init_repository(&temp.0, &[("file.txt", b"before\n")]);
+        fs::create_dir(temp.0.join("folder")).unwrap();
+
+        assert!(stage_paths(&store, &temp.0, &lines("folder")).is_err());
+
+        assert!(oplog::entries_for(&store, &temp.0.canonicalize().unwrap()).is_empty());
     }
 
     #[test]
@@ -784,7 +933,7 @@ mod tests {
         fs::remove_file(temp.0.join("link")).unwrap();
         symlink("missing.txt", temp.0.join("link")).unwrap();
 
-        stage_paths(&temp.0, &lines("link")).unwrap();
+        stage_paths(test_store(), &temp.0, &lines("link")).unwrap();
 
         assert_eq!(content(&repository, "link"), Some(b"missing.txt".to_vec()));
     }
@@ -794,14 +943,14 @@ mod tests {
         let temp = TestDir::new();
         let repository = init_repository(&temp.0, &[("file.txt", b"before\n")]);
         fs::write(temp.0.join("file.txt"), b"after\n").unwrap();
-        stage_paths(&temp.0, &lines("file.txt")).unwrap();
+        stage_paths(test_store(), &temp.0, &lines("file.txt")).unwrap();
 
-        unstage_paths(&temp.0, &lines("file.txt")).unwrap();
+        unstage_paths(test_store(), &temp.0, &lines("file.txt")).unwrap();
 
         assert_eq!(content(&repository, "file.txt"), Some(b"before\n".to_vec()));
         assert_eq!(fs::read(temp.0.join("file.txt")).unwrap(), b"after\n");
         assert_eq!(
-            oplog::entries_for(&temp.0.canonicalize().unwrap())
+            oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
                 .iter()
                 .filter(|entry| entry.operation == "unstagePath")
                 .count(),
@@ -847,14 +996,21 @@ mod tests {
             let repository = init_repository(&temp.0, &[("file.txt", original.as_bytes())]);
             fs::write(temp.0.join("file.txt"), changed.as_bytes()).unwrap();
 
-            stage_hunks(&temp.0, "file.txt", &[selected_hunk], DiffArea::Unstaged).unwrap();
+            stage_hunks(
+                test_store(),
+                &temp.0,
+                "file.txt",
+                &[selected_hunk],
+                DiffArea::Unstaged,
+            )
+            .unwrap();
 
             assert_eq!(
                 content(&repository, "file.txt"),
                 Some(expected.into_bytes())
             );
             assert!(
-                oplog::entries_for(&temp.0.canonicalize().unwrap())
+                oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
                     .iter()
                     .any(|entry| entry.operation == "stageHunks")
             );
@@ -874,9 +1030,9 @@ mod tests {
         let changed = format!("{}\n", changed_lines.join("\n"));
         let repository = init_repository(&temp.0, &[("file.txt", original.as_bytes())]);
         fs::write(temp.0.join("file.txt"), changed.as_bytes()).unwrap();
-        stage_paths(&temp.0, &lines("file.txt")).unwrap();
+        stage_paths(test_store(), &temp.0, &lines("file.txt")).unwrap();
 
-        unstage_hunks(&temp.0, "file.txt", &[0]).unwrap();
+        unstage_hunks(test_store(), &temp.0, "file.txt", &[0]).unwrap();
 
         let mut expected = original_lines;
         expected[11] = "last staged".to_owned();
@@ -885,7 +1041,7 @@ mod tests {
             Some(format!("{}\n", expected.join("\n")).into_bytes())
         );
         assert!(
-            oplog::entries_for(&temp.0.canonicalize().unwrap())
+            oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
                 .iter()
                 .any(|entry| entry.operation == "unstageHunks")
         );
@@ -921,7 +1077,14 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             assert_eq!(selected_ids.len(), 3);
-            stage_lines(&temp.0, "file.txt", &selected_ids, DiffArea::Unstaged).unwrap();
+            stage_lines(
+                test_store(),
+                &temp.0,
+                "file.txt",
+                &selected_ids,
+                DiffArea::Unstaged,
+            )
+            .unwrap();
 
             let mut expected_lines = Vec::new();
             for (index, line) in original_lines.iter().enumerate() {
@@ -936,7 +1099,7 @@ mod tests {
                 Some(expected.into_bytes())
             );
             assert!(
-                oplog::entries_for(&temp.0.canonicalize().unwrap())
+                oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
                     .iter()
                     .any(|entry| entry.operation == "stageLines")
             );
@@ -957,7 +1120,7 @@ mod tests {
         let repository = init_repository(&temp.0, &[("file.txt", original.as_bytes())]);
         fs::write(temp.0.join("file.txt"), changed.as_bytes()).unwrap();
 
-        revert_hunk(&temp.0, "file.txt", 0).unwrap();
+        revert_hunk(test_store(), &temp.0, "file.txt", 0).unwrap();
 
         let mut expected = original_lines;
         expected[11] = "last changed".to_owned();
@@ -965,7 +1128,7 @@ mod tests {
             fs::read(temp.0.join("file.txt")).unwrap(),
             format!("{}\n", expected.join("\n")).into_bytes()
         );
-        let entry = oplog::entries_for(&temp.0.canonicalize().unwrap())
+        let entry = oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
             .into_iter()
             .find(|entry| entry.operation == "revertHunk")
             .unwrap();
@@ -985,19 +1148,82 @@ mod tests {
         let repository = init_repository(&temp.0, &[("file.txt", b"before\n")]);
         fs::write(temp.0.join("file.txt"), b"after\n").unwrap();
 
-        discard_paths(&temp.0, &lines("file.txt"), false).unwrap();
+        discard_paths(test_store(), &temp.0, &lines("file.txt"), false).unwrap();
 
         assert_eq!(fs::read(temp.0.join("file.txt")).unwrap(), b"before\n");
         let canonical = temp.0.canonicalize().unwrap();
-        let entry = oplog::entries_for(&canonical)
+        let entry = oplog::entries_for(test_store(), &canonical)
             .into_iter()
-            .find(|entry| entry.operation == "discardPath")
+            .find(|entry| entry.operation == "discard")
             .unwrap();
         assert_eq!(
-            entry.payload["beforeWorkingTree"],
+            entry.payload["items"][0]["beforeWorkingTree"],
             json!([97, 102, 116, 101, 114, 10])
         );
         assert_eq!(content(&repository, "file.txt"), Some(b"before\n".to_vec()));
+    }
+
+    #[test]
+    fn oplog_insert_failure_aborts_discard_before_the_file_changes() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        store.reject_oplog_inserts();
+        let _repository = init_repository(&temp.0, &[("file.txt", b"before\n")]);
+        fs::write(temp.0.join("file.txt"), b"after\n").unwrap();
+
+        assert!(discard_paths(&store, &temp.0, &lines("file.txt"), false).is_err());
+        assert_eq!(fs::read(temp.0.join("file.txt")).unwrap(), b"after\n");
+    }
+
+    #[test]
+    fn failed_untracked_trash_removes_its_oplog_record() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        init_repository(&temp.0, &[]);
+        let file = temp.0.join("untracked.txt");
+        fs::write(&file, b"keep me\n").unwrap();
+
+        let result = discard_paths_with(&store, &temp.0, &lines("untracked.txt"), true, |_| {
+            Err(AppError::io("trash failed"))
+        });
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(file).unwrap(), b"keep me\n");
+        assert!(oplog::entries_for(&store, &temp.0.canonicalize().unwrap()).is_empty());
+    }
+
+    #[test]
+    fn partial_discard_failure_keeps_a_recoverable_record() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        init_repository(&temp.0, &[]);
+        fs::write(temp.0.join("first.txt"), b"first\n").unwrap();
+        fs::write(temp.0.join("second.txt"), b"second\n").unwrap();
+        let mut trash_calls = 0;
+
+        let result = discard_paths_with(
+            &store,
+            &temp.0,
+            &lines("first.txt\nsecond.txt"),
+            true,
+            |path| {
+                trash_calls += 1;
+                if trash_calls == 1 {
+                    fs::remove_file(path).map_err(AppError::from)
+                } else {
+                    Err(AppError::io("trash failed"))
+                }
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(!temp.0.join("first.txt").exists());
+        assert!(temp.0.join("second.txt").exists());
+        let canonical = temp.0.canonicalize().unwrap();
+        assert_eq!(oplog::entries_for(&store, &canonical).len(), 1);
+        oplog::undo_last(&store, &canonical).unwrap();
+        assert_eq!(fs::read(canonical.join("first.txt")).unwrap(), b"first\n");
+        assert_eq!(fs::read(canonical.join("second.txt")).unwrap(), b"second\n");
     }
 
     #[test]
@@ -1037,20 +1263,39 @@ mod tests {
         fs::remove_file(temp.0.join("link")).unwrap();
         symlink(&outside, temp.0.join("link")).unwrap();
 
-        discard_paths(&temp.0, &lines("link"), false).unwrap();
+        discard_paths(test_store(), &temp.0, &lines("link"), false).unwrap();
 
         let canonical = temp.0.canonicalize().unwrap();
-        let entry = oplog::entries_for(&canonical)
+        let entry = oplog::entries_for(test_store(), &canonical)
             .into_iter()
-            .find(|entry| entry.operation == "discardPath")
+            .find(|entry| entry.operation == "discard")
             .unwrap();
         use std::os::unix::ffi::OsStrExt;
         let expected_link_text: Vec<u8> = outside.as_os_str().as_bytes().to_vec();
         assert_eq!(
-            entry.payload["beforeWorkingTree"],
+            entry.payload["items"][0]["beforeWorkingTree"],
             serde_json::to_value(&expected_link_text).unwrap()
         );
         let _ = fs::remove_file(&outside);
+    }
+
+    #[test]
+    fn one_discard_undo_restores_every_path_in_the_operation() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        let _repository = init_repository(&temp.0, &[("one.txt", b"one\n"), ("two.txt", b"two\n")]);
+        fs::write(temp.0.join("one.txt"), b"one changed\n").unwrap();
+        fs::write(temp.0.join("two.txt"), b"two changed\n").unwrap();
+        let paths = lines("one.txt\ntwo.txt");
+
+        discard_paths(&store, &temp.0, &paths, false).unwrap();
+        assert_eq!(fs::read(temp.0.join("one.txt")).unwrap(), b"one\n");
+        assert_eq!(fs::read(temp.0.join("two.txt")).unwrap(), b"two\n");
+
+        crate::oplog::undo_last(&store, &temp.0).unwrap();
+
+        assert_eq!(fs::read(temp.0.join("one.txt")).unwrap(), b"one changed\n");
+        assert_eq!(fs::read(temp.0.join("two.txt")).unwrap(), b"two changed\n");
     }
 
     #[test]
@@ -1059,7 +1304,9 @@ mod tests {
         let _repository = init_repository(&temp.0, &[("file.txt", b"before\n")]);
         for path in ["../outside", ".git/config", ""] {
             assert_eq!(
-                stage_paths(&temp.0, &[path.to_owned()]).unwrap_err().kind,
+                stage_paths(test_store(), &temp.0, &[path.to_owned()])
+                    .unwrap_err()
+                    .kind,
                 crate::error::ErrorKind::Validation
             );
         }
@@ -1070,8 +1317,14 @@ mod tests {
         let temp = TestDir::new();
         let _repository = init_repository(&temp.0, &[("large.txt", b"before\n")]);
         fs::write(temp.0.join("large.txt"), vec![b'x'; 1_048_577]).unwrap();
-        let error =
-            stage_lines(&temp.0, "large.txt", &lines("0:0"), DiffArea::Unstaged).unwrap_err();
+        let error = stage_lines(
+            test_store(),
+            &temp.0,
+            "large.txt",
+            &lines("0:0"),
+            DiffArea::Unstaged,
+        )
+        .unwrap_err();
         assert_eq!(error.kind, crate::error::ErrorKind::Validation);
     }
 
@@ -1114,7 +1367,7 @@ mod tests {
             .unwrap();
         fs::write(temp.0.join("file.txt"), b"after\n").unwrap();
 
-        stage_hunks(&temp.0, "file.txt", &[0], DiffArea::Unstaged).unwrap();
+        stage_hunks(test_store(), &temp.0, "file.txt", &[0], DiffArea::Unstaged).unwrap();
 
         assert!(!marker.exists());
         assert_eq!(content(&repository, "file.txt"), Some(b"after\n".to_vec()));
@@ -1125,8 +1378,28 @@ mod tests {
         let temp = TestDir::new();
         let _repository = init_repository(&temp.0, &[]);
         fs::write(temp.0.join("untracked.txt"), b"data\n").unwrap();
-        let error = discard_paths(&temp.0, &lines("untracked.txt"), false).unwrap_err();
+        let error =
+            discard_paths(test_store(), &temp.0, &lines("untracked.txt"), false).unwrap_err();
         assert_eq!(error.kind, crate::error::ErrorKind::Validation);
         assert!(temp.0.join("untracked.txt").exists());
+    }
+
+    #[test]
+    fn discards_untracked_files_to_trash_and_undo_restores_them() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        let _repository = init_repository(&temp.0, &[]);
+        let file = temp.0.join("untracked.txt");
+        fs::write(&file, b"recover me\n").unwrap();
+        let root = temp.0.canonicalize().unwrap();
+
+        discard_paths_with(&store, &temp.0, &lines("untracked.txt"), true, |path| {
+            fs::remove_file(path).map_err(|error| AppError::io(error.to_string()))
+        })
+        .unwrap();
+        assert!(!file.exists());
+
+        crate::oplog::undo_last(&store, &root).unwrap();
+        assert_eq!(fs::read(file).unwrap(), b"recover me\n");
     }
 }

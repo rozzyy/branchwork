@@ -38,9 +38,9 @@ Each has a recommended default so planning can proceed. Confirm these at the fir
 2. **Trash integration crate.** Options: (a) `trash` crate 3.x (cross-platform, used by many Tauri apps); (b) Objective-C FFI to `NSWorkspace.recycle`. **Default: (a)**, because it keeps the Rust surface small and is already macOS-10.13-safe. Pin the version and add it as an allowed dependency. **✅ Implemented 2026-11-08: (a) `trash` crate, pinned `~5.3.0` (Cargo.lock 5.3.0 with checksum; 5.x is the current line, 3.x was outdated). Confirmed by user 2026-11-08.**
 3. **External file-system changes while editing.** Spec §6.4 requires a reload banner when the file is dirty and silent reload when clean. Two watch sources: the M1 `git:changed` debounced watcher (already emitted per worktree), and `notify` on each open editor file. **Default:** reuse the M1 `git:changed` payload plus a lightweight mtime check when the editor regains focus; do not spin up a per-file watcher in M2. If users report lag, add a per-file watcher in M3. **✅ Resolved 2026-11-07 (user): reuse `git:changed` + focus mtime check.**
 4. **Line-level staging patch synthesis.** `git apply --cached` with a hand-built patch is the spec's chosen path. The alternative is to update the index entry in Rust (`git2::Index::add_frombuffer`). **Default:** `git apply --cached --unidiff-zero --whitespace=nowarn` with argument arrays, in the isolated-config pattern. The Rust-only path is faster but harder to keep correct across renames and permission changes; defer it.
-5. **Blame scope for v1.** Spec §6.4 Blame shows age, author, message, heat stripe, consecutive-line collapse, and links to PR. **Default:** ship everything except the PR link (M4). Ship the "View commit" link to the Graph screen using the M1 inspector.
+5. **Blame scope for v1.** Spec §6.4 Blame shows age, author, message, heat stripe, consecutive-line collapse, and links to PR. **Default:** ship everything except the PR link (M4). Ship the "View commit" link to the Graph screen using the M1 inspector. **✅ Resolved 2026-11-08 (user):** defer PR links to M4; keep Blame/History/Diff tabs, with View commit opening Graph.
 6. **Commit signing (GPG/SSH).** Not in the M2 spec row, and clone/open does not touch it. **Default:** do not wire anything; the user's `git` config takes effect because we call the CLI. If their config requires signing and it fails, surface the stderr as an actionable toast per §7.
-7. **`undo_last` scope.** Spec lists it as an IPC command alongside `op:done{undoable}`. **Default** for M2: implement undo for commit (soft reset to `HEAD@{1}`), discard (restore from oplog blob), delete (restore from Trash), stash-drop (reapply). Other operations are additive in later milestones.
+7. **`undo_last` scope.** Spec lists it as an IPC command alongside `op:done{undoable}`. **Default** for M2: implement undo for commit (soft reset to `HEAD@{1}`), discard (restore from oplog blob), delete (restore from Trash), stash-drop (reapply). Other operations are additive in later milestones. **✅ Resolved 2026-11-08 (user):** confirm these four undo kinds.
 
 ## Stage 1: Status read model and shared diff renderer
 
@@ -171,7 +171,7 @@ Add `src/editor/` with a CodeMirror 6 editor host: tabs (bound to `src/state/fil
 
 ## Stage 4: Blame, history, and oplog undo
 
-### Task 12 — Blame and file history IPC
+### Task 12 — Blame and file history IPC ✅
 
 Add Rust IPC: `blame(worktree, path)` returning per-line commit SHA, author, timestamp, and first-line-of-message, collapsing consecutive identical SHAs into a `groupId`; `file_history(worktree, path, { limit })` returning `[{ sha, author, message, time }]` using `git2::Revwalk` scoped to the path. `blame` uses `git2::Blame` with default follow options. Bundle an "age heat" field (`hours|days|weeks|months`) so the UI can map it to the stripe color without recomputing dates.
 
@@ -179,7 +179,13 @@ Add Rust IPC: `blame(worktree, path)` returning per-line commit SHA, author, tim
 
 **Security-relevant surfaces:** read-only; path validation.
 
-### Task 13 — Blame screen
+- [x] Rust `blame`/`file_history` IPC in `src-tauri/src/blame.rs` + `lib.rs` registration + regenerated bindings; rename-follow off by default (documented: libgit2 track-copies flags are unimplemented upstream, request flag is a no-op until then).
+- [x] `src/ipc/blame.ts` wrapper + contract test (3 tests).
+- [x] Rust tests 4/4 (three-commit blame SHA/groups, history ordering+limit, age_bucket boundaries, NotFound untracked).
+- [x] `./init.sh` — Test Files 33 passed (33), Tests 274 passed (274), Rust 104 passed/0 failed/3 ignored; `cargo fmt --check` clean.
+- [ ] Commit _(skipped: no-commit rule — one Stage 4 commit after Checkpoint M2.4)_
+
+### Task 13 — Blame screen ✅
 
 Replace the Blame placeholder with the three-column layout from the prototype: file tree (reuse the fs-tree component from Task 10 in a compact mode), blame gutter column with author avatar initials, age heat stripe, and the collapsed group header, and the right-side detail panel showing the selected line's commit (SHA, author, time, full message) and the file-history timeline. "View commit" navigates to the Graph screen at that SHA (reuse the M1 inspector). The PR link is rendered disabled with `deferred_m4`. Reachable from the Files context menu (`Blame`, `File history`) and from the sidebar Tools entry.
 
@@ -187,21 +193,57 @@ Replace the Blame placeholder with the three-column layout from the prototype: f
 
 **Security-relevant surfaces:** none beyond consuming the new IPC.
 
-### Task 14 — Oplog persistence and `undo_last`
+- [x] `src/screens/blame/BlameScreen.tsx` (`BlameToolbar`/`BlameView`) + `blameState.ts` + `blame.css`; mounted in `views.tsx`; 20 `blame.*` i18n keys; Files context menu selects the file before navigating.
+- [x] Vitest 7 tests (group collapse, heat mapping all buckets, selection→detail, View commit deep-link, disabled PR tooltip, history→scroll, empty state). Spec review PASS (`.agent/reviews/m2-task-13-spec.md`).
+- [x] `./init.sh` — Test Files 34 passed (34), Tests 281 passed (281), Rust 104 passed/0 failed/3 ignored.
+- [ ] Commit _(skipped: no-commit rule — one Stage 4 commit after Checkpoint M2.4)_
 
-Add the `oplog` table to the SQLite schema (migration-safe, idempotent setup in `src-tauri/src/store.rs`): `id INTEGER PRIMARY KEY, worktree_path TEXT, kind TEXT, payload BLOB, created_at INTEGER`. Wire every Stage 2/3 destructive operation (commit, discard, delete-to-Trash, stash-drop) to append a row *before* the operation runs. Add `undo_last(worktree)` IPC that pops the most recent row for that worktree and applies the reverse: commit → `git reset --soft <prev_head>`; discard → restore blob to disk via `fs_write`; delete-to-Trash → `trash::os_limited::restore` or re-`fs_write` from an inline copy; stash-drop → `git stash apply <sha>`. Emit `op:done{undoable}` after every forward op and after undo. Expose `undo_last` through a "Undo last action" command in the palette (reuse the M0 command-list registration) and the existing toast "Undo" action slot used in M0/M1 toasts.
+### Task 14 — Oplog persistence and `undo_last` ✅
+
+Add the `oplog` table to the SQLite schema (migration-safe, idempotent setup in `src-tauri/src/store.rs`): `id INTEGER PRIMARY KEY, worktree_path TEXT NOT NULL, kind TEXT NOT NULL, payload BLOB, undoable INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL`, indexed by `(worktree_path, id DESC)`. Wire Stage 2/3 destructive operations (commit, discard, delete-to-Trash, stash-drop) to append a row *before* the operation runs. Payloads are capped at 16 MiB per row; oversized rows are stored as non-undoable. Add `undo_last(worktree)` IPC that applies the newest undoable row's reverse: commit → `git reset --soft <prev_head>`; discard → restore the stored file snapshot; delete-to-Trash → restore via the trash API when available or an inline copy; stash-drop → `git stash apply <sha>`. Keep the row if reverse fails; delete it after success. Emit `op:done{undoable}` after forward destructive operations and undo. Expose `undo_last` through an "Undo last action" command in the palette and wire Stage 2/3 toast Undo actions to the event's enabled state.
 
 **Tests:** Rust unit tests for each undo kind (commit, discard, delete, stash-drop) round-tripping state; a schema-migration test that an older SQLite without `oplog` gains it idempotently; Vitest for the palette command + toast-action wiring.
 
 **Security-relevant surfaces:** SQLite schema migration (additive), CLI reset/stash-apply (argument arrays), Trash restore.
 
-### Task 15 — M2 wrap-up polish
+- [x] Add the idempotent SQLite v2 oplog migration/table/index; preserve existing catalog rows.
+- [x] Persist pre-operation records, apply the 16 MiB payload cap, and emit `op:done` after successful oplog-recording mutations and undo.
+- [x] Implement `undo_last` reversals and keep failed-reverse rows; register the typed Tauri command and palette entry.
+- [x] Wire commit/discard/delete/stash Undo actions to event-enabled state; emit after stage/unstage/revert writes too.
+- [x] Rust migration/cap/failure/round-trip/order tests and Vitest palette/toast wiring tests. Spec review PASS (`.agent/reviews/m2-task-14-spec.md`).
+- [x] `./init.sh` — Test Files 35 passed (35), Tests 283 passed (283), Rust 116 passed/0 failed/3 ignored; Clippy clean.
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml --check` — clean.
+- [x] Commit _(skipped: no-commit rule — one Stage 4 commit after Checkpoint M2.4)_
+
+### Task 15 — M2 wrap-up polish ✅
 
 Narrow surface task: add any missing i18n strings (`changes.*`, `files.*`, `blame.*`, `undo.*`, `ui.deferred_m3`, `ui.deferred_m4`, `ui.deferred_m6`), update the palette's command list to include "Toggle staged view", "Open Changes", "Open Files", "Open Blame", "Discard all changes" (confirmed), "Undo last action". Update `docs/testing/m2-manual-e2e.md` Stage 4. **No** functional additions outside this list.
 
 **Tests:** Vitest for the new palette entries and i18n presence.
 
 **Security-relevant surfaces:** none.
+
+- [x] Audited Changes, Files, Editor, and Blame user-facing strings; localized the UTF-8 fallback and editor language labels.
+- [x] Added the exact M3/M4/M6 deferred-tooltip strings and palette commands; verified the existing `undo.last_action`.
+- [x] Added palette dispatch/confirmation tests and i18n key/no-warning coverage.
+- [x] Added Stage 4 checks to `docs/testing/m2-manual-e2e.md`, including palette Undo.
+- [x] Focused Vitest — 5 files, 90 tests passed; `./init.sh` — Test Files 35 passed (35), Tests 289 passed (289), Rust 116 passed/0 failed/3 ignored, Clippy clean.
+- [x] Coordinator acceptance review PASS (`.agent/reviews/m2-task-15-spec.md`).
+- [x] Commit _(skipped: no-commit rule — one Stage 4 commit after Checkpoint M2.4)_
+
+### Task 16 — Graph working-copy inspector
+
+Make Graph's WIP inspector a compact source-control surface: clicking status-group files opens individual diff tabs in Graph's main editor area, preserving staged/unstaged context. Keep a Graph tab to return to the commit graph and WIP inspector. Reuse the shared diff renderer and Changes dispatch behavior for stage/unstage/revert/line actions. Keep the full Changes screen for commit, stash, discard, and bulk operations; keep Open in Changes and existing Files editor navigation.
+
+**Tests:** Vitest for opening/activating/closing diff tabs, staged-vs-unstaged context, and a diff action dispatch.
+
+**Security-relevant surfaces:** none; consumes existing IPC only.
+
+- [x] Implement the Graph editor tabs from WIP file rows and shared diff actions; reset diff tabs when the active worktree changes.
+- [x] Add focused Vitest coverage and update Stage 4 manual E2E checks.
+- [x] `./init.sh` — Test Files 36 passed (36), Tests 292 passed (292), Rust 116 passed/0 failed/3 ignored; Clippy clean.
+- [x] Coordinator acceptance review PASS (`.agent/reviews/m2-task-16-spec.md`).
+- [x] Commit _(skipped: no-commit rule — one Stage 4 commit after Checkpoint M2.4)_
 
 **Stage 4 gate.** `./init.sh`; full Playwright E2E; `code-reviewer`; `security-reviewer` (oplog SQLite, undo paths, cross-stage regression sweep); §9 perf check for memory (<400 MB open with 2 repos and the editor loaded — approximate measurement documented); final `docs/testing/m2-manual-e2e.md` update. 🛑 **Manual Checkpoint M2.4** (M2 done).
 

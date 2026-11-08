@@ -41,8 +41,8 @@ export function fsRename(worktreePath: string, from: string, to: string): Promis
   return commands.fsRename(worktreePath, from, to).then(() => undefined);
 }
 
-export function fsDelete(worktreePath: string, path: string): Promise<void> {
-  return commands.fsDelete(worktreePath, path).then(() => undefined);
+export function fsDelete(worktreePath: string, path: string): Promise<boolean> {
+  return commands.fsDelete(worktreePath, path);
 }
 
 export function revealInFinder(worktreePath: string, path: string): Promise<void> {

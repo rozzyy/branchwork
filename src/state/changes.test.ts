@@ -20,6 +20,7 @@ import {
   stashPush,
 } from "../ipc/stash";
 import { toast } from "../ui/toast";
+import { undoLast } from "../ipc/undo";
 import { useChanges } from "./changes";
 import { useWorktrees } from "./worktrees";
 
@@ -45,6 +46,7 @@ vi.mock("../ipc/stash", () => ({
   stashDrop: vi.fn(),
 }));
 vi.mock("../ui/toast", () => ({ toast: vi.fn() }));
+vi.mock("../ipc/undo", () => ({ undoLast: vi.fn() }));
 
 const stagedEntry = { path: "a.ts", oldPath: null, indexStatus: "M", worktreeStatus: "", bytes: 1, large: false };
 const unstagedEntry = { path: "b.ts", oldPath: null, indexStatus: "", worktreeStatus: "M", bytes: 2, large: false };
@@ -57,12 +59,8 @@ beforeEach(() => {
   vi.mocked(readStatus).mockReset().mockResolvedValue(summary());
   vi.mocked(readDiff).mockReset();
   for (const fn of [
-    commit,
-    commitAndPush,
-    commitAndSync,
     stagePaths,
     unstagePaths,
-    discardPaths,
     stageHunks,
     unstageHunks,
     stageLines,
@@ -70,10 +68,14 @@ beforeEach(() => {
   ]) {
     vi.mocked(fn).mockReset().mockResolvedValue(undefined);
   }
+  for (const fn of [commit, commitAndPush, commitAndSync, discardPaths]) {
+    vi.mocked(fn).mockReset().mockResolvedValue(false);
+  }
   vi.mocked(stashList).mockReset().mockResolvedValue([]);
-  for (const fn of [stashPush, stashApply, stashPop, stashDrop]) {
+  for (const fn of [stashPush, stashApply, stashPop]) {
     vi.mocked(fn).mockReset().mockResolvedValue(undefined);
   }
+  vi.mocked(stashDrop).mockReset().mockResolvedValue(false);
   vi.mocked(toast).mockReset();
   useChanges.setState({
     worktree: null,
@@ -305,10 +307,9 @@ it("dispatch applies and pops stashes by index", async () => {
   expect(stashPop).toHaveBeenCalledWith("/repos/main", 1);
 });
 
-it("dispatch drop toasts Undo and fires the undo-last intent", async () => {
+it("dispatch drop toasts an enabled Undo action and invokes undo_last", async () => {
   await useChanges.getState().refresh("/repos/main");
-  const onUndo = vi.fn();
-  window.addEventListener("branchwork:undo-last", onUndo);
+  vi.mocked(stashDrop).mockResolvedValue(true);
 
   await useChanges.getState().dispatch({ type: "stash-drop", index: 0 });
 
@@ -318,12 +319,8 @@ it("dispatch drop toasts Undo and fires the undo-last intent", async () => {
     .mock.calls.find(([entry]) => entry.title === "Stash dropped");
   expect(dropped).toBeDefined();
   expect(dropped![0].action?.label).toBe("Undo");
+  expect(dropped![0].action?.enabled).toBe(true);
 
   dropped![0].action!.run();
-  expect(onUndo).toHaveBeenCalledOnce();
-  expect((onUndo.mock.calls[0][0] as CustomEvent).detail).toEqual({
-    type: "undo.last",
-    worktree: "/repos/main",
-  });
-  window.removeEventListener("branchwork:undo-last", onUndo);
+  expect(undoLast).toHaveBeenCalledWith("/repos/main");
 });

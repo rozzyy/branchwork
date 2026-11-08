@@ -677,8 +677,8 @@
       "dependencies": [
         "m2-stage-3-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "spec-reviewer PASS (.agent/reviews/m2-task-12-spec.md, all 8 ACs). Implemented on m2-stage-4 (partial from prior session rate-limited executor, completed this session): src-tauri/src/blame.rs blame (git2::Blame, groups collapse, age_bucket hours/days/weeks/months/older) + file_history (Revwalk TOPOLOGICAL|TIME, limit, path-scoped via tree diff), NotFound on untracked, validate_catalog_worktree in lib.rs, regenerated bindings; src/ipc/blame.ts + blame.test.ts (3 tests). Rust blame tests 4/4. ./init.sh green: Test Files 33 passed (33), Tests 274 passed (274), Rust 104 passed/0 failed/3 ignored, Clippy clean; cargo fmt --check clean. Also: e2e/m2-stage2-changes.spec.ts rewritten from vacuous __bwTest stubs to __TAURI_INTERNALS__ mock — 16/16 passed, no early-return guards."
     },
     {
       "id": "m2-task-13",
@@ -688,8 +688,8 @@
       "dependencies": [
         "m2-task-12"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "spec-reviewer PASS (.agent/reviews/m2-task-13-spec.md, all ACs; 4 non-blocking nits). Built src/screens/blame/{BlameScreen.tsx,blameState.ts,blame.css,BlameScreen.test.tsx 7 tests}, views.tsx mounts BlameToolbar/BlameView, 20 blame.* i18n keys, Files context menu selects file before navigating. Coordinator-verified: focused blame+ipc tests 10/10, typecheck clean, ./init.sh green: Test Files 34 passed (34), Tests 281 passed (281), Rust 104 passed/0 failed/3 ignored (one earlier full run flaked 1 test, two reruns 281/281)."
     },
     {
       "id": "m2-task-14",
@@ -699,8 +699,8 @@
       "dependencies": [
         "m2-task-13"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Post-fix review PASS (.agent/reviews/m2-task-14-spec.md, all 8 ACs). SQLite v2 migration adds idempotent oplog table/index; Stage 2/3 oplog writes persist before mutations with 16 MiB row cap and oversize undo disabled. undo_last handles commit/reset, discard snapshots, Trash restore/inline fallback, and stash_drop/apply; failed reverses retain rows, and a non-undoable newest row cannot skip older history. op:done updates toast state after all oplog-recording mutations; commit/rebase completion is emitted before later push failures. Rust migration/cap/insert-failure/reverse/order/failure tests and Vitest palette/toast tests pass. ./init.sh: Test Files 35 passed (35), Tests 283 passed (283), Rust 116 passed/0 failed/3 ignored, Clippy clean. cargo fmt --manifest-path src-tauri/Cargo.toml --check clean."
     },
     {
       "id": "m2-task-15",
@@ -710,8 +710,19 @@
       "dependencies": [
         "m2-task-14"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Coordinator acceptance review PASS (.agent/reviews/m2-task-15-spec.md, all 5 ACs). Audited Changes/Files/Editor/Blame; localized UTF-8 and editor language labels; added exact M3/M4/M6 tooltip strings and palette commands, including verification of undo.last_action. Palette routing/confirmation and i18n key/no-warning tests added. Stage 4 manual checks include palette Undo. Focused Vitest: 5 files/90 tests passed. ./init.sh: typecheck clean; Test Files 35 passed (35), Tests 289 passed (289), Rust 116 passed/0 failed/3 ignored, Clippy clean."
+    },
+    {
+      "id": "m2-task-16",
+      "stage": 11,
+      "name": "Graph working-copy inspector",
+      "description": ".agent/tasks/m2-task-16-graph-wip-inspector.md",
+      "dependencies": [
+        "m2-task-15"
+      ],
+      "status": "done",
+      "evidence": "Coordinator acceptance review PASS (.agent/reviews/m2-task-16-spec.md, all 6 ACs). Updated spec §6.2: Graph WIP inspector has staged/unstaged/untracked/conflicted groups, separate diff tabs retaining path/area, quick stage/unstage and shared hunk/line actions; full commit/stash/discard workflows remain in Changes. Uses existing IPC only. Stage 4 manual E2E M2-S4-04 added. Focused Vitest: 3 files/18 tests passed. ./init.sh: typecheck clean; Test Files 36 passed (36), Tests 292 passed (292), Rust 116 passed/0 failed/3 ignored, Clippy clean."
     },
     {
       "id": "m2-stage-4-review",
@@ -719,10 +730,10 @@
       "name": "M2 Stage 4 review and M2 completion checkpoint",
       "description": ".agent/tasks/m2-stage-4-review.md",
       "dependencies": [
-        "m2-task-15"
+        "m2-task-16"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Code review follow-up PASS (.agent/reviews/m2-stage-4-code-review.md); security review PASS, no vulnerabilities (.agent/reviews/m2-stage-4-security-review.md). ./init.sh: typecheck/Clippy clean, 37 Vitest files/294 tests passed, Rust 126 passed/3 ignored. pnpm test:e2e: 76 passed. cargo fmt --check and git diff --check clean. User confirmed Open Question 5 (defer PR links to M4; retain Blame/History/Diff tabs; View commit opens Graph) and Open Question 7 (undo commit, discard, delete-to-Trash, stash-drop). User approved Checkpoint M2.4 and the stage commit while accepting that manual M2-S4-01..05 and native memory (<400 MB, two repositories + 5,000-line editor) remain unverified."
     }
   ]
 }

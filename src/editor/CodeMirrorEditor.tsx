@@ -651,7 +651,7 @@ export function CodeMirrorEditor() {
           {cursor.selectionLength > 0 && ` ${t("editor.selected", { n: cursor.selectionLength })}`}
         </span>
         <span>{detectIndentation(currentBuf?.content ?? "")}</span>
-        <span>{currentBuf?.encoding?.toUpperCase() ?? "UTF-8"}</span>
+        <span>{currentBuf?.encoding?.toUpperCase() ?? t("editor.encodingUtf8")}</span>
         <span>{currentBuf?.eol?.toUpperCase() ?? "LF"}</span>
         <span>{langName}</span>
         <span style={{ marginLeft: "auto" }}>⎇ {branch ?? "main"}</span>

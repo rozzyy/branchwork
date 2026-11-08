@@ -1,6 +1,7 @@
 //! Commit / push / sync writes via the user's `git` CLI (Task 07).
 use crate::error::AppError;
 use crate::oplog;
+use crate::store::Store;
 use crate::worktree;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -32,6 +33,27 @@ fn head_sha(repository: &git2::Repository) -> Result<Option<String>, AppError> {
         Err(error) if error.code() == git2::ErrorCode::UnbornBranch => Ok(None),
         Err(error) => Err(error.into()),
     }
+}
+
+fn rebase_abort_failure(
+    store: &Store,
+    record_id: i64,
+    error: AppError,
+    after_write: impl FnOnce(),
+) -> AppError {
+    let error = match store.mark_oplog_non_undoable(record_id) {
+        Ok(true) => error,
+        Ok(false) => AppError::internal(format!(
+            "{}; sync undo record could not be found",
+            error.message
+        )),
+        Err(update_error) => AppError::internal(format!(
+            "{}; could not mark sync undo record non-undoable: {update_error}",
+            error.message
+        )),
+    };
+    after_write();
+    error
 }
 
 fn stderr_text(output: &Output) -> String {
@@ -215,17 +237,45 @@ fn require_success(
 }
 
 fn record_before_head(
+    store: &Store,
     root: &Path,
     repository: &git2::Repository,
     operation: &str,
-) -> Result<(), AppError> {
+) -> Result<(i64, Option<String>), AppError> {
     let before = head_sha(repository)?;
-    oplog::record(
+    let record_id = oplog::record(
+        store,
         operation,
         root,
         "",
         serde_json::json!({ "beforeHead": before }),
-    )
+    )?;
+    Ok((record_id, before))
+}
+
+fn update_commit_record(
+    store: &Store,
+    record_id: i64,
+    root: &Path,
+    before_head: Option<&str>,
+) -> Result<(), AppError> {
+    let Some(before_head) = before_head else {
+        return Ok(());
+    };
+    let after_head = open_worktree(root)
+        .and_then(|(_, repository)| head_sha(&repository))?
+        .ok_or_else(|| AppError::internal("Commit completed without creating a HEAD"))?;
+    if let Err(error) = oplog::update_commit_record(store, record_id, before_head, &after_head) {
+        return Err(oplog::remove_failed_record(
+            store,
+            record_id,
+            AppError::internal(format!(
+                "Commit completed, but its undo record could not be updated: {}",
+                error.message
+            )),
+        ));
+    }
+    Ok(())
 }
 
 fn write_commit(
@@ -256,62 +306,90 @@ fn write_commit(
     require_success(root, repository, "commit", output)
 }
 
-pub(crate) fn commit(worktree_path: &Path, options: &CommitOptions) -> Result<(), AppError> {
+pub(crate) fn commit(
+    store: &Store,
+    worktree_path: &Path,
+    options: &CommitOptions,
+) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
     let message = options.message.trim();
     if message.is_empty() && !options.amend {
         return Err(AppError::validation("Commit message must not be empty"));
     }
 
-    record_before_head(&root, &repository, "commit")?;
-    write_commit(&root, &repository, options)
+    let (record_id, before_head) = record_before_head(store, &root, &repository, "commit")?;
+    if let Err(error) = write_commit(&root, &repository, options) {
+        return Err(oplog::remove_failed_record(store, record_id, error));
+    }
+    update_commit_record(store, record_id, &root, before_head.as_deref())
 }
 
-pub(crate) fn commit_and_push(
+pub(crate) fn commit_and_push_with_callback(
+    store: &Store,
     worktree_path: &Path,
     options: &CommitOptions,
+    after_commit: impl FnOnce(),
 ) -> Result<(), AppError> {
-    commit(worktree_path, options)?;
+    commit(store, worktree_path, options)?;
+    after_commit();
     let (root, repository) = open_worktree(worktree_path)?;
     let output = run_git(&root, &[OsStr::new("push")])?;
     require_success(&root, &repository, "push", output)
 }
 
-pub(crate) fn commit_and_sync(
+pub(crate) fn commit_and_sync_with_callback(
+    store: &Store,
     worktree_path: &Path,
     options: &CommitOptions,
+    mut after_write: impl FnMut(),
 ) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
 
     // Record before fetch/rebase/commit so undo can return to the pre-sync HEAD.
-    record_before_head(&root, &repository, "sync")?;
+    let (record_id, before_head) = record_before_head(store, &root, &repository, "sync")?;
 
-    let fetch = run_git(&root, &[OsStr::new("fetch"), OsStr::new("--prune")])?;
-    require_success(&root, &repository, "fetch", fetch)?;
+    let fetch = run_git(&root, &[OsStr::new("fetch"), OsStr::new("--prune")])
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))?;
+    require_success(&root, &repository, "fetch", fetch)
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))?;
 
-    let rebase = run_git(&root, &[OsStr::new("rebase")])?;
+    let rebase = run_git(&root, &[OsStr::new("rebase")])
+        .map_err(|error| oplog::remove_failed_record(store, record_id, error))?;
     if !rebase.status.success() {
         let detail = combined_text(&rebase);
         let aborted = run_git(&root, &[OsStr::new("rebase"), OsStr::new("--abort")]);
         if let Err(error) = aborted {
-            return Err(AppError::internal(format!(
+            let error = AppError::internal(format!(
                 "Rebase conflicted and could not be aborted: {error}"
-            )));
+            ));
+            return Err(rebase_abort_failure(store, record_id, error, after_write));
         }
         let lower = detail.to_ascii_lowercase();
         if lower.contains("conflict") || lower.contains("could not apply") {
-            return Err(AppError::git_conflict(
-                "Rebase conflicted while syncing; the rebase was aborted",
-                stderr_text(&rebase),
+            return Err(oplog::remove_failed_record(
+                store,
+                record_id,
+                AppError::git_conflict(
+                    "Rebase conflicted while syncing; the rebase was aborted",
+                    stderr_text(&rebase),
+                ),
             ));
         }
-        return Err(classify_git_failure(&root, &repository, "rebase", &rebase));
+        return Err(oplog::remove_failed_record(
+            store,
+            record_id,
+            classify_git_failure(&root, &repository, "rebase", &rebase),
+        ));
     }
 
+    update_commit_record(store, record_id, &root, before_head.as_deref())?;
+    after_write();
     let message = options.message.trim();
     let should_commit = options.amend || !message.is_empty();
     if should_commit {
         write_commit(&root, &repository, options)?;
+        update_commit_record(store, record_id, &root, before_head.as_deref())?;
+        after_write();
     }
 
     let push = run_git(&root, &[OsStr::new("push")])?;
@@ -323,6 +401,7 @@ mod tests {
     use super::*;
     use crate::error::ErrorKind;
     use git2::Signature;
+    use std::sync::OnceLock;
     use std::{
         path::PathBuf,
         process::Command,
@@ -330,6 +409,11 @@ mod tests {
     };
 
     static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+    static STORE: OnceLock<Store> = OnceLock::new();
+
+    fn test_store() -> &'static Store {
+        STORE.get_or_init(|| Store::in_memory().unwrap())
+    }
 
     struct TestDir(PathBuf);
 
@@ -420,6 +504,7 @@ mod tests {
         stage_file(&temp.0, "README.md", b"two\n");
 
         commit(
+            test_store(),
             &temp.0,
             &CommitOptions {
                 message: "update readme".into(),
@@ -430,12 +515,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(head_message(&temp.0), "update readme");
-        let entry = oplog::entries_for(&temp.0.canonicalize().unwrap())
+        let entry = oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
             .into_iter()
             .rev()
             .find(|entry| entry.operation == "commit")
             .expect("oplog commit row");
         assert_eq!(entry.payload["beforeHead"], before);
+        assert_eq!(entry.payload["afterHead"], head_id(&temp.0));
         drop(repository);
     }
 
@@ -445,6 +531,7 @@ mod tests {
         init_repo(&temp.0);
         stage_file(&temp.0, "README.md", b"two\n");
         commit(
+            test_store(),
             &temp.0,
             &CommitOptions {
                 message: "second".into(),
@@ -455,6 +542,7 @@ mod tests {
         .unwrap();
         stage_file(&temp.0, "README.md", b"three\n");
         commit(
+            test_store(),
             &temp.0,
             &CommitOptions {
                 message: String::new(),
@@ -473,6 +561,7 @@ mod tests {
         fs::write(temp.0.join("README.md"), b"edited\n").unwrap();
         fs::write(temp.0.join("new.txt"), b"fresh\n").unwrap();
         commit(
+            test_store(),
             &temp.0,
             &CommitOptions {
                 message: "everything".into(),
@@ -509,6 +598,7 @@ mod tests {
         }
         stage_file(&temp.0, "README.md", b"hooked\n");
         let error = commit(
+            test_store(),
             &temp.0,
             &CommitOptions {
                 message: "should fail".into(),
@@ -526,6 +616,34 @@ mod tests {
                 .unwrap_or("")
                 .contains("hook-blocked")
         );
+        assert_eq!(
+            test_store()
+                .latest_oplog_undoable(temp.0.canonicalize().unwrap().to_str().unwrap())
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn failed_rebase_abort_disables_the_incomplete_sync_undo_record() {
+        let store = Store::in_memory().unwrap();
+        let record_id = store
+            .record_oplog("/repo", "sync", br#"{"beforeHead":"abc"}"#, true)
+            .unwrap();
+        let mut refreshed_undoable = None;
+
+        let error = rebase_abort_failure(
+            &store,
+            record_id,
+            AppError::internal("Rebase conflicted and could not be aborted"),
+            || refreshed_undoable = store.latest_oplog_undoable("/repo").unwrap(),
+        );
+
+        assert!(error.message.contains("could not be aborted"));
+        assert_eq!(refreshed_undoable, Some(false));
+        let row = store.latest_oplog("/repo").unwrap().unwrap();
+        assert_eq!(row.id, record_id);
+        assert!(!row.undoable);
     }
 
     #[test]
@@ -559,13 +677,15 @@ mod tests {
         git(&work.0, &["config", "user.name", "Branchwork Test"]);
         git(&work.0, &["config", "user.email", "test@example.com"]);
         stage_file(&work.0, "README.md", b"pushed\n");
-        commit_and_push(
+        commit_and_push_with_callback(
+            test_store(),
             &work.0,
             &CommitOptions {
                 message: "push me".into(),
                 amend: false,
                 stage_all: false,
             },
+            || {},
         )
         .unwrap();
         let remote_head = git2::Repository::open(&bare.0)
@@ -608,16 +728,41 @@ mod tests {
             ],
         );
         stage_file(&temp.0, "README.md", b"auth\n");
-        let error = commit_and_push(
+        let error = commit_and_push_with_callback(
+            test_store(),
             &temp.0,
             &CommitOptions {
                 message: "auth fail".into(),
                 amend: false,
                 stage_all: false,
             },
+            || {},
         )
         .unwrap_err();
         assert_eq!(error.kind, ErrorKind::GitAuth);
+    }
+
+    #[test]
+    fn commit_and_push_notifies_after_commit_even_when_push_fails() {
+        let temp = TestDir::new("push-failure-notify");
+        init_repo(&temp.0);
+        stage_file(&temp.0, "README.md", b"committed\n");
+        let mut notified = false;
+
+        let result = commit_and_push_with_callback(
+            test_store(),
+            &temp.0,
+            &CommitOptions {
+                message: "commit before failed push".into(),
+                amend: false,
+                stage_all: false,
+            },
+            || notified = true,
+        );
+
+        assert!(result.is_err());
+        assert!(notified);
+        assert_eq!(head_message(&temp.0), "commit before failed push");
     }
 
     #[test]
@@ -625,6 +770,7 @@ mod tests {
         let temp = TestDir::new("empty");
         init_repo(&temp.0);
         let error = commit(
+            test_store(),
             &temp.0,
             &CommitOptions {
                 message: "   ".into(),

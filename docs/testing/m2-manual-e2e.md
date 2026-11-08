@@ -226,7 +226,7 @@ Expected:
 
 Expected:
 - The stash entry disappears. A toast appears with an **Undo** action.
-- Clicking Undo triggers the `undo_last` IPC (currently shows a deferred toast — full undo wired in Task 14).
+- Clicking Undo reapplies the dropped stash and restores the stash entry.
 
 ### M2-S2-16 · Sync without a new message
 
@@ -329,7 +329,7 @@ Expected:
 Expected:
 - A confirmation dialog appears first; Cancel leaves the file untouched.
 - After confirm, the file disappears from the tree and a "Deleted" toast shows. The file is in the macOS Trash (not permanently deleted).
-- After Put Back, the file reappears in the tree. (An in-app Undo arrives with the oplog in Task 14.)
+- After **Put Back**, the file reappears in the tree. In-app Undo is covered by M2-S4-03.
 
 ### M2-S3-08 · Reveal in Finder and deferred items
 
@@ -385,3 +385,70 @@ Expected:
 | M2-S3-09 | | |
 | M2-S3-10 | | |
 | M2-S3-11 | | |
+
+## Stage 4: Blame, history, oplog undo, and palette polish
+
+> **Prerequisites:** Stage 3 checks passed. Use a scratch repository with one partially staged file, at least one tracked unstaged change, and a disposable tracked file to delete.
+
+### M2-S4-01 · Palette navigation and diff selection
+
+1. Press **⌘K**, search **Open Changes**, and run it. Repeat with **Open Files**.
+2. With no file selected, run **Open Blame**.
+3. Return to Changes, select a partially staged file, then run **Toggle staged view** from the palette twice.
+
+Expected:
+- Each Open command navigates to its screen. Blame shows its empty state when no file is selected.
+- Toggle staged view keeps the selected path and alternates the right-pane diff between its staged and unstaged areas.
+- Deferred tooltips name the correct milestone: M3 for Terminal/agents, M4 for GitHub, and M6 for AI assists.
+
+### M2-S4-02 · Confirmed discard-all and Undo
+
+1. Create two tracked unstaged changes. Run **Discard all changes** from the palette and cancel.
+2. Run it again, inspect the confirmation's file list, and confirm.
+3. Click **Undo** on the resulting toast.
+
+Expected:
+- Cancel leaves both changes untouched. Confirm reverts both files, and Undo restores both pre-discard contents.
+- Undo is disabled when the recorded payload exceeds the 16 MiB limit.
+
+### M2-S4-03 · Blame, history, and destructive-operation Undo
+
+1. Open a tracked file's context menu in Files and choose **Blame**. Select a line and a file-history entry; use **View commit**.
+2. Make and commit a change, then run **Undo last action** from the palette. Drop a stash and use its **Undo** toast.
+3. Delete a disposable file to Trash, then use its **Undo** toast.
+
+Expected:
+- Blame shows line authorship and commit details; file history selects the matching commit group; View commit opens Graph at that SHA.
+- Undo Last Commit soft-resets the commit, preserving its changes staged. Undoing stash-drop reapplies the stash, and Undoing Delete restores the file.
+- A failed reverse reports an error and does not silently remove its recovery record.
+
+### M2-S4-04 · Graph working-copy diff tabs
+
+1. Select the **Working copy** row at the top of Graph.
+2. Click a file in **Staged**, then click the same partially staged file in **Unstaged**. Each opens a tab in Graph's main editor area, not in the WIP inspector.
+3. Switch between the **Graph** tab and both diff tabs, close one, then use a row action to stage or unstage a file from the Graph tab.
+
+Expected:
+- Graph remains available as a tab with the commit history, and the WIP inspector stays visible beside the editor. Each diff tab shows the right comparison (HEAD ↔ Index for staged, Index ↔ Working Tree for unstaged); switching tabs preserves its path and area.
+- Closing the active diff tab returns to the remaining tab or Graph. Row/hunk actions refresh the worktree.
+- **Open in Changes** still exposes commit, stash, and discard operations; opening a file from the diff still routes to Files.
+
+### M2-S4-05 · Native memory budget
+
+1. Launch the native app and open two repositories.
+2. Open a 5 000-line file in the editor and wait for loading to settle.
+3. Measure the Branchwork app's resident memory, including any associated WebKit content process. Record the process names, RSS values, repository/editor state, and measurement tool.
+
+Expected:
+- Total measured RSS for the app and associated WebKit content stays below 400 MB.
+- Do not substitute browser E2E measurements or an app sample whose repository/editor state is unknown.
+
+### M2 Stage 4 results
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M2-S4-01 | | |
+| M2-S4-02 | | |
+| M2-S4-03 | | |
+| M2-S4-04 | | |
+| M2-S4-05 | | |

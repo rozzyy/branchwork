@@ -190,6 +190,24 @@ it("renders a fixed-row virtual window and requests the next 500-row page near t
   await screen.findByRole("option", { name: /Commit 500/ });
 });
 
+it("loads and scrolls to a selected commit beyond the first page", async () => {
+  const olderCommit = makeCommit(500, { message: "Older blamed commit" });
+  setupGraph(async (_projectId, _worktreePath, page) =>
+    page === 0
+      ? initialPage
+      : { ...initialPage, page: 1, totalCommits: 501, commits: [olderCommit], hasMore: false },
+  );
+  await screen.findByRole("option", { name: /Initial commit/ });
+
+  useGraphUi.getState().select({ kind: "commit", sha: olderCommit.sha });
+
+  const selected = await screen.findByRole("option", { name: /Older blamed commit/ });
+  const list = screen.getByRole("listbox", { name: "Commit history" });
+  expect(readGraphPage).toHaveBeenCalledWith("project-1", "/repos/main", 1);
+  expect(selected).toHaveAttribute("aria-selected", "true");
+  expect(list.scrollTop).toBeGreaterThan(0);
+});
+
 it("retries a failed next page without restarting the loaded graph", async () => {
   let pageOneAttempts = 0;
   setupGraph(async (_projectId, _worktreePath, page) => {

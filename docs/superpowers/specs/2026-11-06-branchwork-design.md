@@ -278,7 +278,8 @@ Every step can be skipped.
 - Toolbar: Fetch, Pull (count), Push (count), ＋ Worktree.
 - **Inspector:**
   - For a commit: SHA, CI, PR, message, author, a file list (click to open in Files), an AI summary (on demand), and actions (cherry-pick, revert, rebase from here, open PR).
-  - For WIP: staged files and a "Open in Changes" button.
+  - For WIP: staged, unstaged, untracked, and conflicted files. Clicking a file opens a diff tab in Graph's main editor area, distinct from the Files editor. A persistent Graph tab keeps the commit graph accessible, and the WIP inspector remains alongside the editor tabs; multiple diff tabs can remain open and be closed individually. Each diff retains the selected file's staged or unstaged comparison.
+  - The WIP inspector supports quick stage/unstage actions, and the Graph diff tabs use the shared renderer's hunk/line actions. Commit, stash, and bulk source-control operations remain in the full Changes screen, reachable through "Open in Changes".
 - **Row context menu:**
   - Checkout
   - Create worktree here

@@ -19,6 +19,8 @@ import { ask } from "../../ui/dialog";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { toast } from "../../ui/toast";
 import { useGraphUi, type GraphFilter } from "./graphState";
+import { GraphEditorTabs } from "./GraphEditorTabs";
+import { WipInspector } from "./WipInspector";
 import "./graph.css";
 
 const ROW_HEIGHT = 38;
@@ -68,15 +70,8 @@ const deferredMenuActions = [
   "graph.action.terminal",
   "graph.action.agent",
 ] as const;
-const fileGroupKeys = {
-  staged: "graph.files.staged",
-  unstaged: "graph.files.unstaged",
-  untracked: "graph.files.untracked",
-  conflicted: "graph.files.conflicted",
-} as const;
 // ponytail: a badge letter for the known bucket a WIP file is in; not a real git status
 // letter (we don't have per-file M/A/D data), so it stays neutral rather than color-coded.
-const fileGroupBadges = { staged: "S", unstaged: "M", untracked: "U", conflicted: "C" } as const;
 const refKindKeys: Record<GraphRefKind, "graph.ref.localBranch" | "graph.ref.remoteBranch" | "graph.ref.tag"> = {
   localBranch: "graph.ref.localBranch",
   remoteBranch: "graph.ref.remoteBranch",
@@ -375,7 +370,7 @@ export function GraphView() {
     setTotalCommits(0);
     setError(null);
     setLoading(true);
-    select({ kind: "wip" });
+    if (useGraphUi.getState().selection.kind !== "commit") select({ kind: "wip" });
     setSelectedCommit(null);
     setMenu(null);
     setScrollTop(0);
@@ -501,6 +496,27 @@ export function GraphView() {
     }
   }, [activePath, hasMore, loading, projectId]);
 
+  useEffect(() => {
+    if (selection.kind !== "commit" || selectedCommit || !hasMore || loading || error) return;
+    void loadNextPage();
+  }, [commits, error, hasMore, loadNextPage, loading, selectedCommit, selection]);
+
+  useEffect(() => {
+    if (selection.kind !== "commit" || !selectedCommit) return;
+    const list = listRef.current;
+    if (!list) return;
+    const index = commits.findIndex((commit) => commit.sha === selectedCommit.sha);
+    if (index < 0) return;
+    const rowTop = (index + 1) * ROW_HEIGHT;
+    const rowBottom = rowTop + ROW_HEIGHT;
+    const visibleBottom = list.scrollTop + list.clientHeight;
+    if (rowTop < list.scrollTop || rowBottom > visibleBottom) {
+      const nextScrollTop = Math.max(0, rowTop - ROW_HEIGHT);
+      list.scrollTop = nextScrollTop;
+      setScrollTop(nextScrollTop);
+    }
+  }, [commits, selectedCommit, selection]);
+
   const scrollToTop = useCallback(() => {
     if (listRef.current) listRef.current.scrollTop = 0;
     setScrollTop(0);
@@ -528,7 +544,7 @@ export function GraphView() {
   const rowCount = commits.length + 1;
   const firstVisible = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const endVisible = Math.min(rowCount, Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN);
-  const visibleRows = [];
+  const visibleRows: number[] = [];
   for (let index = firstVisible; index < endVisible; index++) visibleRows.push(index);
 
   useEffect(() => {
@@ -599,98 +615,115 @@ export function GraphView() {
   }
 
   return (
-    <div className="graph-screen">
-      <section className="graph-list-panel" aria-label={t("graph.commitHistory")}>
-        <GraphFilterBar totalLoaded={commits.length} hasMore={hasMore} totalCommits={totalCommits} />
-        {error && commits.length === 0 ? (
-          <div className="graph-state" role="alert">
-            <p>{t("graph.loadError", { message: error })}</p>
-            <button className="btn sm" onClick={() => void loadFirstPage()}>{t("graph.retry")}</button>
-          </div>
-        ) : (
-          <div className="graph-scroll" ref={listRef} onScroll={onScroll} role="listbox" aria-label={t("graph.commitHistory")}>
-            {filter === "mine" && !userEmail && !loading && (
-              <div className="graph-notice" role="status">{t("graph.mineNoEmail")}</div>
-            )}
-            {commits.length === 0 && !loading && !error && (
-              <div className="graph-empty" role="status">{t("graph.empty")}</div>
-            )}
-            <div style={{ height: firstVisible * ROW_HEIGHT }} aria-hidden />
-            {visibleRows.map((rowIndex) => rowIndex === 0 ? (
-              <WipRow
-                key="wip"
-                wip={wip}
-                selected={selection.kind === "wip"}
-                onSelect={() => {
-                  setSelectedCommit(null);
-                  select({ kind: "wip" });
-                }}
-              />
+    <GraphEditorTabs
+      key={activePath}
+      worktreePath={activePath}
+      renderInspector={(openDiff) => (
+        <aside className="graph-inspector" aria-label={t("graph.inspector")}>
+          {selection.kind === "wip" ? (
+            <WipInspector
+              worktreePath={activePath}
+              wip={wip}
+              onOpenChanges={() => useStage.getState().go("changes")}
+              onOpenDiff={(path, area) => {
+                setMenu(null);
+                openDiff(path, area);
+              }}
+            />
+          ) : selectedCommit ? (
+            <CommitInspector
+              commit={selectedCommit}
+              detail={detail}
+              loading={detailLoading}
+              error={detailError}
+              onRetry={() => {
+                const commit = selectedCommit;
+                if (!projectId || !activePath) return;
+                const currentRequest = ++detailRequestId.current;
+                setDetailError(null);
+                setDetailLoading(true);
+                void readGraphCommitDetail(projectId, activePath, commit.sha)
+                  .then((result) => {
+                    if (detailRequestId.current === currentRequest) setDetail(result);
+                  })
+                  .catch((reason: unknown) => {
+                    if (detailRequestId.current === currentRequest) {
+                      setDetailError(errorMessage(reason));
+                    }
+                  })
+                  .finally(() => {
+                    if (detailRequestId.current === currentRequest) setDetailLoading(false);
+                  });
+              }}
+            />
+          ) : (
+            <div className="graph-inspector-empty">{t("graph.selectCommit")}</div>
+          )}
+        </aside>
+      )}
+    >
+      {() => (
+        <>
+          <section className="graph-list-panel" aria-label={t("graph.commitHistory")}>
+            <GraphFilterBar totalLoaded={commits.length} hasMore={hasMore} totalCommits={totalCommits} />
+            {error && commits.length === 0 ? (
+              <div className="graph-state" role="alert">
+                <p>{t("graph.loadError", { message: error })}</p>
+                <button className="btn sm" onClick={() => void loadFirstPage()}>{t("graph.retry")}</button>
+              </div>
             ) : (
-              <CommitRow
-                key={commits[rowIndex - 1].sha}
-                commit={commits[rowIndex - 1]}
-                laneRow={laneRows.get(commits[rowIndex - 1].sha)}
-                selected={selection.kind === "commit" && selection.sha === commits[rowIndex - 1].sha}
-                dim={matchingShas !== null && !matchingShas.has(commits[rowIndex - 1].sha)}
-                offBranch={branchAncestry !== null && !branchAncestry.has(commits[rowIndex - 1].sha)}
-                onSelect={() => {
-                  const commit = commits[rowIndex - 1];
-                  setSelectedCommit(commit);
-                  select({ kind: "commit", sha: commit.sha });
-                }}
-                onContextMenu={(event) => showMenu(event, commits[rowIndex - 1])}
-              />
-            ))}
-            <div style={{ height: Math.max(0, rowCount - endVisible) * ROW_HEIGHT }} aria-hidden />
-            {loading && <div className="graph-list-status" role="status">{t("graph.loading")}</div>}
-            {error && commits.length > 0 && (
-              <div className="graph-inline-error" role="alert">
-                <span>{t("graph.pageError", { message: error })}</span>
-                <button className="btn sm" onClick={() => void loadNextPage()}>{t("graph.retry")}</button>
+              <div className="graph-scroll" ref={listRef} onScroll={onScroll} role="listbox" aria-label={t("graph.commitHistory")}>
+                {filter === "mine" && !userEmail && !loading && (
+                  <div className="graph-notice" role="status">{t("graph.mineNoEmail")}</div>
+                )}
+                {commits.length === 0 && !loading && !error && (
+                  <div className="graph-empty" role="status">{t("graph.empty")}</div>
+                )}
+                <div style={{ height: firstVisible * ROW_HEIGHT }} aria-hidden />
+                {visibleRows.map((rowIndex) => rowIndex === 0 ? (
+                  <WipRow
+                    key="wip"
+                    wip={wip}
+                    selected={selection.kind === "wip"}
+                    onSelect={() => {
+                      setSelectedCommit(null);
+                      select({ kind: "wip" });
+                    }}
+                  />
+                ) : (
+                  <CommitRow
+                    key={commits[rowIndex - 1].sha}
+                    commit={commits[rowIndex - 1]}
+                    laneRow={laneRows.get(commits[rowIndex - 1].sha)}
+                    selected={selection.kind === "commit" && selection.sha === commits[rowIndex - 1].sha}
+                    dim={matchingShas !== null && !matchingShas.has(commits[rowIndex - 1].sha)}
+                    offBranch={branchAncestry !== null && !branchAncestry.has(commits[rowIndex - 1].sha)}
+                    onSelect={() => {
+                      const commit = commits[rowIndex - 1];
+                      setSelectedCommit(commit);
+                      select({ kind: "commit", sha: commit.sha });
+                    }}
+                    onContextMenu={(event) => showMenu(event, commits[rowIndex - 1])}
+                  />
+                ))}
+                <div style={{ height: Math.max(0, rowCount - endVisible) * ROW_HEIGHT }} aria-hidden />
+                {loading && <div className="graph-list-status" role="status">{t("graph.loading")}</div>}
+                {error && commits.length > 0 && (
+                  <div className="graph-inline-error" role="alert">
+                    <span>{t("graph.pageError", { message: error })}</span>
+                    <button className="btn sm" onClick={() => void loadNextPage()}>{t("graph.retry")}</button>
+                  </div>
+                )}
+                {!loading && !error && !hasMore && commits.length > 0 && (
+                  <div className="graph-list-status">{t("graph.endHistory", { count: totalCommits ?? commits.length })}</div>
+                )}
               </div>
             )}
-            {!loading && !error && !hasMore && commits.length > 0 && (
-              <div className="graph-list-status">{t("graph.endHistory", { count: totalCommits ?? commits.length })}</div>
-            )}
-          </div>
-        )}
-      </section>
-      <aside className="graph-inspector" aria-label={t("graph.inspector")}>
-        {selection.kind === "wip" ? (
-          <WipInspector wip={wip} onOpenChanges={() => useStage.getState().go("changes")} />
-        ) : selectedCommit ? (
-          <CommitInspector
-            commit={selectedCommit}
-            detail={detail}
-            loading={detailLoading}
-            error={detailError}
-            onRetry={() => {
-              const commit = selectedCommit;
-              if (!projectId || !activePath) return;
-              const currentRequest = ++detailRequestId.current;
-              setDetailError(null);
-              setDetailLoading(true);
-              void readGraphCommitDetail(projectId, activePath, commit.sha)
-                .then((result) => {
-                  if (detailRequestId.current === currentRequest) setDetail(result);
-                })
-                .catch((reason: unknown) => {
-                  if (detailRequestId.current === currentRequest) {
-                    setDetailError(errorMessage(reason));
-                  }
-                })
-                .finally(() => {
-                  if (detailRequestId.current === currentRequest) setDetailLoading(false);
-                });
-            }}
-          />
-        ) : (
-          <div className="graph-inspector-empty">{t("graph.selectCommit")}</div>
-        )}
-      </aside>
-      {menu && <Menu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} width={260} />}
-    </div>
+          </section>
+          {menu && <Menu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} width={260} />}
+        </>
+      )}
+    </GraphEditorTabs>
   );
 }
 
@@ -833,43 +866,6 @@ function CommitRow({
       </time>
       <span className="graph-sha">{commit.shortSha}</span>
     </button>
-  );
-}
-
-function WipInspector({ wip, onOpenChanges }: { wip: WipSummary | null; onOpenChanges(): void }) {
-  const groups = [
-    ["staged", wip?.stagedFiles ?? []],
-    ["unstaged", wip?.unstagedFiles ?? []],
-    ["untracked", wip?.untrackedFiles ?? []],
-    ["conflicted", wip?.conflictedFiles ?? []],
-  ] as const;
-  const count = wip
-    ? wip.stagedFiles.length + wip.unstagedFiles.length + wip.untrackedFiles.length + wip.conflictedFiles.length
-    : 0;
-  return (
-    <div className="graph-inspector-content">
-      <div className="graph-wip-meta">
-        <span className="graph-chip">{t("graph.wipFileCount", { count })}</span>
-        <button className="btn sm" onClick={onOpenChanges}>± {t("graph.openChanges")}</button>
-        <span className="graph-chip mono">{wip?.branch ?? t("sidebar.detached")}</span>
-      </div>
-      <h2 className="graph-commit-heading">{t("graph.wip")}</h2>
-      <div className="graph-file-groups">
-        {groups.map(([group, files]) => (
-          <section key={group} className="graph-file-group">
-            <h3>{t(fileGroupKeys[group])} <span>{files.length}</span></h3>
-            {files.length ? (
-              <ul>{files.map((path) => (
-                <li key={`${group}:${path}`} className="graph-wip-file" title={path}>
-                  <span className="graph-status-badge" aria-hidden>{fileGroupBadges[group]}</span>
-                  <code>{path}</code>
-                </li>
-              ))}</ul>
-            ) : <p className="graph-muted">{t("graph.noFiles")}</p>}
-          </section>
-        ))}
-      </div>
-    </div>
   );
 }
 

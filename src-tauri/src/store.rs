@@ -2,6 +2,22 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Mutex};
 
+pub(crate) const OPLOG_MAX_PAYLOAD: usize = 16 * 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OplogRow {
+    pub id: i64,
+    pub kind: String,
+    pub payload: Option<Vec<u8>>,
+    pub undoable: bool,
+}
+
+#[cfg(test)]
+pub(crate) struct StoredOplogRow {
+    pub kind: String,
+    pub payload: Option<Vec<u8>>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Group {
@@ -187,12 +203,132 @@ impl Store {
             params![project_id, worktree_path],
         )? > 0)
     }
+
+    pub(crate) fn record_oplog(
+        &self,
+        worktree_path: &str,
+        kind: &str,
+        payload: &[u8],
+        undoable: bool,
+    ) -> rusqlite::Result<i64> {
+        let within_limit = payload.len() <= OPLOG_MAX_PAYLOAD;
+        let undoable = undoable && within_limit;
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO oplog (worktree_path, kind, payload, undoable, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                worktree_path,
+                kind,
+                within_limit.then_some(payload),
+                undoable,
+                unix_time_seconds()
+            ],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub(crate) fn update_oplog_payload(&self, id: i64, payload: &[u8]) -> rusqlite::Result<bool> {
+        let within_limit = payload.len() <= OPLOG_MAX_PAYLOAD;
+        Ok(self.conn.lock().unwrap().execute(
+            "UPDATE oplog SET payload = ?1, undoable = undoable AND ?2 WHERE id = ?3",
+            params![within_limit.then_some(payload), within_limit, id],
+        )? > 0)
+    }
+
+    pub(crate) fn mark_oplog_non_undoable(&self, id: i64) -> rusqlite::Result<bool> {
+        Ok(self
+            .conn
+            .lock()
+            .unwrap()
+            .execute("UPDATE oplog SET undoable = 0 WHERE id = ?1", [id])?
+            > 0)
+    }
+
+    pub(crate) fn latest_oplog_undoable(
+        &self,
+        worktree_path: &str,
+    ) -> rusqlite::Result<Option<bool>> {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT undoable FROM oplog WHERE worktree_path = ?1 ORDER BY id DESC LIMIT 1",
+                [worktree_path],
+                |row| row.get::<_, bool>(0),
+            )
+            .optional()
+    }
+
+    pub(crate) fn latest_oplog(&self, worktree_path: &str) -> rusqlite::Result<Option<OplogRow>> {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT id, kind, payload, undoable FROM oplog
+                 WHERE worktree_path = ?1 ORDER BY id DESC LIMIT 1",
+                [worktree_path],
+                |row| {
+                    Ok(OplogRow {
+                        id: row.get(0)?,
+                        kind: row.get(1)?,
+                        payload: row.get(2)?,
+                        undoable: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    pub(crate) fn delete_oplog(&self, id: i64) -> rusqlite::Result<()> {
+        self.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM oplog WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn oplog_rows_for(
+        &self,
+        worktree_path: &str,
+    ) -> rusqlite::Result<Vec<StoredOplogRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT kind, payload FROM oplog WHERE worktree_path = ?1 ORDER BY id ASC")?;
+        stmt.query_map([worktree_path], |row| {
+            Ok(StoredOplogRow {
+                kind: row.get(0)?,
+                payload: row.get(1)?,
+            })
+        })?
+        .collect()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reject_oplog_inserts(&self) {
+        self.conn
+            .lock()
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER reject_oplog BEFORE INSERT ON oplog
+                 BEGIN SELECT RAISE(ABORT, 'oplog unavailable'); END;",
+            )
+            .unwrap();
+    }
+}
+
+fn unix_time_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "foreign_keys", "ON")?;
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if version > 1 {
+    if version > 2 {
         return Err(rusqlite::Error::InvalidQuery);
     }
     if version == 0 {
@@ -225,6 +361,24 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              COMMIT;",
         )?;
     }
+    let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if version < 2 {
+        conn.execute_batch(
+            "BEGIN IMMEDIATE;
+             CREATE TABLE IF NOT EXISTS oplog (
+                 id INTEGER PRIMARY KEY,
+                 worktree_path TEXT NOT NULL,
+                 kind TEXT NOT NULL,
+                 payload BLOB,
+                 undoable INTEGER NOT NULL DEFAULT 1,
+                 created_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS oplog_worktree_id_idx
+                 ON oplog(worktree_path, id DESC);
+             PRAGMA user_version = 2;
+             COMMIT;",
+        )?;
+    }
     Ok(())
 }
 
@@ -242,6 +396,13 @@ mod tests {
         .unwrap();
 
         migrate(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO oplog (worktree_path, kind, payload, undoable, created_at)
+             VALUES ('/repo', 'commit', X'7B7D', 1, 1)",
+            [],
+        )
+        .unwrap();
+        migrate(&conn).unwrap();
         migrate(&conn).unwrap();
 
         let version: i64 = conn
@@ -254,8 +415,20 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
         assert_eq!(setting, r#"{"mode":"dark"}"#);
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 1);
+        let index: String = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'oplog_worktree_id_idx'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(index.contains("worktree_path, id DESC"));
     }
 
     #[test]
@@ -415,5 +588,78 @@ mod tests {
             s.get("theme").unwrap().as_deref(),
             Some(r#"{"mode":"light"}"#)
         );
+    }
+
+    #[test]
+    fn oplog_payload_cap_keeps_oversize_rows_but_disables_undo() {
+        let store = Store::in_memory().unwrap();
+        let within = vec![b'x'; OPLOG_MAX_PAYLOAD];
+        let oversize = vec![b'y'; OPLOG_MAX_PAYLOAD + 1];
+        store
+            .record_oplog("/repo", "discard", &within, true)
+            .unwrap();
+        store
+            .record_oplog("/repo", "discard", &oversize, true)
+            .unwrap();
+        assert_eq!(store.latest_oplog_undoable("/repo").unwrap(), Some(false));
+        let conn = store.conn.lock().unwrap();
+        let rows: Vec<(Option<Vec<u8>>, bool)> = conn
+            .prepare("SELECT payload, undoable FROM oplog ORDER BY id")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(rows[0].0.as_ref().unwrap().len(), OPLOG_MAX_PAYLOAD);
+        assert!(rows[0].1);
+        assert_eq!(rows[1], (None, false));
+    }
+
+    #[test]
+    fn failed_oplog_insert_is_reported_to_abort_the_forward_write() {
+        let store = Store::in_memory().unwrap();
+        store.reject_oplog_inserts();
+        let error = store.record_oplog("/repo", "discard", b"{}", true);
+        assert!(error.is_err());
+        assert_eq!(store.latest_oplog_undoable("/repo").unwrap(), None);
+    }
+
+    #[test]
+    fn oplog_migration_preserves_existing_catalog_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE groups (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, clone_path_template TEXT NOT NULL);
+             CREATE TABLE projects (id TEXT PRIMARY KEY NOT NULL, owner TEXT, name TEXT NOT NULL, local_path TEXT NOT NULL UNIQUE, group_id TEXT);
+             CREATE TABLE worktree_pins (project_id TEXT NOT NULL, worktree_path TEXT NOT NULL, PRIMARY KEY (project_id, worktree_path));
+             INSERT INTO settings VALUES ('theme', 'dark');
+             INSERT INTO groups VALUES ('g1', 'Group', 'blue', '~/repos/{repo}');
+             INSERT INTO projects VALUES ('p1', 'owner', 'Repo', '/repos/repo', 'g1');
+             INSERT INTO worktree_pins VALUES ('p1', '/repos/repo');
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap();
+        migrate(&conn).unwrap();
+
+        let catalog_counts: (i64, i64, i64) = conn
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM groups), (SELECT COUNT(*) FROM projects), (SELECT COUNT(*) FROM worktree_pins)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(catalog_counts, (1, 1, 1));
+        let theme: String = conn
+            .query_row("SELECT value FROM settings WHERE key='theme'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(theme, "dark");
+        let version: i64 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
     }
 }

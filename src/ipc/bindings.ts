@@ -28,17 +28,18 @@ export const commands = {
 	graphCommitDetail: (projectId: string, worktreePath: string, sha: string) => __TAURI_INVOKE<GraphCommitDetail>("graph_commit_detail", { projectId, worktreePath, sha }),
 	status: (worktreePath: string) => __TAURI_INVOKE<StatusSummary_Serialize>("status", { worktreePath }),
 	diffFile: (worktreePath: string, path: string, area: DiffArea) => __TAURI_INVOKE<DiffModel_Serialize>("diff_file", { worktreePath, path, area }),
-	commit: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<null>("commit", { worktreePath, options }),
-	commitAndPush: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<null>("commit_and_push", { worktreePath, options }),
-	commitAndSync: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<null>("commit_and_sync", { worktreePath, options }),
+	commit: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit", { worktreePath, options }),
+	commitAndPush: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit_and_push", { worktreePath, options }),
+	commitAndSync: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit_and_sync", { worktreePath, options }),
+	undoLast: (worktreePath: string) => __TAURI_INVOKE<boolean>("undo_last", { worktreePath }),
 	stashList: (worktreePath: string) => __TAURI_INVOKE<StashEntry[]>("stash_list", { worktreePath }),
 	stashPush: (worktreePath: string, options: StashPushOptions_Deserialize) => __TAURI_INVOKE<null>("stash_push", { worktreePath, options }),
 	stashApply: (worktreePath: string, index: number) => __TAURI_INVOKE<null>("stash_apply", { worktreePath, index }),
 	stashPop: (worktreePath: string, index: number) => __TAURI_INVOKE<null>("stash_pop", { worktreePath, index }),
-	stashDrop: (worktreePath: string, index: number) => __TAURI_INVOKE<null>("stash_drop", { worktreePath, index }),
+	stashDrop: (worktreePath: string, index: number) => __TAURI_INVOKE<boolean>("stash_drop", { worktreePath, index }),
 	stagePaths: (worktreePath: string, paths: string[]) => __TAURI_INVOKE<null>("stage_paths", { worktreePath, paths }),
 	unstagePaths: (worktreePath: string, paths: string[]) => __TAURI_INVOKE<null>("unstage_paths", { worktreePath, paths }),
-	discardPaths: (worktreePath: string, paths: string[], discardUntracked: boolean) => __TAURI_INVOKE<null>("discard_paths", { worktreePath, paths, discardUntracked }),
+	discardPaths: (worktreePath: string, paths: string[], discardUntracked: boolean) => __TAURI_INVOKE<boolean>("discard_paths", { worktreePath, paths, discardUntracked }),
 	stageHunks: (worktreePath: string, path: string, hunkIndices: number[], area: DiffArea) => __TAURI_INVOKE<null>("stage_hunks", { worktreePath, path, hunkIndices, area }),
 	unstageHunks: (worktreePath: string, path: string, hunkIndices: number[]) => __TAURI_INVOKE<null>("unstage_hunks", { worktreePath, path, hunkIndices }),
 	stageLines: (worktreePath: string, path: string, lineIds: string[], area: DiffArea) => __TAURI_INVOKE<null>("stage_lines", { worktreePath, path, lineIds, area }),
@@ -48,11 +49,15 @@ export const commands = {
 	fsWrite: (worktreePath: string, path: string, bytes: number[], expectedMtime: number) => __TAURI_INVOKE<number>("fs_write", { worktreePath, path, bytes, expectedMtime }),
 	fsCreate: (worktreePath: string, path: string, kind: FsEntryKind) => __TAURI_INVOKE<null>("fs_create", { worktreePath, path, kind }),
 	fsRename: (worktreePath: string, from: string, to: string) => __TAURI_INVOKE<null>("fs_rename", { worktreePath, from, to }),
-	fsDelete: (worktreePath: string, path: string) => __TAURI_INVOKE<null>("fs_delete", { worktreePath, path }),
+	fsDelete: (worktreePath: string, path: string) => __TAURI_INVOKE<boolean>("fs_delete", { worktreePath, path }),
 	revealInFinder: (worktreePath: string, path: string) => __TAURI_INVOKE<null>("reveal_in_finder", { worktreePath, path }),
+	blame: (worktreePath: string, path: string, options: BlameRequest) => __TAURI_INVOKE<BlameResult>("blame", { worktreePath, path, options }),
+	fileHistory: (worktreePath: string, path: string, options: FileHistoryRequest) => __TAURI_INVOKE<FileHistoryEntry[]>("file_history", { worktreePath, path, options }),
 };
 
 /* Types */
+export type AgeBucket = "hours" | "days" | "weeks" | "months" | "older";
+
 export type AppError = AppError_Serialize | AppError_Deserialize;
 
 export type AppError_Deserialize = {
@@ -67,6 +72,30 @@ export type AppError_Serialize = {
 	message: string,
 	detail: string | null,
 	recoverable: boolean,
+};
+
+export type BlameGroup = {
+	sha: string,
+	start: number,
+	end: number,
+};
+
+export type BlameLine = {
+	line: number,
+	sha: string,
+	author: string,
+	time: number,
+	summary: string,
+	ageBucket: AgeBucket,
+};
+
+export type BlameRequest = {
+	followRenames: boolean,
+};
+
+export type BlameResult = {
+	lines: BlameLine[],
+	groups: BlameGroup[],
 };
 
 export type CommitOptions = {
@@ -120,6 +149,17 @@ export type DiffModel_Serialize = {
  *  for input validation, stale-write detection and unknown-id lookups.
  */
 export type ErrorKind = "gitConflict" | "gitAuth" | "gitHook" | "notARepo" | "network" | "rateLimited" | "ptySpawn" | "cliMissing" | "profileAuth" | "io" | "internal" | "validation" | "conflict" | "notFound";
+
+export type FileHistoryEntry = {
+	sha: string,
+	author: string,
+	message: string,
+	time: number,
+};
+
+export type FileHistoryRequest = {
+	limit: number,
+};
 
 export type FsEncoding = "utf-8" | "utf-16" | "binary";
 
@@ -290,6 +330,10 @@ export type IntraSpan = {
 	start: number,
 	end: number,
 	kind: IntraKind,
+};
+
+export type OpDone = {
+	undoable: boolean,
 };
 
 export type Project = Project_Serialize | Project_Deserialize;

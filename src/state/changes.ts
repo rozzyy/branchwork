@@ -199,16 +199,17 @@ export const useChanges = create<ChangesStore>((set, get) => ({
     }
 
     const action = commandAction(command);
+    let undoable: boolean | undefined;
     try {
       switch (command.type) {
         case "commit":
-          await commit(worktree, command.options);
+          undoable = await commit(worktree, command.options);
           break;
         case "commit-and-push":
-          await commitAndPush(worktree, command.options);
+          undoable = await commitAndPush(worktree, command.options);
           break;
         case "commit-and-sync":
-          await commitAndSync(worktree, command.options);
+          undoable = await commitAndSync(worktree, command.options);
           break;
         case "stash-push":
           await stashPush(worktree, command.options);
@@ -220,7 +221,7 @@ export const useChanges = create<ChangesStore>((set, get) => ({
           await stashPop(worktree, command.index);
           break;
         case "stash-drop":
-          await stashDrop(worktree, command.index);
+          undoable = await stashDrop(worktree, command.index);
           break;
         case "stage-paths":
           await stagePaths(worktree, command.paths);
@@ -229,7 +230,7 @@ export const useChanges = create<ChangesStore>((set, get) => ({
           await unstagePaths(worktree, command.paths);
           break;
         case "discard-paths":
-          await discardPaths(worktree, command.paths, command.discardUntracked);
+          undoable = await discardPaths(worktree, command.paths, command.discardUntracked);
           break;
         case "stage-hunks":
           await stageHunks(worktree, command.path, command.hunkIndices, command.area);
@@ -244,12 +245,19 @@ export const useChanges = create<ChangesStore>((set, get) => ({
           await revertHunk(worktree, command.path, command.hunkIndex);
           break;
       }
-      if (command.type === "stash-drop") {
+      if (undoable !== undefined) {
         toast({
-          title: t("changes.stashDropped"),
-          detail: `stash@{${command.index}}`,
-          icon: "🗑",
-          action: { label: t("toast.undo"), run: () => undoLast(worktree) },
+          title: command.type === "stash-drop"
+            ? t("changes.stashDropped")
+            : t("changes.actionDone", { action }),
+          detail: command.type === "stash-drop" ? `stash@{${command.index}}` : undefined,
+          icon: command.type === "stash-drop" ? "🗑" : "✓",
+          action: {
+            label: t("toast.undo"),
+            undo: true,
+            enabled: undoable,
+            run: () => undoLast(worktree),
+          },
         });
       } else {
         toast({ title: t("changes.actionDone", { action }), icon: "✓" });

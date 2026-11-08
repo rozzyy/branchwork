@@ -5,6 +5,7 @@ import { SettingsToolbar, SettingsView } from "./settings/SettingsScreen";
 import { GraphToolbar, GraphView } from "./graph/GraphScreen";
 import { ChangesToolbar, ChangesView } from "./changes/ChangesScreen";
 import { FilesToolbar, FilesView } from "./files/FilesScreen";
+import { BlameToolbar, BlameView } from "./blame/BlameScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -31,3 +32,4 @@ VIEWS.settings = { Toolbar: SettingsToolbar, View: SettingsView };
 VIEWS.graph = { Toolbar: GraphToolbar, View: GraphView };
 VIEWS.changes = { Toolbar: ChangesToolbar, View: ChangesView };
 VIEWS.files = { Toolbar: FilesToolbar, View: FilesView };
+VIEWS.blame = { Toolbar: BlameToolbar, View: BlameView };

@@ -10,6 +10,7 @@ import { python } from "@codemirror/lang-python";
 import { yaml } from "@codemirror/lang-yaml";
 import { StreamLanguage } from "@codemirror/language";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
+import { t } from "../i18n/t";
 
 export function getFileExtension(path: string): string {
   const parts = path.split("/").pop()?.split(".") ?? [];
@@ -56,33 +57,33 @@ export function getLanguageName(path: string): string {
   const ext = getFileExtension(path);
   switch (ext) {
     case "ts":
-      return "TypeScript";
+      return t("editor.language.typescript");
     case "tsx":
-      return "TypeScript JSX";
+      return t("editor.language.typescriptJsx");
     case "js":
-      return "JavaScript";
+      return t("editor.language.javascript");
     case "jsx":
-      return "JavaScript JSX";
+      return t("editor.language.javascriptJsx");
     case "json":
-      return "JSON";
+      return t("editor.language.json");
     case "md":
-      return "Markdown";
+      return t("editor.language.markdown");
     case "css":
-      return "CSS";
+      return t("editor.language.css");
     case "html":
-      return "HTML";
+      return t("editor.language.html");
     case "rs":
-      return "Rust";
+      return t("editor.language.rust");
     case "go":
-      return "Go";
+      return t("editor.language.go");
     case "py":
-      return "Python";
+      return t("editor.language.python");
     case "yaml":
     case "yml":
-      return "YAML";
+      return t("editor.language.yaml");
     case "toml":
-      return "TOML";
+      return t("editor.language.toml");
     default:
-      return "Plain";
+      return t("editor.language.plain");
   }
 }

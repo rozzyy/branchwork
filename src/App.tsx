@@ -12,6 +12,7 @@ import { useGlobalKeys } from "./keys/globalKeys";
 import { useSidebar } from "./state/sidebar";
 import { useRepos } from "./state/repos";
 import { useChanges } from "./state/changes";
+import { subscribeUndoState } from "./ipc/undo";
 
 export default function App() {
   useGlobalKeys();
@@ -25,7 +26,19 @@ export default function App() {
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme(useSettings.getState().theme);
     mq?.addEventListener("change", onChange);
-    return () => mq?.removeEventListener("change", onChange);
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      void subscribeUndoState().then((dispose) => {
+        if (disposed) dispose();
+        else unlisten = dispose;
+      });
+    }
+    return () => {
+      disposed = true;
+      mq?.removeEventListener("change", onChange);
+      unlisten?.();
+    };
   }, []);
   return (
     <div className="app" data-sidebar={collapsed ? "collapsed" : "expanded"}>

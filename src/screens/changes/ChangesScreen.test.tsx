@@ -61,17 +61,17 @@ function statusSummary(overrides: Partial<StatusSummary> = {}): StatusSummary {
 async function setup(summary = statusSummary(), stashes: StashEntry[] = []) {
   vi.mocked(readStatus).mockResolvedValue(summary);
   vi.mocked(readDiff).mockResolvedValue({ hunks: [], binary: false, truncated: false, bytes: 0 });
-  vi.mocked(commit).mockResolvedValue(undefined);
-  vi.mocked(commitAndPush).mockResolvedValue(undefined);
-  vi.mocked(commitAndSync).mockResolvedValue(undefined);
+  vi.mocked(commit).mockResolvedValue(false);
+  vi.mocked(commitAndPush).mockResolvedValue(false);
+  vi.mocked(commitAndSync).mockResolvedValue(false);
   vi.mocked(stagePaths).mockResolvedValue(undefined);
   vi.mocked(unstagePaths).mockResolvedValue(undefined);
-  vi.mocked(discardPaths).mockResolvedValue(undefined);
+  vi.mocked(discardPaths).mockResolvedValue(false);
   vi.mocked(stashList).mockResolvedValue(stashes);
   vi.mocked(stashPush).mockResolvedValue(undefined);
   vi.mocked(stashApply).mockResolvedValue(undefined);
   vi.mocked(stashPop).mockResolvedValue(undefined);
-  vi.mocked(stashDrop).mockResolvedValue(undefined);
+  vi.mocked(stashDrop).mockResolvedValue(false);
   act(() => {
     useWorktrees.setState({
       activePath: "/repos/main",
@@ -280,7 +280,7 @@ it("stages, unstages, and discards from file-row hover actions", async () => {
 
   await userEvent.click(within(unstagedRow as HTMLElement).getByRole("button", { name: "Discard changes" }));
   await waitFor(() =>
-    expect(discardPaths).toHaveBeenCalledWith("/repos/main", ["src/auth/callback.ts"], false),
+    expect(discardPaths).toHaveBeenCalledWith("/repos/main", ["src/auth/callback.ts"], true),
   );
 });
 

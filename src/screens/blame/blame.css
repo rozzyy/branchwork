@@ -1,0 +1,31 @@
+.pane-view:has(.blame-screen) { overflow: hidden; }
+.blame-screen { display: grid; grid-template-columns: 200px minmax(0, 1fr) 300px; height: 100%; min-width: 0; min-height: 0; }
+.blame-subtitle { margin-left: 8px; color: var(--fg3); font-weight: 400; font-size: 12.5px; }
+.blame-toolbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.blame-tree { border-right: 1px solid var(--line); padding-top: 6px; }
+.blame-code { min-width: 0; overflow: auto; border-right: 1px solid var(--line); font-size: 12.5px; }
+.blame-line { display: flex; align-items: stretch; gap: 0; cursor: pointer; min-height: 22px; }
+.blame-line:hover { background: var(--s2); }
+.blame-line.on { background: var(--accs); }
+.blame-heat { flex: none; width: 3px; }
+.blame-gutter { flex: none; width: 240px; display: flex; align-items: center; gap: 6px; padding: 2px 8px; overflow: hidden; white-space: nowrap; color: var(--fg2); }
+.blame-gutter-cont { background: transparent; }
+.blame-gutter-author { font-weight: 600; color: var(--fg); }
+.blame-gutter-age { color: var(--fg3); }
+.blame-gutter-summary { overflow: hidden; text-overflow: ellipsis; color: var(--fg3); }
+.blame-avatar { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 700; }
+.blame-lineno { flex: none; width: 36px; text-align: right; padding: 2px 8px 2px 0; color: var(--fg3); }
+.blame-code-text { flex: 1; min-width: 0; padding: 2px 6px; white-space: pre; color: var(--fg); }
+.blame-detail { min-width: 0; overflow: auto; display: flex; flex-direction: column; }
+.blame-commit-card { padding: 14px; border-bottom: 1px solid var(--line); }
+.blame-h4 { color: var(--fg3); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.blame-commit-message { font-weight: 650; font-size: 14px; margin: 4px 0; }
+.blame-who { display: flex; align-items: center; gap: 6px; color: var(--fg2); font-size: 12.5px; }
+.blame-commit-actions { display: flex; gap: 6px; margin-top: 10px; }
+.blame-history-heading { padding: 12px 14px 4px; }
+.blame-history-item { display: flex; gap: 8px; padding: 8px 14px; cursor: pointer; align-items: flex-start; }
+.blame-history-item:hover { background: var(--s2); }
+.blame-history-item.on { background: var(--accs); }
+.blame-history-message { font-weight: 550; font-size: 12.5px; }
+.blame-history-meta { color: var(--fg3); font-size: 11.5px; }
+.blame-no-history, .blame-state { padding: 10px 14px; color: var(--fg3); font-size: 12.5px; }

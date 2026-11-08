@@ -49,6 +49,10 @@ test.describe("M0 Stage 1 shell", () => {
         // Files & editor now renders a real (empty) state instead of the generic placeholder (M2 Stage 3).
         await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
         await expect(page.getByText("Open a worktree to see its files.")).toBeVisible();
+      } else if (label === "Blame & history") {
+        await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 2, name: "No file selected" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Pick a file" })).toBeVisible();
       } else {
         await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
         await expect(page.getByText(PLACEHOLDER_BODY)).toBeVisible();

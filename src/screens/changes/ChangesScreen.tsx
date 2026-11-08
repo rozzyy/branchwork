@@ -6,6 +6,7 @@ import { useChanges, type ChangesSelection } from "../../state/changes";
 import { useFiles } from "../../state/files";
 import { useStage } from "../../state/stage";
 import { onGitChanged } from "../../ipc/worktrees";
+import { undoLast } from "../../ipc/undo";
 import type { DiffArea } from "../../ipc/diff";
 import type { CommitOptions } from "../../ipc/changes";
 import type { StatusEntry } from "../../ipc/status";
@@ -15,7 +16,6 @@ import { Segmented } from "../../ui/controls";
 import { FileIcon } from "../../ui/fileIcon";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { ask } from "../../ui/dialog";
-import { toast } from "../../ui/toast";
 import "./changes.css";
 
 const def = screenById("changes");
@@ -384,7 +384,10 @@ export function ChangesView() {
       label: t("changes.undoCommit"),
       icon: "↶",
       kbd: "⌘Z",
-      onSelect: () => toast({ title: t("changes.undoDeferred"), icon: "↶" }),
+      disabled: !activePath,
+      onSelect: () => {
+        if (activePath) undoLast(activePath);
+      },
     },
   ];
 
@@ -400,7 +403,7 @@ export function ChangesView() {
   const onFileAction = (action: "discard" | "stage" | "unstage", entry: StatusEntry) => {
     if (action === "stage") void dispatch({ type: "stage-paths", paths: [entry.path] });
     else if (action === "unstage") void dispatch({ type: "unstage-paths", paths: [entry.path] });
-    else void dispatch({ type: "discard-paths", paths: [entry.path], discardUntracked: false });
+    else void dispatch({ type: "discard-paths", paths: [entry.path], discardUntracked: true });
   };
 
   const onSectionAction = async (action: SectionAction) => {
@@ -425,7 +428,7 @@ export function ChangesView() {
       void dispatch({
         type: "discard-paths",
         paths: entries.unstaged.map((entry) => entry.path),
-        discardUntracked: false,
+        discardUntracked: true,
       });
     }
   };

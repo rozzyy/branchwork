@@ -6,6 +6,7 @@ use crate::{
     diff,
     error::{AppError, ErrorKind},
     oplog, status,
+    store::Store,
 };
 use git2::Repository;
 use serde::{Deserialize, Serialize};
@@ -341,6 +342,7 @@ fn atomic_overwrite(full: &Path, bytes: &[u8]) -> Result<(), AppError> {
 }
 
 pub(crate) fn write(
+    store: &Store,
     worktree_path: &Path,
     path: &str,
     bytes: Vec<u8>,
@@ -376,15 +378,21 @@ pub(crate) fn write(
         Err(error) => return Err(AppError::io(format!("Cannot inspect file: {error}"))),
     };
     let text = path_text(&root, &full)?;
-    oplog::record(
+    let record_id = oplog::record(
+        store,
         "fsWrite",
         &root,
         &text,
         json!({ "previousBytes": previous }),
     )?;
     if let Some(parent) = full.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| AppError::io(format!("Cannot create parent directory: {error}")))?;
+        fs::create_dir_all(parent).map_err(|error| {
+            oplog::remove_failed_record(
+                store,
+                record_id,
+                AppError::io(format!("Cannot create parent directory: {error}")),
+            )
+        })?;
     }
     if previous.is_none() {
         // New-file branch: O_EXCL via `create_new` so this never silently follows a symlink
@@ -394,7 +402,13 @@ pub(crate) fn write(
             .write(true)
             .create_new(true)
             .open(&full)
-            .map_err(|error| AppError::io(format!("Cannot create file: {error}")))?;
+            .map_err(|error| {
+                oplog::remove_failed_record(
+                    store,
+                    record_id,
+                    AppError::io(format!("Cannot create file: {error}")),
+                )
+            })?;
         file.write_all(&bytes)
             .map_err(|error| AppError::io(format!("Cannot write file: {error}")))?;
     } else {
@@ -403,21 +417,42 @@ pub(crate) fn write(
         // Write through an in-worktree symlink to its target (like `fs::write` did) instead of
         // replacing the link with a regular file. The target was already checked to stay inside
         // the worktree by `resolve_relative(.., follow_leaf: true, ..)`; re-check after resolving.
-        let target = fs::canonicalize(&full)
-            .map_err(|error| AppError::io(format!("Cannot resolve file: {error}")))?;
-        let canonical_root = fs::canonicalize(&root)
-            .map_err(|error| AppError::io(format!("Cannot resolve worktree: {error}")))?;
+        let target = fs::canonicalize(&full).map_err(|error| {
+            oplog::remove_failed_record(
+                store,
+                record_id,
+                AppError::io(format!("Cannot resolve file: {error}")),
+            )
+        })?;
+        let canonical_root = fs::canonicalize(&root).map_err(|error| {
+            oplog::remove_failed_record(
+                store,
+                record_id,
+                AppError::io(format!("Cannot resolve worktree: {error}")),
+            )
+        })?;
         if !target.starts_with(&canonical_root) {
-            return Err(AppError::validation("Path escapes the worktree"));
+            return Err(oplog::remove_failed_record(
+                store,
+                record_id,
+                AppError::validation("Path escapes the worktree"),
+            ));
         }
-        atomic_overwrite(&target, &bytes)?;
+        if let Err(error) = atomic_overwrite(&target, &bytes) {
+            return Err(oplog::remove_failed_record(store, record_id, error));
+        }
     }
     let metadata = fs::metadata(&full)
         .map_err(|error| AppError::io(format!("Cannot stat written file: {error}")))?;
     mtime_millis(&metadata)
 }
 
-pub(crate) fn create(worktree_path: &Path, path: &str, kind: FsEntryKind) -> Result<(), AppError> {
+pub(crate) fn create(
+    store: &Store,
+    worktree_path: &Path,
+    path: &str,
+    kind: FsEntryKind,
+) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
     let full = resolve_relative(&root, path, false, true, &repository)?;
     if fs::symlink_metadata(&full).is_ok() {
@@ -426,21 +461,26 @@ pub(crate) fn create(worktree_path: &Path, path: &str, kind: FsEntryKind) -> Res
         ));
     }
     let text = path_text(&root, &full)?;
-    oplog::record("fsCreate", &root, &text, json!({ "kind": kind }))?;
-    match kind {
-        FsEntryKind::File => {
-            fs::File::create_new(&full)
-                .map_err(|error| AppError::io(format!("Cannot create file: {error}")))?;
-        }
-        FsEntryKind::Folder => {
-            fs::create_dir(&full)
-                .map_err(|error| AppError::io(format!("Cannot create folder: {error}")))?;
-        }
+    let record_id = oplog::record(store, "fsCreate", &root, &text, json!({ "kind": kind }))?;
+    let result = match kind {
+        FsEntryKind::File => fs::File::create_new(&full)
+            .map(|_| ())
+            .map_err(|error| AppError::io(format!("Cannot create file: {error}"))),
+        FsEntryKind::Folder => fs::create_dir(&full)
+            .map_err(|error| AppError::io(format!("Cannot create folder: {error}"))),
+    };
+    if let Err(error) = result {
+        return Err(oplog::remove_failed_record(store, record_id, error));
     }
     Ok(())
 }
 
-pub(crate) fn rename(worktree_path: &Path, from: &str, to: &str) -> Result<(), AppError> {
+pub(crate) fn rename(
+    store: &Store,
+    worktree_path: &Path,
+    from: &str,
+    to: &str,
+) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
     // `rename(2)` acts on the `from` entry itself without following a leaf symlink, so a
     // dangling or `.git`-aliasing `from` must not be refused; `to` must not already exist and
@@ -459,27 +499,37 @@ pub(crate) fn rename(worktree_path: &Path, from: &str, to: &str) -> Result<(), A
     let to_text = path_text(&root, &to_full)?;
     // The payload is the inverse rename: an undo step replays it directly as `rename(from, to)`
     // without having to know to swap fields first.
-    oplog::record(
+    let record_id = oplog::record(
+        store,
         "fsRename",
         &root,
         &from_text,
         json!({ "from": to_text, "to": from_text }),
     )?;
-    fs::rename(&from_full, &to_full)
-        .map_err(|error| AppError::io(format!("Cannot rename: {error}")))?;
+    if let Err(error) = fs::rename(&from_full, &to_full) {
+        return Err(oplog::remove_failed_record(
+            store,
+            record_id,
+            AppError::io(format!("Cannot rename: {error}")),
+        ));
+    }
     Ok(())
 }
 
-pub(crate) fn delete(worktree_path: &Path, path: &str) -> Result<(), AppError> {
-    delete_with(worktree_path, path, |target| trash::delete(target))
+pub(crate) fn delete(store: &Store, worktree_path: &Path, path: &str) -> Result<(), AppError> {
+    delete_with(store, worktree_path, path, |target| {
+        trash::delete(target)
+            .map_err(|error| AppError::io(format!("Could not move to Trash: {error}")))
+    })
 }
 
 /// The actual Trash call goes through this seam so tests can assert the invocation shape
 /// (which path it moves) without touching the real macOS Trash.
 fn delete_with(
+    store: &Store,
     worktree_path: &Path,
     path: &str,
-    trash_fn: impl FnOnce(&Path) -> Result<(), trash::Error>,
+    trash_fn: impl FnOnce(&Path) -> Result<(), AppError>,
 ) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
     // `trash` moves the leaf entry itself without following it (a symlink is trashed, not its
@@ -489,13 +539,11 @@ fn delete_with(
         return Err(AppError::not_found("Path does not exist"));
     }
     let text = path_text(&root, &full)?;
-    oplog::record(
-        "fsDelete",
-        &root,
-        &text,
-        json!({ "trashedAbsolutePath": full.to_string_lossy() }),
-    )?;
-    trash_fn(&full).map_err(|error| AppError::io(format!("Could not move to Trash: {error}")))?;
+    let payload = oplog::delete_payload(Path::new(&text), &full)?;
+    let record_id = oplog::record(store, "delete_to_trash", &root, &text, payload)?;
+    if let Err(error) = trash_fn(&full) {
+        return Err(oplog::remove_failed_record(store, record_id, error));
+    }
     Ok(())
 }
 
@@ -523,9 +571,17 @@ pub(crate) fn reveal_in_finder(worktree_path: &Path, path: &str) -> Result<(), A
 mod tests {
     use super::*;
     use git2::Signature;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{
+        OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    };
 
     static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+    static STORE: OnceLock<Store> = OnceLock::new();
+
+    fn test_store() -> &'static Store {
+        STORE.get_or_init(|| Store::in_memory().unwrap())
+    }
 
     struct TestDir(PathBuf);
 
@@ -625,10 +681,17 @@ mod tests {
         assert_eq!(first.encoding, FsEncoding::Utf8);
         assert_eq!(first.eol, FsEol::Lf);
 
-        let new_mtime = write(&temp.0, "file.txt", b"after\n".to_vec(), first.mtime).unwrap();
+        let new_mtime = write(
+            test_store(),
+            &temp.0,
+            "file.txt",
+            b"after\n".to_vec(),
+            first.mtime,
+        )
+        .unwrap();
         assert_eq!(fs::read(temp.0.join("file.txt")).unwrap(), b"after\n");
         assert!(
-            oplog::entries_for(&temp.0.canonicalize().unwrap())
+            oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
                 .iter()
                 .any(|entry| entry.operation == "fsWrite")
         );
@@ -637,12 +700,26 @@ mod tests {
         // untouched. Pick a value guaranteed to differ from the real current mtime rather than
         // relying on timing.
         let wrong_mtime = new_mtime.wrapping_add(1);
-        let error = write(&temp.0, "file.txt", b"conflict\n".to_vec(), wrong_mtime).unwrap_err();
+        let error = write(
+            test_store(),
+            &temp.0,
+            "file.txt",
+            b"conflict\n".to_vec(),
+            wrong_mtime,
+        )
+        .unwrap_err();
         assert_eq!(error.kind, ErrorKind::Conflict);
         assert_eq!(fs::read(temp.0.join("file.txt")).unwrap(), b"after\n");
 
         // The fresh mtime from the successful write is accepted.
-        write(&temp.0, "file.txt", b"final\n".to_vec(), new_mtime).unwrap();
+        write(
+            test_store(),
+            &temp.0,
+            "file.txt",
+            b"final\n".to_vec(),
+            new_mtime,
+        )
+        .unwrap();
         assert_eq!(fs::read(temp.0.join("file.txt")).unwrap(), b"final\n");
     }
 
@@ -651,15 +728,15 @@ mod tests {
         let temp = TestDir::new();
         let _repository = init_repository(&temp.0, &[]);
 
-        create(&temp.0, "new.txt", FsEntryKind::File).unwrap();
+        create(test_store(), &temp.0, "new.txt", FsEntryKind::File).unwrap();
         assert!(temp.0.join("new.txt").is_file());
-        create(&temp.0, "new-dir", FsEntryKind::Folder).unwrap();
+        create(test_store(), &temp.0, "new-dir", FsEntryKind::Folder).unwrap();
         assert!(temp.0.join("new-dir").is_dir());
 
-        let error = create(&temp.0, "new.txt", FsEntryKind::File).unwrap_err();
+        let error = create(test_store(), &temp.0, "new.txt", FsEntryKind::File).unwrap_err();
         assert_eq!(error.kind, ErrorKind::Validation);
         assert!(
-            oplog::entries_for(&temp.0.canonicalize().unwrap())
+            oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
                 .iter()
                 .filter(|entry| entry.operation == "fsCreate")
                 .count()
@@ -668,15 +745,57 @@ mod tests {
     }
 
     #[test]
+    fn failed_filesystem_mutations_remove_their_oplog_records() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        let _repository = init_repository(
+            &temp.0,
+            &[("blocked.txt", b"file\n"), ("old.txt", b"old\n")],
+        );
+        let root = temp.0.canonicalize().unwrap();
+        let root_text = root.to_str().unwrap();
+
+        assert_eq!(
+            create(&store, &temp.0, "missing/new.txt", FsEntryKind::File)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Io
+        );
+        assert!(store.latest_oplog(root_text).unwrap().is_none());
+
+        assert_eq!(
+            rename(&store, &temp.0, "old.txt", "missing/new.txt")
+                .unwrap_err()
+                .kind,
+            ErrorKind::Io
+        );
+        assert!(store.latest_oplog(root_text).unwrap().is_none());
+
+        assert_eq!(
+            write(
+                &store,
+                &temp.0,
+                "blocked.txt/child.txt",
+                b"content".to_vec(),
+                0,
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::Io
+        );
+        assert!(store.latest_oplog(root_text).unwrap().is_none());
+    }
+
+    #[test]
     fn renames_a_file() {
         let temp = TestDir::new();
         let _repository = init_repository(&temp.0, &[("old.txt", b"contents\n")]);
 
-        rename(&temp.0, "old.txt", "new.txt").unwrap();
+        rename(test_store(), &temp.0, "old.txt", "new.txt").unwrap();
 
         assert!(!temp.0.join("old.txt").exists());
         assert_eq!(fs::read(temp.0.join("new.txt")).unwrap(), b"contents\n");
-        let entry = oplog::entries_for(&temp.0.canonicalize().unwrap())
+        let entry = oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
             .into_iter()
             .find(|entry| entry.operation == "fsRename")
             .unwrap();
@@ -693,19 +812,19 @@ mod tests {
         let full = temp.0.canonicalize().unwrap().join("doomed.txt");
 
         let mut trashed = None;
-        delete_with(&temp.0, "doomed.txt", |path| {
+        delete_with(test_store(), &temp.0, "doomed.txt", |path| {
             trashed = Some(path.to_path_buf());
             Ok(())
         })
         .unwrap();
 
         assert_eq!(trashed, Some(full));
-        let entry = oplog::entries_for(&temp.0.canonicalize().unwrap())
+        let entry = oplog::entries_for(test_store(), &temp.0.canonicalize().unwrap())
             .into_iter()
-            .find(|entry| entry.operation == "fsDelete")
+            .find(|entry| entry.operation == "delete_to_trash")
             .unwrap();
         assert_eq!(
-            entry.payload["trashedAbsolutePath"],
+            entry.payload["absolutePath"],
             json!(
                 temp.0
                     .canonicalize()
@@ -714,6 +833,26 @@ mod tests {
                     .to_string_lossy()
             )
         );
+    }
+
+    #[test]
+    fn failed_trash_operation_removes_its_undo_record() {
+        let temp = TestDir::new();
+        let store = Store::in_memory().unwrap();
+        let _repository = init_repository(&temp.0, &[("doomed.txt", b"bye\n")]);
+        let root = temp.0.canonicalize().unwrap();
+
+        assert!(
+            delete_with(&store, &temp.0, "doomed.txt", |_| {
+                Err(AppError::io("trash failed"))
+            })
+            .is_err()
+        );
+        assert_eq!(
+            store.latest_oplog_undoable(root.to_str().unwrap()).unwrap(),
+            None
+        );
+        assert!(root.join("doomed.txt").exists());
     }
 
     #[test]
@@ -727,7 +866,7 @@ mod tests {
         // `trash` moves the leaf entry itself without following it, so the user must be able to
         // trash a malicious `meta -> .git` link from inside the app.
         let mut trashed = None;
-        delete_with(&temp.0, "meta", |path| {
+        delete_with(test_store(), &temp.0, "meta", |path| {
             trashed = Some(path.to_path_buf());
             Ok(())
         })
@@ -778,7 +917,7 @@ mod tests {
             ErrorKind::Validation
         );
         assert_eq!(
-            write(&temp.0, "meta/config", b"evil".to_vec(), 0)
+            write(test_store(), &temp.0, "meta/config", b"evil".to_vec(), 0)
                 .unwrap_err()
                 .kind,
             ErrorKind::Validation
@@ -811,7 +950,7 @@ mod tests {
         let _ = fs::remove_file(&dangling_target);
         symlink(&dangling_target, temp.0.join("out")).unwrap();
 
-        let error = write(&temp.0, "out", b"evil".to_vec(), 0).unwrap_err();
+        let error = write(test_store(), &temp.0, "out", b"evil".to_vec(), 0).unwrap_err();
 
         assert!(!dangling_target.exists());
         // Refused by the validator failing to canonicalize the dangling target, before
@@ -854,7 +993,7 @@ mod tests {
         symlink("real.txt", temp.0.join("alias.txt")).unwrap();
         let mtime = mtime_millis(&fs::metadata(temp.0.join("alias.txt")).unwrap()).unwrap();
 
-        write(&temp.0, "alias.txt", b"new\n".to_vec(), mtime).unwrap();
+        write(test_store(), &temp.0, "alias.txt", b"new\n".to_vec(), mtime).unwrap();
 
         assert!(
             fs::symlink_metadata(temp.0.join("alias.txt"))
