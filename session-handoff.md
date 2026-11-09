@@ -5,11 +5,12 @@
 
 - **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–3 committed and fast-forwarded into `main`. No push.
 - **Branch:** `m3-stage-4` (branched from `main` at `c110d42`; WIP commit per user order 2026-11-09, no push, not merged).
-- **Active task:** `m3-stage-4-review` — in-progress (code+security+e2e PASS, reports written; modal tidy done; manual checkpoint pending user run).
+- **Branch:** `main` (Stage 4 merged; `m3-stage-4` deleted). No push.
+- **Active task:** `m3-task-13-pane-cli-switcher` — next (Stage 5).
 
 ## Recommended Next Step
 
-User runs manual M3-S3-01..07 + M3-S4-01..04 and orders the stage commit, then: single stage commit on `m3-stage-4`, ff into `main`. No push. Open gaps for next tasks: pane-header CLI switcher (spec §6.6/line 358) + Settings agent-accounts section (spec/line 566).
+Work M3-13 per its task file on a new `m3-stage-5` branch from `main`. No commit/push until the user approves the Stage 5 checkpoint and orders it.
 
 ## M2 structure
 

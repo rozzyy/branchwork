@@ -899,8 +899,8 @@
       "dependencies": [
         "m3-stage-3-review"
       ],
-      "status": "in-progress",
-      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-11-spec.md; 1 minor preview-note-path finding fixed inline). init.sh 52 files/440 tests green, Rust 157, e2e 76/76; preview fix verified by focused 59/59 + typecheck. WIP committed f48b369 on m3-stage-4 per user order, no push; code + security addenda APPROVE (no findings; 2 deferred minors noted). Follow-up fix (user report): AgentsView now filters sessions by active worktree + handover-to-new-worktree does load+select (graph pattern); 2 new tests, gate 52 files/442 tests + e2e 76/76. Manual M3-S4 pending."
+      "status": "done",
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-11-spec.md; 1 minor preview-note-path finding fixed inline). init.sh 52 files/440 tests green, Rust 157, e2e 76/76; preview fix verified by focused 59/59 + typecheck. WIP committed f48b369 on m3-stage-4 per user order, no push; code + security addenda APPROVE (no findings; 2 deferred minors noted). Follow-up fix (user report): AgentsView now filters sessions by active worktree + handover-to-new-worktree does load+select (graph pattern); 2 new tests, gate 52 files/442 tests + e2e 76/76. Manual M3-S4 pending. Stage checkpoint approved by user manual run 2026-11-09; merged to main."
     },
     {
       "id": "m3-task-12-race",
@@ -910,8 +910,8 @@
       "dependencies": [
         "m3-task-11-handover"
       ],
-      "status": "in-progress",
-      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-12-spec.md). Race dialog + toolbar, prompt via prefix, unpin helper (race+handover), branch-deleting remove + 4 Rust tests, bindings regenerated. Gate: init.sh 52 files/449 tests, Rust 161, typecheck+Clippy clean; e2e 76/76. Uncommitted; stage code/security review + manual M3-S4 checkpoint pending."
+      "status": "done",
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-12-spec.md). Race dialog + toolbar, prompt via prefix, unpin helper (race+handover), branch-deleting remove + 4 Rust tests, bindings regenerated. Gate: init.sh 52 files/449 tests, Rust 161, typecheck+Clippy clean; e2e 76/76. Uncommitted; stage code/security review + manual M3-S4 checkpoint pending. Stage checkpoint approved by user manual run 2026-11-09; merged to main."
     },
     {
       "id": "m3-stage-4-review",
@@ -921,8 +921,52 @@
       "dependencies": [
         "m3-task-12-race"
       ],
-      "status": "in-progress",
-      "evidence": "Code APPROVE + security APPROVE (no findings) + e2e automated 76/76 PASS (.agent/reviews/m3-stage-4-{code,security,e2e}.md); manual M3-S3+M3-S4 awaiting user; gate 52 files/450 tests, Rust 161, typecheck+Clippy clean. No commit/push."
+      "status": "done",
+      "evidence": "Code APPROVE + security APPROVE (no findings) + e2e automated 76/76 PASS (.agent/reviews/m3-stage-4-{code,security,e2e}.md); manual M3-S3+M3-S4 awaiting user; gate 52 files/450 tests, Rust 161, typecheck+Clippy clean. No commit/push. User ran manual M3-S3+M3-S4 OK 2026-11-09; stage merged to main, no push."
+    },
+    {
+      "id": "m3-task-13-pane-cli-switcher",
+      "stage": 17,
+      "name": "Pane-header CLI switcher",
+      "description": ".agent/tasks/m3-task-13-pane-cli-switcher.md",
+      "dependencies": [
+        "m3-stage-4-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-14-settings-accounts",
+      "stage": 17,
+      "name": "Settings agent accounts section",
+      "description": ".agent/tasks/m3-task-14-settings-accounts.md",
+      "dependencies": [
+        "m3-task-13-pane-cli-switcher"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-stage-5-review",
+      "stage": 17,
+      "name": "M3 Stage 5 review and manual checkpoint",
+      "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
+      "dependencies": [
+        "m3-task-15-provider-icons"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m3-task-15-provider-icons",
+      "stage": 17,
+      "name": "Actual provider icons for all CLIs",
+      "description": ".agent/tasks/m3-task-15-provider-icons.md",
+      "dependencies": [
+        "m3-task-14-settings-accounts"
+      ],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

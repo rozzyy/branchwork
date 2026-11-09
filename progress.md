@@ -661,3 +661,14 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Modal tidy (user order):** `.dlg-wide` (560px) for New agent/Handover/Race, one-line ellipsis CLI card names with full-name titles, Contestants empty hint (`agents.raceEmpty`). Detector: no new findings (only pre-existing `--spring` warnings).
 - **Gate:** init.sh exit 0 + Verification Complete (52 files/450 tests; Rust 161/3 ignored; typecheck + Clippy clean); e2e 76/76. No commit/push (not ordered).
 - **Awaiting user:** manual M3-S3-01..07 + M3-S4-01..04, then stage commit order.
+
+## 2026-11-09: Committed Stage 4 progress + specced 2 gaps (user ordered)
+
+- **Commit** `b1e6004` on `m3-stage-4` (no push/merge — manual checkpoint still pending): M3-12 race, discard, modal tidy, M3-S4 manual spec, Stage 4 reviews.
+- **Gap specs (new Stage 5):** `.agent/tasks/m3-task-13-pane-cli-switcher.md` (header CLI dropdown → handover preset; spec §6.6 line 358) and `.agent/tasks/m3-task-14-settings-accounts.md` (Settings per-CLI add/list/default/logout; spec line 566; per-repo/group default UI deferred, usage stays hidden). Entries added to `feature_list.json` (stage 17). Not started — needs Stage 4 checkpoint go-ahead first.
+
+## 2026-11-09: Stage 4 checkpoint approved + merged (user ran manual OK)
+
+- **Manual:** user ran M3-S3-01..07 + M3-S4-01..04 — OK.
+- **Tasks 11/12 + stage-4-review → done.** Stage branch merged to main (ff-only, branch deleted, no push).
+- **Next:** M3 Stage 5 (13 CLI switcher → 14 settings accounts → 15 provider icons → review).
