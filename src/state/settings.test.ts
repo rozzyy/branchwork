@@ -35,6 +35,17 @@ it("fills missing fields from defaults when loading older settings", async () =>
   expect(useSettings.getState().theme).toEqual({ ...DEFAULT_THEME, mode: "light" });
 });
 
+it("defaults auto-switch on and persists the toggle", async () => {
+  useSettings.setState({ agentAutoSwitch: true });
+  expect(useSettings.getState().agentAutoSwitch).toBe(true);
+  useSettings.getState().setAgentAutoSwitch(false);
+  expect(useSettings.getState().agentAutoSwitch).toBe(false);
+  expect(localStorage.getItem("bw:agentAutoSwitch")).toBe("false");
+  useSettings.setState({ agentAutoSwitch: true, loaded: false });
+  await useSettings.getState().load();
+  expect(useSettings.getState().agentAutoSwitch).toBe(false);
+});
+
 // Runs last: mockWindows/mockIPC leave window.__TAURI_INTERNALS__ present for the
 // rest of this file's jsdom instance even after clearMocks (it only deletes the
 // properties on it), which would make earlier tests take the Tauri branch too.

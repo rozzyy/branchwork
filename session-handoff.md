@@ -1,15 +1,15 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-08
-- **Current Objective:** M3 Stage 3 — agent registry and session lifecycle (starting)
+- **Current Objective:** M3 Stage 3 — all tasks 06–10 done and reviewed; manual checkpoint pending
 
 - **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–2 committed and fast-forwarded into `main`. No push.
-- **Branch:** `m3-stage-3` (to be created from `main` after the Stage 2 merge). No push.
-- **Active task:** `m3-task-06-cli-registry` — next (Stage 3 starting).
+- **Branch:** `m3-stage-3` (uncommitted). No push.
+- **Active task:** `m3-stage-3-review` — manual checkpoint M3-S3-01..07 (then single stage commit on order).
 
 ## Recommended Next Step
 
-Start M3 Stage 3 (Tasks 06–10) on a new `m3-stage-3` branch. No commit or push until the user approves the Stage 3 checkpoint and orders it.
+🛑 STOP at the Stage 3 manual checkpoint: user runs M3-S3-01..07 (`docs/testing/m0-manual-e2e.md`). On approval + order: one stage commit on `m3-stage-3`, then `git switch main && git merge --ff-only m3-stage-3 && git branch -d m3-stage-3`. Never push.
 
 ## M2 structure
 
@@ -20,8 +20,7 @@ Start M3 Stage 3 (Tasks 06–10) on a new `m3-stage-3` branch. No commit or push
 - Stage 5 follow-up — Graph commit history diff inspector (Task 17) → committed as `1336afb` and fast-forwarded into `main`, no push
 - M3 Stage 1 — PTY foundation and terminal dock (Tasks 01–03) → ✅ committed `a95e38f`, merged into `main`
 - M3 Stage 2 — Full-screen Terminal workspace (Tasks 04–05) → ✅ manual OK, committed, merged into `main`
-- M3 Stage 3 — Agent registry and session lifecycle (Tasks 06–10) → starting
-- M3 Stage 3 — Agent registry and session lifecycle (Tasks 06–10) → not started
+- M3 Stage 3 — Agent registry and session lifecycle (Tasks 06–10) → all done and reviewed ✅; manual M3-S3-01..07 pending
 - M3 Stage 4 — Agent workflows (Tasks 11–12) → not started
 
 ## Decisions this session (user)

@@ -546,3 +546,68 @@ Expected: fresh shells start for registered worktrees, layouts/sizes/focus/broad
 | M3-S2-05 | | |
 | M3-S2-06 | | |
 | M3-S2-07 | | |
+
+### M3-S3-01 · CLI registry and install guidance
+
+1. Open Agents → ＋ New agent; confirm all 7 CLIs are listed (Claude Code, Codex, OpenCode, Gemini CLI, GitHub Copilot, Muse, Custom).
+2. For a CLI whose binary is not installed, confirm the card shows install guidance and Start stays disabled for it.
+
+Expected: `copilot --continue` and `muse resume --last` are the resume argv; verified flags match `copilot --help` 1.0.107 / `muse --help` 1.4.14 on this host.
+
+### M3-S3-02 · Profiles: add, login, logout
+
+1. Add a profile for one CLI; confirm the name slugifies, duplicates are rejected, and a login terminal opens with the profile env (`*_CONFIG_DIR`/`HOME` pointing under `~/.branchwork/profiles`).
+2. Log out from the profile; confirm only the declared credential files are deleted, the profile record is kept, and re-login works.
+
+Expected: credentials are only ever typed into the vendor CLI; nothing secret is stored, read, or logged.
+
+### M3-S3-03 · New Agent flow validation
+
+1. Open ＋ New agent with no worktree open; confirm Start is refused with a message.
+2. Pick CLI + profile + worktree; confirm the preview command shows the profile env and launch argv, and the session spawns.
+
+Expected: nothing spawns until CLI, worktree, and a valid slug are all chosen.
+
+### M3-S3-04 · Sessions grid layout
+
+1. With one session, confirm it fills the whole view.
+2. Start a second session; confirm both panes sit side by side at full height.
+3. Pin ◧/◨ and confirm conflicts move to the other side; toggle ▦/▭ and confirm all panes follow.
+
+Expected: single and split panes are always full-height; headers are edge-to-edge on every screen.
+
+### M3-S3-05 · Close, Undo, and dock sharing
+
+1. Close a running session; confirm the confirmation appears, Cancel keeps it, and confirming stops it gracefully (worktree kept). Type `exit` in an agent instead and confirm its pane closes by itself.
+2. From the Undo toast, confirm the session relaunches with resume argv and the conversation continues.
+3. Move a session to the dock (⤴); confirm it stays visible in both places, closing the grid pane only detaches, and the dock owns cleanup.
+
+### M3-S3-06 · Status detection and hooks
+
+1. Start an agent; confirm the pane shows running (pulsing dot + chip).
+2. Trigger a permission prompt (or wait 4 s with no output); confirm the pane gets the yellow outline, the sidebar Agents badge counts it, and a toast appears.
+3. With the app unfocused, repeat step 2 and confirm a macOS notification arrives.
+4. Hook path with a real CLI: in a Claude session, trigger a permission prompt; confirm the pane flips to waiting promptly (hook beats the 4 s timer) and back to running on new output. (Skipped when the sidecar was missing at session start — heuristics still apply; hook delivery itself was verified with the sidecar directly during implementation.)
+
+Expected: hook events beat the 4 s heuristic; malformed/unknown input never touches a session.
+
+### M3-S3-07 · Profile switching and usage limits
+
+1. Add a second profile for one CLI; open the pane chip menu and confirm both profiles (✓ current), "Add account…", and "Manage accounts" (→ Settings).
+2. Switch while running; confirm the dialog appears, Cancel keeps the session, and confirming relaunches with the resume command plus a dimmed `↻ Account A → B` line in the new pane.
+3. Type `/account` in the pane and confirm it cycles to the next profile without a dialog; ordinary typing is unaffected.
+4. Trigger a usage limit (or wait for the 4 s heuristic text); confirm the inline banner with Switch/Dismiss and the toast action both switch and resume. Flip Settings → Agents → Auto-switch off and confirm the banner/toast path asks first.
+
+Expected: no switch ever kills a dock-shared PTY; usage percentages stay hidden; no fabricated numbers anywhere.
+
+### M3 Stage 3 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M3-S3-01 | | |
+| M3-S3-02 | | |
+| M3-S3-03 | | |
+| M3-S3-04 | | |
+| M3-S3-05 | | |
+| M3-S3-06 | | |
+| M3-S3-07 | | |

@@ -4,7 +4,9 @@ mod diff;
 mod error;
 mod fs;
 mod graph;
+mod notify;
 mod oplog;
+mod cli;
 mod pty;
 mod repository;
 mod stage;
@@ -706,9 +708,10 @@ fn pty_spawn(
     worktree_path: String,
     columns: u16,
     rows: u16,
+    env: Option<std::collections::HashMap<String, String>>,
 ) -> Result<PtySession, AppError> {
     let path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
-    manager.spawn(&path, columns, rows, app)
+    manager.spawn(&path, columns, rows, app, &env.unwrap_or_default())
 }
 
 #[tauri::command]
@@ -756,6 +759,88 @@ fn pty_detach(
 #[specta::specta]
 fn pty_close(manager: State<'_, PtyManager>, session_id: String) -> Result<(), AppError> {
     manager.close(&session_id)
+}
+
+/// Resolve a CLI binary through the login shell's PATH (spec §6.6.1).
+/// The name is strictly validated; only a single resolved absolute path or a
+/// missing-binary error ever crosses this boundary.
+#[tauri::command]
+#[specta::specta]
+fn cli_resolve(binary: String) -> Result<String, AppError> {
+    cli::resolve_binary(&binary)
+}
+
+/// Create (when needed) the isolated profile dir for a CLI and return it.
+#[tauri::command]
+#[specta::specta]
+fn cli_profile_dir(cli_id: String, slug: String) -> Result<String, AppError> {
+    cli::ensure_profile_dir(&cli_id, &slug)
+}
+
+/// Stop a PTY session gracefully: SIGINT, wait up to `grace_ms`, then
+/// force-close. Returns true when the process exited on its own in time.
+#[tauri::command]
+#[specta::specta]
+fn pty_stop(manager: State<'_, PtyManager>, session_id: String, grace_ms: u64) -> Result<bool, AppError> {
+    manager.stop(&session_id, grace_ms)
+}
+
+/// Remove the registry's declared credential files inside a profile dir.
+/// Returns the names actually removed; nothing else is touched.
+#[tauri::command]
+#[specta::specta]
+fn cli_logout_profile(
+    cli_id: String,
+    slug: String,
+    credential_files: Vec<String>,
+) -> Result<Vec<String>, AppError> {
+    cli::logout_profile(&cli_id, &slug, &credential_files)
+}
+
+/// Absolute path of the notify socket hook sidecars should dial.
+/// Fails on platforms without socket support; callers fall back to heuristics.
+#[tauri::command]
+#[specta::specta]
+fn notify_socket_path() -> Result<String, AppError> {
+    Ok(notify::socket_path()?.to_string_lossy().into_owned())
+}
+
+/// Validate and re-emit a hook-reported status as an `agent:status` event.
+/// Unknown sessions are ignored by the frontend; malformed input is rejected.
+#[tauri::command]
+#[specta::specta]
+fn notify_status(app: AppHandle, session_id: String, event: String) -> Result<(), AppError> {
+    let payload = notify::validate_notify_event(&session_id, &event)?;
+    app.emit("agent:status", payload)
+        .map_err(|error| AppError::internal(format!("Could not emit agent:status event: {error}")))?;
+    Ok(())
+}
+
+/// Merge agent hook entries into the isolated profile dir for CLIs with
+/// documented hook support (currently Claude Code only). Best-effort: a
+/// missing sidecar or an unsupported CLI reports false and the caller keeps
+/// the output heuristics. Never touches user config outside the profile dir.
+#[tauri::command]
+#[specta::specta]
+fn cli_ensure_hooks(cli_id: String, profile_dir: String) -> Result<bool, AppError> {
+    if cli_id != "claude" {
+        return Ok(false);
+    }
+    let dir = Path::new(&profile_dir);
+    let file = dir.file_name().and_then(|name| name.to_str()).unwrap_or("");
+    if !file.starts_with("claude-") || !dir.is_dir() {
+        return Err(AppError::validation(
+            "Hook setup needs an isolated claude profile dir",
+        ));
+    }
+    let bin = match notify::notify_binary_path() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("Skipping agent hooks: {error}");
+            return Ok(false);
+        }
+    };
+    notify::ensure_claude_hooks(dir, &bin)
 }
 
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
@@ -834,7 +919,14 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             pty_resize,
             pty_attach,
             pty_detach,
-            pty_close
+            pty_close,
+            pty_stop,
+            cli_resolve,
+            cli_profile_dir,
+            cli_logout_profile,
+            cli_ensure_hooks,
+            notify_socket_path,
+            notify_status
         ])
         // `git:changed` (emitted in `run()`'s setup below) carries this payload; registering it
         // here (rather than as a tauri-specta `Event`) exports its TS type without changing how
@@ -880,6 +972,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
                 .on_navigation(|_webview, url| is_local_navigation(url))
@@ -897,6 +990,7 @@ pub fn run() {
                     eprintln!("Could not emit git:changed event: {error}");
                 }
             }));
+            notify::spawn_listener(app.handle());
             Ok(())
         })
         .invoke_handler(builder.invoke_handler())

@@ -8,6 +8,7 @@ import { useWorktrees } from "../state/worktrees";
 import { listPins, pinWorktree, unpinWorktree } from "../ipc/catalog";
 import { listWorktrees, onGitChanged, type GitChanged, type Worktree } from "../ipc/worktrees";
 import { useToasts } from "../ui/toast";
+import { useSessions } from "../agents/sessions";
 
 vi.mock("../ipc/catalog", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ipc/catalog")>();
@@ -68,6 +69,28 @@ it("context menu offers split directions", async () => {
   fireEvent.contextMenu(screen.getByRole("button", { name: /Agents/ }));
   await userEvent.click(screen.getByRole("menuitem", { name: /Split left/ }));
   expect(useStage.getState().panes).toEqual(["agents", "launchpad"]);
+});
+
+it("badges the Agents nav while a session waits", () => {
+  useSessions.setState({
+    sessions: [
+      {
+        id: "a1",
+        cliId: "codex",
+        profile: { cliId: "codex", slug: "work" },
+        worktreePath: "/wt/a",
+        sessionId: "pty-1",
+        slot: "auto",
+        error: null,
+        sharedWithDock: false,
+        status: "waiting",
+        limitHit: false,
+      },
+    ],
+  });
+  render(<Sidebar />);
+  expect(screen.getByRole("status", { name: "1 agents waiting for input" })).toHaveTextContent("1");
+  useSessions.setState({ sessions: [] });
 });
 
 it("shows position glyphs for both split screens", () => {

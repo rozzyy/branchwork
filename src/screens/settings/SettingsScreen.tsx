@@ -25,6 +25,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 export function SettingsView() {
   const theme = useSettings((s) => s.theme);
   const setTheme = useSettings((s) => s.setTheme);
+  const agentAutoSwitch = useSettings((s) => s.agentAutoSwitch);
+  const setAgentAutoSwitch = useSettings((s) => s.setAgentAutoSwitch);
 
   const demoConfirm = async () => {
     const r = await ask({ title: t("demo.confirm.title"), body: t("demo.confirm.body"), ok: t("demo.confirm.ok"), icon: "↑" });
@@ -85,6 +87,17 @@ export function SettingsView() {
               { value: "default", label: t("settings.density.default") },
               { value: "comfy", label: t("settings.density.comfy") },
             ]}
+          />
+        </Row>
+      </div>
+
+      <h3>{t("settings.agents")}</h3>
+      <div className="card">
+        <Row label={t("settings.autoSwitch")}>
+          <Switch
+            label={t("settings.autoSwitch")}
+            checked={agentAutoSwitch}
+            onChange={(on) => setAgentAutoSwitch(on)}
           />
         </Row>
       </div>

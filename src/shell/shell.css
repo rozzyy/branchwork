@@ -2,6 +2,16 @@
 .titlebar { display: flex; align-items: center; gap: 12px; padding: 0 14px 0 0; }
 .traffic-space { width: 78px; height: 100%; flex: none; }
 .app-name { font-weight: 650; color: var(--fg2); }
+/* Brand mark: the transparent PNG is used as a mask so the shape takes the
+   theme foreground color and adapts to dark/light automatically. */
+.app-mark {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  background: var(--fg);
+  -webkit-mask: url(/branchwork-mark.png) center / contain no-repeat;
+  mask: url(/branchwork-mark.png) center / contain no-repeat;
+}
 .group-chip { display: flex; align-items: center; gap: 7px; flex: none; padding: 5px 10px; border: 0; border-radius: 999px; background: var(--glass); box-shadow: var(--spec); color: var(--fg2); font-weight: 500; font-size: 13px; cursor: pointer; }
 .group-chip:hover { background: var(--glass2); color: var(--fg); }
 .group-chip-sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
@@ -94,6 +104,19 @@
 .nav-ic { width: 18px; text-align: center; color: var(--fg3); }
 .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-split { font-size: 11px; color: var(--acc); }
+.nav-badge {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: color-mix(in oklch, var(--yel) 25%, transparent);
+  color: var(--yel);
+}
 .side-toggle { flex: none; }
 /* Title-bar toggles mirror the prototype's round glass header buttons. */
 .dock-toggle,
@@ -119,6 +142,7 @@
 .app[data-sidebar="collapsed"] .nav { justify-content: center; padding: 0; }
 .app[data-sidebar="collapsed"] .nav-label,
 .app[data-sidebar="collapsed"] .nav-split,
+.app[data-sidebar="collapsed"] .nav-badge,
 .app[data-sidebar="collapsed"] .side-empty { display: none; }
 .app[data-sidebar="collapsed"] .side-h { font-size: 0; padding: 8px 0 4px; border-top: 1px solid var(--line); margin: 6px 4px 0; }
 .app[data-sidebar="collapsed"] .worktree-head { justify-content: center; }

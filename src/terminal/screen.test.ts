@@ -77,8 +77,13 @@ describe("tabs and splits", () => {
     expect(id).toBeTruthy();
     const tab = onlyTab();
     expect(tab.panes[tab.focusedPaneId!]).toMatchObject({ worktreePath: "/wt/a", cwd: "/wt/a" });
-    expect(spawnTerminal).toHaveBeenCalledWith("/wt/a", 80, 24);
+    expect(spawnTerminal).toHaveBeenCalledWith("/wt/a", 80, 24, undefined);
     expect(useTerminalScreen.getState().selectedTabId).toBe(id);
+  });
+
+  it("starts the shell with the given environment", async () => {
+    await useTerminalScreen.getState().newTab("/wt/a", { CLAUDE_CONFIG_DIR: "/p" });
+    expect(spawnTerminal).toHaveBeenCalledWith("/wt/a", 80, 24, { CLAUDE_CONFIG_DIR: "/p" });
   });
 
   it("refuses a new tab without a worktree", async () => {

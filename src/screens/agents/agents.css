@@ -1,0 +1,362 @@
+.agent-screen {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0;
+  background: var(--surf);
+}
+
+/* Edge-to-edge: grid panes touch the pane edges (header buttons are flush
+ * via the shared .pane-tool rule in stage.css). */
+
+.agent-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--fg3);
+}
+
+.agent-sub {
+  color: var(--fg3);
+  font-weight: 400;
+  font-size: 12.5px;
+}
+
+/* Segmented layout group in the toolbar, mirroring the prototype. */
+.agent-grp {
+  display: flex;
+  gap: 1px;
+  background: var(--s3);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.agent-grp button {
+  border: 0;
+  background: none;
+  color: var(--fg2);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.agent-grp button:hover {
+  color: var(--fg);
+}
+
+.agent-grp button.on {
+  background: var(--s4);
+  color: var(--fg);
+}
+
+.agent-grid {
+  display: grid;
+  grid-auto-flow: row dense;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(310px, 1fr);
+  gap: 10px;
+  height: 100%;
+}
+
+.agent-full .agent-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.agent-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 310px;
+  min-width: 0;
+  height: auto;
+  border-radius: 14px;
+  background: var(--surf);
+  box-shadow: var(--spec), 0 0 0 0.5px var(--line2);
+  overflow: hidden;
+}
+
+.agent-pane[data-slot="left"] {
+  grid-column: 1;
+}
+
+.agent-pane[data-slot="right"] {
+  grid-column: 2;
+}
+
+.agent-pane[data-slot="full"],
+.agent-full .agent-pane {
+  grid-column: 1 / -1;
+}
+
+.agent-full .agent-pane {
+  height: 420px;
+}
+
+/* A lone default session fills the whole view until the user splits. A fixed
+ * 1fr row (never content-driven height) so the terminal cannot grow the pane. */
+.agent-solo .agent-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  align-items: stretch;
+}
+
+.agent-solo .agent-pane {
+  height: auto;
+}
+
+.agent-phd {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  background: var(--s2);
+  min-width: 0;
+}
+
+.agent-phd > * {
+  flex-shrink: 0;
+}
+
+.agent-phd .sp {
+  flex: 1;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c, var(--fg3));
+}
+
+.agent-dot.pulse {
+  animation: agent-pulse 1.2s infinite;
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.agent-wt {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.agent-cli {
+  color: var(--fg2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agent-chip-run {
+  background: color-mix(in oklch, var(--acc) 16%, transparent);
+  color: var(--acc);
+}
+
+.agent-chip-wait {
+  background: color-mix(in oklch, var(--yel) 18%, transparent);
+  color: var(--yel);
+}
+
+button.agent-profile {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.agent-profile:hover {
+  color: var(--fg);
+}
+
+/* Usage-limit banner (spec §6.6.4): inline, above the terminal. */
+.agent-limit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in oklch, var(--yel) 40%, transparent);
+  background: color-mix(in oklch, var(--yel) 10%, transparent);
+  color: var(--yel);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-limit .sp {
+  flex: 1;
+}
+
+/* Spec §6.6.3: yellow pane outline while waiting for input. */
+.agent-pane.st-waiting {
+  box-shadow:
+    var(--spec),
+    0 0 0 1.5px color-mix(in oklch, var(--yel) 70%, transparent),
+    0 0 30px -12px var(--yel);
+}
+
+.agent-lay {
+  display: flex;
+  gap: 1px;
+  background: var(--s3);
+  border-radius: 7px;
+  padding: 1px;
+}
+
+.agent-lay button {
+  border: 0;
+  background: none;
+  color: var(--fg2);
+  width: 24px;
+  height: 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.agent-lay button:hover {
+  color: var(--fg);
+}
+
+.agent-lay button.on {
+  background: var(--s4);
+  color: var(--fg);
+}
+
+.agent-phb {
+  border: 0;
+  background: var(--s3);
+  color: var(--fg2);
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.agent-phb:hover {
+  background: var(--s4);
+  color: var(--fg);
+}
+
+.agent-phb.x:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.agent-pane-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.agent-pane-body .cli-pane {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-pane-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--fg3);
+  padding: 12px;
+  text-align: center;
+}
+
+.agent-h4 {
+  margin: 14px 0 6px;
+  font-size: 11px;
+  color: var(--fg3);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.agent-h4:first-of-type {
+  margin-top: 16px;
+}
+
+.agent-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+/* CLI card picker in the New Agent dialog. */
+.agent-apick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.agent-apick label {
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--s2);
+  box-shadow: var(--spec), 0 0 0 0.5px var(--line);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-weight: 600;
+  font-size: 12.5px;
+  transition: box-shadow 0.15s;
+}
+
+.agent-apick label:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--acc), 0 0 0 6px var(--accs);
+}
+
+.agent-apick label:has(input:disabled) {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.agent-apick input {
+  display: none;
+}
+
+.agent-apick-icon {
+  font-size: 16px;
+  color: var(--acc);
+}
+
+.agent-apick small {
+  font-weight: 400;
+  color: var(--fg3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.agent-dialog select.input {
+  width: 100%;
+}
+
+@container (max-width: 780px) {
+  .agent-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-pane[data-slot="left"],
+  .agent-pane[data-slot="right"] {
+    grid-column: 1;
+  }
+  .agent-apick {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

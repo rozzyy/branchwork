@@ -1,6 +1,6 @@
 .stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; position: relative; }
 .pane { display: grid; grid-template-rows: 52px minmax(0, 1fr); min-width: 0; min-height: 0; border-radius: 16px; background: var(--surf); box-shadow: var(--spec), 0 0 0 .5px var(--line2); overflow: hidden; container-type: inline-size; transition: box-shadow .2s; }
-.pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); }
+.pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 0 0 16px; border-bottom: 1px solid var(--line); }
 .pane-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
 .pane-view { min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
 @keyframes pane-in { from { opacity: 0; transform: translateY(6px); } }
@@ -16,7 +16,8 @@
  * group's own auto margin does the push — giving pane-ctl auto margin too would split the free
  * space between both, leaving a gap between the actions and the split control instead of flush
  * against it (prototype's `.acts ~ .pctl`). */
-.pane-actions ~ .pane-ctl { margin-left: 8px; border-left: 1px solid var(--line); }
+.pane-actions ~ .pane-ctl,
+.pane-ctl ~ .pane-ctl { margin-left: 8px; border-left: 1px solid var(--line); }
 .divider { position: relative; cursor: col-resize; }
 .split-v .divider { cursor: row-resize; }
 .divider::after { content: ""; position: absolute; inset: 0; margin: auto; width: 3px; height: 44px; border-radius: 2px; background: var(--line2); transition: all .2s var(--spring); }

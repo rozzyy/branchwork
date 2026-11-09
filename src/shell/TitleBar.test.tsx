@@ -19,6 +19,14 @@ it("renders nothing when there are no projects", () => {
   expect(screen.queryByRole("list", { name: "Projects" })).toBeNull();
 });
 
+it("shows the theme-adaptive brand mark next to the app name", () => {
+  const { container } = render(<TitleBar />);
+  const mark = container.querySelector(".app-mark");
+  expect(mark).not.toBeNull();
+  expect(mark?.getAttribute("aria-hidden")).toBe("true");
+  expect(screen.getByText("Branchwork")).toBeInTheDocument();
+});
+
 it("renders a tab per project and selects on click", () => {
   useRepos.setState({ projects, activeProjectId: "p1", openProjectIds: ["p1", "p2"], status: "ready" });
   const { container } = render(<TitleBar />);

@@ -1,6 +1,11 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/branchwork-mark.png" />
+  <img src="public/branchwork-mark-dark.png" alt="Branchwork logo" width="120" />
+</picture>
+
 # Branchwork
 
-A macOS Git client for developers who work across **many worktrees and branches at once**, often next to CLI coding agents such as Claude Code, Codex, OpenCode and Gemini CLI.
+A macOS Git client for developers who work across **many worktrees and branches at once**, often next to CLI coding agents such as Claude Code, Codex, OpenCode, Gemini CLI, GitHub Copilot and Muse.
 
 Built with [Tauri 2](https://tauri.app) (Rust) and React + TypeScript.
 
@@ -22,7 +27,7 @@ Built with [Tauri 2](https://tauri.app) (Rust) and React + TypeScript.
 |---|---|
 | **Launchpad**: PRs that need you, running agents and CI in one place. | **Changes**: VS Code–style source control with hunk/line staging, commit variants and stashes. |
 | ![Launchpad](docs/screenshots/launchpad.png) | ![Changes](docs/screenshots/changes.png) |
-| **Agents**: Claude Code, Codex and others running side by side in isolated worktrees, each with its own account profile. | **Pull requests**: review, suggested changes, checks and merge without leaving the app. |
+| **Agents**: Claude Code, Codex, OpenCode, Gemini CLI, GitHub Copilot, Muse and custom CLIs running side by side in isolated worktrees, each with its own account profile. | **Pull requests**: review, suggested changes, checks and merge without leaving the app. |
 | ![Agents](docs/screenshots/agents.png) | ![Pull requests](docs/screenshots/prs.png) |
 | **Files & editor**: file manager plus a CodeMirror editor with git gutter, blame and history. | **Compare worktrees**: diff two worktrees, uncommitted changes included. |
 | ![Files](docs/screenshots/files.png) | ![Compare](docs/screenshots/compare.png) |

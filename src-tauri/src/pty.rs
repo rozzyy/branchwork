@@ -200,6 +200,20 @@ impl SessionTerminator {
         }
         Err(pty_error("Could not stop terminal process group", error))
     }
+
+    /// Ask the process group to exit on its own (SIGINT). Already-dead groups
+    /// are not an error; the caller decides whether to wait or escalate.
+    fn interrupt(&self) -> Result<(), AppError> {
+        let result = unsafe { libc::kill(-self.process_group_leader, libc::SIGINT) };
+        if result == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(libc::ESRCH) {
+            return Ok(());
+        }
+        Err(pty_error("Could not interrupt terminal process group", error))
+    }
 }
 
 #[cfg(windows)]
@@ -261,6 +275,12 @@ impl SessionTerminator {
         }
         Ok(())
     }
+
+    /// No console control signal exists for job objects: graceful stop
+    /// degrades to an immediate terminate on Windows.
+    fn interrupt(&self) -> Result<(), AppError> {
+        Ok(())
+    }
 }
 
 struct PtyManagerInner {
@@ -307,10 +327,12 @@ impl PtyManager {
         columns: u16,
         rows: u16,
         app: AppHandle,
+        env: &std::collections::HashMap<String, String>,
     ) -> Result<PtySession, AppError> {
         validate_dimensions(columns, rows)?;
         let mut command = CommandBuilder::new_default_prog();
         command.cwd(worktree_path);
+        apply_spawn_env(&mut command, env)?;
         let sink = Arc::new(move |event| emit_event(&app, event));
         self.spawn_command(command, columns, rows, sink)
     }
@@ -507,6 +529,32 @@ impl PtyManager {
         Ok(())
     }
 
+    /// Stop a session the way the Agents screen closes a pane: ask the process
+    /// group to exit (SIGINT; immediate terminate on Windows), wait up to
+    /// `grace_ms` for the exit event, then force-close whatever is left.
+    /// Returns true when the process exited on its own within the grace period.
+    pub fn stop(&self, session_id: &str, grace_ms: u64) -> Result<bool, AppError> {
+        let session = self.session(session_id)?;
+        if session.is_completed() {
+            self.close(session_id)?;
+            return Ok(true);
+        }
+        session.terminator.interrupt()?;
+        let grace = std::time::Duration::from_millis(grace_ms.min(30_000));
+        let step = std::time::Duration::from_millis(20);
+        let deadline = std::time::Instant::now() + grace;
+        while std::time::Instant::now() < deadline {
+            if session.is_completed() {
+                self.close(session_id)?;
+                return Ok(true);
+            }
+            std::thread::sleep(step);
+        }
+        let graceful = session.is_completed();
+        self.close(session_id)?;
+        Ok(graceful)
+    }
+
     pub fn close(&self, session_id: &str) -> Result<(), AppError> {
         let session = self.session(session_id)?;
         if session.is_completed() {
@@ -670,6 +718,46 @@ fn validate_session_id(session_id: &str) -> Result<(), AppError> {
 fn validate_attachment_id(attachment_id: u64) -> Result<(), AppError> {
     if attachment_id == 0 {
         return Err(AppError::validation("Invalid terminal attachment id"));
+    }
+    Ok(())
+}
+
+const MAX_SPAWN_ENV_VARS: usize = 64;
+const MAX_SPAWN_ENV_KEY_LEN: usize = 128;
+const MAX_SPAWN_ENV_VALUE_LEN: usize = 8192;
+
+/// Keys are shell-name shaped (`CLAUDE_CONFIG_DIR`); values must not carry NUL.
+pub fn validate_spawn_env(env: &std::collections::HashMap<String, String>) -> Result<(), AppError> {
+    if env.len() > MAX_SPAWN_ENV_VARS {
+        return Err(AppError::validation("Too many terminal environment variables"));
+    }
+    for (key, value) in env {
+        let mut chars = key.chars();
+        let valid_key = key.len() <= MAX_SPAWN_ENV_KEY_LEN
+            && matches!(chars.next(), Some(first) if first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid_key {
+            return Err(AppError::validation(
+                "Terminal environment names must look like SHELL_VAR",
+            ));
+        }
+        if value.len() > MAX_SPAWN_ENV_VALUE_LEN || value.contains('\0') {
+            return Err(AppError::validation(
+                "Terminal environment values must be short plain text",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validate and apply an isolated environment onto a PTY command.
+pub fn apply_spawn_env(
+    command: &mut CommandBuilder,
+    env: &std::collections::HashMap<String, String>,
+) -> Result<(), AppError> {
+    validate_spawn_env(env)?;
+    for (key, value) in env {
+        command.env(key, value);
     }
     Ok(())
 }
@@ -843,6 +931,125 @@ mod tests {
             manager.close(&session.session_id).unwrap_err().kind,
             ErrorKind::NotFound
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spawn_env_rejects_bad_names_values_and_counts() {
+        use std::collections::HashMap;
+
+        for key in ["", "a b", "a-b", "a.b", "9LIVES", "A;B", "A=B", "é"] {
+            let env = HashMap::from([(key.to_string(), "v".to_string())]);
+            assert!(validate_spawn_env(&env).is_err(), "{key:?} must be rejected");
+        }
+        let nul = HashMap::from([("OK_VAR".to_string(), "a\0b".to_string())]);
+        assert!(validate_spawn_env(&nul).is_err());
+        let big = HashMap::from([("OK_VAR".to_string(), "x".repeat(9000))]);
+        assert!(validate_spawn_env(&big).is_err());
+        let many: HashMap<String, String> =
+            (0..65).map(|i| (format!("VAR_{i}"), "v".to_string())).collect();
+        assert!(validate_spawn_env(&many).is_err());
+
+        let good = HashMap::from([
+            ("CLAUDE_CONFIG_DIR".to_string(), "/tmp/x".to_string()),
+            ("_A1".to_string(), String::new()),
+        ]);
+        assert!(validate_spawn_env(&good).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn applied_env_reaches_the_child() {
+        use std::{collections::HashMap, ffi::OsStr, sync::mpsc, time::Duration};
+
+        let manager = PtyManager::default();
+        let (sender, receiver) = mpsc::channel();
+        let sink = Arc::new(move |event| {
+            sender.send(event).unwrap();
+        });
+        let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
+        command.args(["-c", "printf 'marker-%s' \"$BRANCHWORK_SPAWN_ENV_TEST\"; sleep 30"]);
+        let mut env = HashMap::new();
+        env.insert("BRANCHWORK_SPAWN_ENV_TEST".to_string(), "yes42".to_string());
+        apply_spawn_env(&mut command, &env).unwrap();
+        let session = manager.spawn_command(command, 80, 24, sink).unwrap();
+        manager.attach(&session.session_id, 1).unwrap();
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let mut seen = String::new();
+        while std::time::Instant::now() < deadline && !seen.contains("marker-yes42") {
+            match receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(PtyEvent::Output(output)) => {
+                    seen.push_str(&String::from_utf8_lossy(&output.data));
+                }
+                Ok(PtyEvent::Exit(_)) | Ok(PtyEvent::Error(_)) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(error) => panic!("PTY event channel failed: {error}"),
+            }
+        }
+        assert!(seen.contains("marker-yes42"), "child saw: {seen:?}");
+        manager.close(&session.session_id).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_asks_with_sigint_before_force_closing() {
+        use std::{ffi::OsStr, sync::mpsc};
+
+        let manager = PtyManager::default();
+        let (sender, receiver) = mpsc::channel();
+        let sink = Arc::new(move |event| {
+            sender.send(event).unwrap();
+        });
+        let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
+        command.args(["-c", "sleep 30"]);
+        let session = manager.spawn_command(command, 80, 24, sink).unwrap();
+
+        assert!(manager.stop(&session.session_id, 2_000).unwrap());
+        assert_eq!(
+            manager.close(&session.session_id).unwrap_err().kind,
+            ErrorKind::NotFound
+        );
+        let _ = receiver;
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_escalates_when_sigint_is_ignored() {
+        use std::{ffi::OsStr, sync::mpsc, time::Duration};
+
+        let manager = PtyManager::default();
+        let (sender, receiver) = mpsc::channel();
+        let sink = Arc::new(move |event| {
+            sender.send(event).unwrap();
+        });
+        // Ignored dispositions are inherited, so `sleep` survives SIGINT too.
+        // Wait for the script's first output so the interrupt cannot land on
+        // the pre-exec child, which still has default dispositions.
+        let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
+        command.args(["-c", "printf ready; trap '' INT; sleep 30"]);
+        let session = manager.spawn_command(command, 80, 24, sink).unwrap();
+        manager.attach(&session.session_id, 1).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let mut ready = String::new();
+        while std::time::Instant::now() < deadline && !ready.contains("ready") {
+            match receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(PtyEvent::Output(output)) => {
+                    ready.push_str(&String::from_utf8_lossy(&output.data));
+                }
+                Ok(PtyEvent::Exit(_)) | Ok(PtyEvent::Error(_)) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(error) => panic!("PTY event channel failed: {error}"),
+            }
+        }
+        assert!(ready.contains("ready"), "child never started: {ready:?}");
+
+        assert!(!manager.stop(&session.session_id, 200).unwrap());
+        assert_eq!(
+            manager.close(&session.session_id).unwrap_err().kind,
+            ErrorKind::NotFound
+        );
+        let _ = receiver;
     }
 
     #[cfg(unix)]

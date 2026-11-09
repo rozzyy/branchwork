@@ -53,6 +53,10 @@ test.describe("M0 Stage 1 shell", () => {
         // Terminal now renders a real screen instead of the generic placeholder (M3 Stage 2).
         await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
         await expect(page.getByText("No terminal tabs. Open one with ＋.")).toBeVisible();
+      } else if (label === "Agents") {
+        // Agents now renders the real Sessions screen (M3 Stage 3).
+        await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+        await expect(page.getByText("No agent sessions. Start one with ＋.")).toBeVisible();
       } else if (label === "Blame & history") {
         await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
         await expect(page.getByRole("heading", { level: 2, name: "No file selected" })).toBeVisible();

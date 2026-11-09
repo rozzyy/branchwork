@@ -10,6 +10,7 @@ import { t } from "../i18n/t";
 import { onGitChanged, type Worktree } from "../ipc/worktrees";
 import { useDock } from "../terminal/dock";
 import { toast } from "../ui/toast";
+import { useSessions } from "../agents/sessions";
 
 // Deterministic color stripe/dot per worktree path, picked from a small token palette.
 // Ordered so adjacent hashes don't land on near-identical hues (--acc and --blu are both blue-ish).
@@ -366,6 +367,8 @@ export function Sidebar() {
       : []),
   ];
 
+  const waitingAgents = useSessions((store) => store.sessions.filter((s) => s.status === "waiting").length);
+
   const item = (s: ScreenDef) => (
     <button
       key={s.id}
@@ -379,6 +382,11 @@ export function Sidebar() {
     >
       <span className="nav-ic" aria-hidden>{s.icon}</span>
       <span className="nav-label">{t(s.label)}</span>
+      {s.id === "agents" && waitingAgents > 0 && (
+        <span className="nav-badge" role="status" aria-label={t("agents.waitingBadge", { count: waitingAgents })}>
+          {waitingAgents}
+        </span>
+      )}
       {glyph(s.id)}
     </button>
   );

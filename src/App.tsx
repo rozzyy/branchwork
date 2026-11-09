@@ -16,6 +16,7 @@ import { useSidebar } from "./state/sidebar";
 import { useRepos } from "./state/repos";
 import { useChanges } from "./state/changes";
 import { subscribeUndoState } from "./ipc/undo";
+import { useSessions } from "./agents/sessions";
 
 export default function App() {
   useGlobalKeys();
@@ -29,6 +30,7 @@ export default function App() {
     void useRepos.getState().load();
     void useChanges.getState().load();
     void useDock.getState().load();
+    void useSessions.getState().load();
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme(useSettings.getState().theme);
     mq?.addEventListener("change", onChange);

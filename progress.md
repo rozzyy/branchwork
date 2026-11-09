@@ -525,3 +525,88 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 
 - **Manual OK:** user approved M3-S2-01..07 and ordered "commit & lanjutkan".
 - Tracking finalized: `m3-stage-2-review` → done; handoff/progress moved to Stage 3.
+
+## 2026-11-08: M3-06 + M3-07 done; brand logo wired
+
+- **M3-06 CLI registry** (+ Copilot & Muse per user order, flags verified: copilot 1.0.107 `--continue`, muse 1.4.14 `resume --last`; gemini unverified). `cli_resolve` + `cli_profile_dir`, typed wrappers, regenerated bindings. Review PASS.
+- **M3-07 profiles**: store (CRUD, defaults, resolution order, `ask()` logout deleting only declared credential files, login terminal with profile env), `pty_spawn` env extension with validation, credential layouts verified by file existence only (claude `.claude.json`, codex `auth.json`). No credential handling anywhere (tested). Review PASS.
+- **Gate:** `./init.sh` green — 48 files / 395 tests; Rust cli 7/7, pty 13/13; typecheck+Clippy clean. Fixed a parallel-test temp-dir collision found by the full gate.
+- **Brand logo**: user-supplied mark → transparent `public/branchwork-mark.png` (white) + `branchwork-mark-dark.png`; titlebar `.app-mark` via CSS mask (auto dark/light), favicon, README `<picture>` logo. Verified with Playwright screenshots in both themes.
+- **Next:** M3-08 agent sessions. No commit/push (Stage 3 rule).
+
+## 2026-11-08: M3-08 solo-pane default full view
+
+- **User order:** sesi agent tunggal tampil full width + full height sampai di-split.
+- **Fix:** `AgentsView` tambah class `agent-solo` saat tepat 1 sesi berslot `auto` (default sesi baru); CSS `.agent-solo .agent-grid` 1 kolom `height: 100%`, pane `min-height: 100%`. Pin slot eksplisit dan 2+ sesi tetap grid normal.
+- **Test:** 1 test baru (`agent-solo`); agents suites 30/30, typecheck bersih.
+- **Belum commit** (aturan Stage 3: tunggu checkpoint + order).
+
+## 2026-11-08: Agents edge-to-edge
+
+- **User order:** tombol New agent dan grid mentok ke pinggir.
+- **Fix:** `.agent-screen` padding 10px → 0; `.pane-tool:has(.agent-grp)` padding-right 0 (hanya header Agents, chrome shared lain tak tersentuh). Screenshot header memastikan tombol nempel kanan.
+- **Belum commit** (aturan Stage 3).
+
+## 2026-11-08: Solo-pane height fix (growth loop)
+
+- **User lapor:** input box agent melebar ke bawah terus setelah perubahan solo full-view.
+- **Fix:** `height: auto + min-height: 100%` (tinggi mengikuti konten, rawan loop) diganti baris grid pasti `1fr + align-items: stretch`; pane tetap isi penuh tapi tingginya deterministik.
+- **Tests:** agents 5/5 hijau.
+
+## 2026-11-08: Grid split full-height
+
+- **User order:** split 2 agen tingginya kembali setengah (340px); harusnya tetap penuh.
+- **Fix:** `.agent-grid` baris `minmax(310px, 1fr) + height: 100%` (ikut prototype `.agrid`); pane `height: auto, min-height: 310px` agar stretch isi baris. 2 pane → masing-masing penuh tinggi; 3+ pane → berbagi tinggi, scroll bila lewat minimum.
+- **Tests:** agents 5/5 hijau.
+
+## 2026-11-08: Semua header full-width
+
+- **User order:** tombol di setiap header halaman full width / ke pinggir.
+- **Fix:** `.pane-tool` padding kanan 12px → 0 (global, stage.css); aturan anti-split-margin diperluas ke `.pane-ctl ~ .pane-ctl` agar toolbar Terminal/Agents (grup `.pane-ctl` sendiri) tidak berbagi ruang dengan PaneControls — tombol ＋ Terminal yang tadinya melayang di tengah kini mengelompok kanan. Aturan `:has` khusus Agents dihapus (redundan).
+- **Verifikasi:** screenshot header Agents, Graph, Terminal — tombol mentok kanan. Tests stage+shell+agents 62/62.
+
+## 2026-11-08: Auto-close agent pane on clean exit + muse login note
+
+- **User order:** pane agent harus langsung tutup saat proses keluar (ketik `exit`).
+- **Fix:** exit PTY bersih (code 0, tanpa signal) → `closeSession` otomatis (toast Undo tetap ada); exit abnormal → pane dipertahankan agar error terlihat; close record yang sudah exit tidak lagi memanggil `pty_stop` (backend melaporkan gone). 2 test.sessions diperbarui/ditambah; agents 31/31.
+- **muse login:** error `macOS Keychain did not answer within 5 s` berasal dari CLI `muse` vs Keychain (timeout 5 dtk milik vendor, sering karena approval akses pertama). Tidak ada knob non-Keychain di `muse` (cek `auth set --help`, settings keys). Saran: ulangi `muse login` di pane yang sama (klik Always Allow bila macOS meminta), atau pakai `META_API_KEY` yang diketik sendiri di pane. Tidak ada perubahan kode — kredensial tetap hanya diketik ke vendor CLI.
+- **Belum commit** (aturan Stage 3).
+
+## 2026-11-08: muse pakai metode Orca (tanpa sandbox HOME)
+
+- **User lapor:** `muse login` di profile terisolasi tetap gagal (Keychain timeout).
+- **Investigasi:** env sesi Orca menunjukkan HOME asli + isolasi hanya via env var resmi vendor (`CLAUDE_CONFIG_DIR` untuk claude; tanpa itu jalan dengan env asli). Keychain `muse` hanya bekerja di HOME asli.
+- **Fix:** `CLI_REGISTRY.muse.profileEnv` → `{}` (warisi environment user, tanpa sandbox HOME). Logout tetap no-op. Registry test disesuaikan; agents 26/26 hijau.
+- **Belum commit** (aturan Stage 3).
+
+## 2026-11-08: M3-08 done — Stage 3 implementation complete
+
+- **M3-08 agent sessions:** store, New Agent dialog (7 CLIs), session grid, `pty_stop` (SIGINT → force 3s), close confirm + Undo resume relaunch, dock sharing, clean-exit auto-close, `useSessions.load()` fix, Agents h1 convention fix, solo/grid full-height + edge-to-edge headers. Reviews: spec PASS, code PASS (2 fixed), security PASS.
+- **Gate:** `./init.sh` green — 50 files / 411 tests, `=== Verification Complete ===`; `pnpm test:e2e` 76/76. Reviews: `.agent/reviews/m3-task-08-spec.md`, `m3-stage-3-code.md`, `m3-stage-3-security.md`. Manual: M3-S3-01..05 in `docs/testing/m0-manual-e2e.md`.
+- **Next:** M3-09 session status (then M3-10, stage review + manual M3-S3-01..05 checkpoint). On checkpoint approval + order: single stage commit on `m3-stage-3`, then ff into main. No push.
+- **Belum commit** (menunggu approval checkpoint + order).
+
+## 2026-11-08: M3-09 done — session status + notifications
+
+- **M3-09:** status field (idle/running/waiting/done), `branchwork-notify` sidecar + Unix socket + validation, Claude hooks merge (profile dir only, user keys preserved), heuristics (per-CLI patterns matched on fresh output only + 4 s idle), sidebar badge, yellow `st-waiting` outline, toast + macOS notification while unfocused.
+- **Verified:** sidecar delivers over a real socket (exit 0/1/2 paths); Rust notify 3/3, full Rust 153, Clippy clean; typecheck clean; init.sh 51 files/423 tests; e2e 76/76. Spec PASS. Hook delivery by a real CLI left to manual M3-S3-06.
+- **Honest limits:** CLI-specific patterns empty pending interactive verification (generic cues only); codex hook shape unverified (heuristics cover it); Launchpad cards deferred (no Launchpad screen).
+- **Next:** M3-10 agent lifecycle + profile switching. No commit/push (stage rule).
+
+## 2026-11-08: M3-10 done — Stage 3 tasks complete
+
+- **M3-10:** chip profile menu (✓ current, add, manage→Settings), switchProfile (confirm-if-running, dock-shared refused, stop→close→relaunch resume + dim line), switchToNextProfile cycle, `/account` interception, limitPatterns + banner/toast + auto-switch (default on, persisted), no usage bars (hidden, none exposed).
+- **Fixed in review:** zustand selector fresh-array infinite loop (subscribe raw + filter in render). SkipConfirm only on consent-carrying paths.
+- **Gate:** init.sh 51 files/434 tests, e2e 76/76, Rust 153, Clippy clean, typecheck clean. Spec PASS; stage-3 code+security addenda PASS. Manual M3-S3-07 written.
+- **Next:** user runs manual M3-S3-01..07 checkpoint. On approval + order: single stage commit on m3-stage-3, ff into main. No push.
+
+## 2026-11-08: Fix `cargo run` ambiguity (tauri dev)
+
+- **Error:** `cargo run could not determine which binary to run` — sidecar `branchwork-notify` menambah binary kedua.
+- **Fix:** `default-run = "branchwork"` di `src-tauri/Cargo.toml`. Manifest terparse, `cargo check --all-targets` bersih. (Verifikasi `cargo run` langsung tidak dilakukan — akan membuka GUI.)
+
+## 2026-11-08: Stage 3 committed + merged (user ordered)
+
+- **Gate re-run before commit:** init.sh green (51 files / 434 tests), e2e 76/76.
+- **Commit:** single stage commit on m3-stage-3 (user ordered; no push), ff into main.
+- **Next:** M3 Stage 4 (handover, race) — derive task file first.

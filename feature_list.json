@@ -832,8 +832,8 @@
       "dependencies": [
         "m3-stage-2-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "CLI registry (7 CLIs incl. Copilot + Muse per user order; flags verified against installed --help; gemini honestly unverified), overrides merge, cli_resolve + cli_profile_dir backend commands with Rust tests, typed IPC wrappers, regenerated bindings. Spec review PASS (.agent/reviews/m3-task-06-spec.md). Typecheck clean; registry tests 8/8. No commit (Stage 3 rule)."
     },
     {
       "id": "m3-task-07-profiles",
@@ -843,8 +843,8 @@
       "dependencies": [
         "m3-task-06-cli-registry"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Profiles store (CRUD, defaults, resolution order, confirmed logout deleting only declared credential files, login terminal with profile env); pty_spawn optional env with validation; regenerated bindings. Spec review PASS (.agent/reviews/m3-task-07-spec.md). ./init.sh green: 48 Vitest files/395 tests; Rust cli 7/7 + pty 13/13; typecheck+Clippy clean. No credential handling anywhere (tested). No commit (Stage 3 rule)."
     },
     {
       "id": "m3-task-08-agent-sessions",
@@ -855,8 +855,8 @@
         "m3-task-02-cli-pane",
         "m3-task-07-profiles"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Sessions store + grid + New Agent dialog + pty_stop (grace 3s); undo relaunch with resume argv; dock sharing via detach; clean-exit auto-close; muse uses Orca method (real HOME, no sandbox). Spec/code/security PASS. init.sh 50 files/411 tests green; e2e 76/76."
     },
     {
       "id": "m3-task-09-session-status",
@@ -866,8 +866,8 @@
       "dependencies": [
         "m3-task-08-agent-sessions"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "status field + hook/socker path (branchwork-notify sidecar verified live), claude hooks merge, heuristics (fresh-output only + 4s idle), badge/outline/toast + unfocused macOS notification. Spec PASS. init.sh 51 files/423 tests green; e2e 76/76."
     },
     {
       "id": "m3-task-10-agent-lifecycle",
@@ -877,8 +877,8 @@
       "dependencies": [
         "m3-task-09-session-status"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Profile menu, switchProfile (confirm-if-running, resume+dim line), /account intercept, limitPatterns + banner/toast + auto-switch setting. Spec PASS; stage code+security addenda PASS. init.sh 51 files/434 tests green; e2e 76/76."
     },
     {
       "id": "m3-stage-3-review",
@@ -888,8 +888,8 @@
       "dependencies": [
         "m3-task-10-agent-lifecycle"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Tasks 06-10 spec PASS; stage code+security PASS (incl. 09/10 addenda); manual M3-S3-01..07 written; init.sh 51 files/434 tests green; e2e 76/76."
     },
     {
       "id": "m3-task-11-handover",

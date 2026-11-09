@@ -7,6 +7,7 @@ import { ChangesToolbar, ChangesView } from "./changes/ChangesScreen";
 import { FilesToolbar, FilesView } from "./files/FilesScreen";
 import { BlameToolbar, BlameView } from "./blame/BlameScreen";
 import { TerminalScreen, TerminalToolbar } from "../terminal/TerminalScreen";
+import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -35,3 +36,4 @@ VIEWS.changes = { Toolbar: ChangesToolbar, View: ChangesView };
 VIEWS.files = { Toolbar: FilesToolbar, View: FilesView };
 VIEWS.blame = { Toolbar: BlameToolbar, View: BlameView };
 VIEWS.terminal = { Toolbar: TerminalToolbar, View: TerminalScreen };
+VIEWS.agents = { Toolbar: AgentsToolbar, View: AgentsView };

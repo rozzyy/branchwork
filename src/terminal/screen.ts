@@ -138,7 +138,7 @@ interface ScreenStore {
   tabs: ScreenTab[];
   selectedTabId: string | null;
   loaded: boolean;
-  newTab(worktreePath?: string): Promise<string | null>;
+  newTab(worktreePath?: string, env?: Record<string, string>): Promise<string | null>;
   closeTab(id: string): Promise<void>;
   selectTab(id: string): void;
   splitFocusedPane(tabId: string, dir: SplitDir): Promise<void>;
@@ -191,9 +191,12 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
   const updateTab = (id: string, patch: Partial<ScreenTab>) =>
     set({ tabs: get().tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)) });
 
-  const spawnFor = async (pane: ScreenPaneState): Promise<{ sessionId: string } | { error: string }> => {
+  const spawnFor = async (
+    pane: ScreenPaneState,
+    env?: Record<string, string>,
+  ): Promise<{ sessionId: string } | { error: string }> => {
     try {
-      const session = await spawnTerminal(pane.worktreePath, DEFAULT_COLS, DEFAULT_ROWS);
+      const session = await spawnTerminal(pane.worktreePath, DEFAULT_COLS, DEFAULT_ROWS, env);
       return { sessionId: session.sessionId };
     } catch (error) {
       return { error: errorMessage(error) };
@@ -203,11 +206,15 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
   // Start the spawn for a pane record that is already in the store. Guards
   // the close-during-spawn race: a session that settles after its pane was
   // removed is closed, never attached.
-  const spawnPaneSession = async (tabId: string, pane: ScreenPaneState): Promise<void> => {
+  const spawnPaneSession = async (
+    tabId: string,
+    pane: ScreenPaneState,
+    env?: Record<string, string>,
+  ): Promise<void> => {
     if (pendingSpawns.has(pane.id)) return;
     pendingSpawns.add(pane.id);
     try {
-      const result = await spawnFor(pane);
+      const result = await spawnFor(pane, env);
       const tab = tabById(tabId);
       const live = tab?.panes[pane.id];
       if (!tab || !live) {
@@ -300,7 +307,7 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
     selectedTabId: null,
     loaded: false,
 
-    async newTab(worktreePath) {
+    async newTab(worktreePath, env) {
       const selected = get().tabs.find((tab) => tab.id === get().selectedTabId);
       const focusedWorktree =
         selected && selected.focusedPaneId ? selected.panes[selected.focusedPaneId]?.worktreePath : undefined;
@@ -330,7 +337,7 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
       };
       set({ tabs: [...get().tabs, tab], selectedTabId: tab.id });
       save();
-      await spawnPaneSession(tab.id, pane);
+      await spawnPaneSession(tab.id, pane, env);
       return tab.id;
     },
 

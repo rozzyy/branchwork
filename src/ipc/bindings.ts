@@ -54,12 +54,47 @@ export const commands = {
 	revealInFinder: (worktreePath: string, path: string) => __TAURI_INVOKE<null>("reveal_in_finder", { worktreePath, path }),
 	blame: (worktreePath: string, path: string, options: BlameRequest) => __TAURI_INVOKE<BlameResult>("blame", { worktreePath, path, options }),
 	fileHistory: (worktreePath: string, path: string, options: FileHistoryRequest) => __TAURI_INVOKE<FileHistoryEntry[]>("file_history", { worktreePath, path, options }),
-	ptySpawn: (worktreePath: string, columns: number, rows: number) => __TAURI_INVOKE<PtySession>("pty_spawn", { worktreePath, columns, rows }),
+	ptySpawn: (worktreePath: string, columns: number, rows: number, env: { [key in string]: string } | null) => __TAURI_INVOKE<PtySession>("pty_spawn", { worktreePath, columns, rows, env }),
 	ptyWrite: (sessionId: string, data: number[]) => __TAURI_INVOKE<null>("pty_write", { sessionId, data }),
 	ptyResize: (sessionId: string, columns: number, rows: number) => __TAURI_INVOKE<null>("pty_resize", { sessionId, columns, rows }),
 	ptyAttach: (sessionId: string, attachmentId: number) => __TAURI_INVOKE<null>("pty_attach", { sessionId, attachmentId }),
 	ptyDetach: (sessionId: string, attachmentId: number) => __TAURI_INVOKE<null>("pty_detach", { sessionId, attachmentId }),
 	ptyClose: (sessionId: string) => __TAURI_INVOKE<null>("pty_close", { sessionId }),
+	/**
+	 *  Stop a PTY session gracefully: SIGINT, wait up to `grace_ms`, then
+	 *  force-close. Returns true when the process exited on its own in time.
+	 */
+	ptyStop: (sessionId: string, graceMs: number) => __TAURI_INVOKE<boolean>("pty_stop", { sessionId, graceMs }),
+	/**
+	 *  Resolve a CLI binary through the login shell's PATH (spec §6.6.1).
+	 *  The name is strictly validated; only a single resolved absolute path or a
+	 *  missing-binary error ever crosses this boundary.
+	 */
+	cliResolve: (binary: string) => __TAURI_INVOKE<string>("cli_resolve", { binary }),
+	/**  Create (when needed) the isolated profile dir for a CLI and return it. */
+	cliProfileDir: (cliId: string, slug: string) => __TAURI_INVOKE<string>("cli_profile_dir", { cliId, slug }),
+	/**
+	 *  Remove the registry's declared credential files inside a profile dir.
+	 *  Returns the names actually removed; nothing else is touched.
+	 */
+	cliLogoutProfile: (cliId: string, slug: string, credentialFiles: string[]) => __TAURI_INVOKE<string[]>("cli_logout_profile", { cliId, slug, credentialFiles }),
+	/**
+	 *  Merge agent hook entries into the isolated profile dir for CLIs with
+	 *  documented hook support (currently Claude Code only). Best-effort: a
+	 *  missing sidecar or an unsupported CLI reports false and the caller keeps
+	 *  the output heuristics. Never touches user config outside the profile dir.
+	 */
+	cliEnsureHooks: (cliId: string, profileDir: string) => __TAURI_INVOKE<boolean>("cli_ensure_hooks", { cliId, profileDir }),
+	/**
+	 *  Absolute path of the notify socket hook sidecars should dial.
+	 *  Fails on platforms without socket support; callers fall back to heuristics.
+	 */
+	notifySocketPath: () => __TAURI_INVOKE<string>("notify_socket_path"),
+	/**
+	 *  Validate and re-emit a hook-reported status as an `agent:status` event.
+	 *  Unknown sessions are ignored by the frontend; malformed input is rejected.
+	 */
+	notifyStatus: (sessionId: string, event: string) => __TAURI_INVOKE<null>("notify_status", { sessionId, event }),
 };
 
 /* Types */
