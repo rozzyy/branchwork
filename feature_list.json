@@ -910,8 +910,8 @@
       "dependencies": [
         "m3-task-11-handover"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "in-progress",
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-12-spec.md). Race dialog + toolbar, prompt via prefix, unpin helper (race+handover), branch-deleting remove + 4 Rust tests, bindings regenerated. Gate: init.sh 52 files/449 tests, Rust 161, typecheck+Clippy clean; e2e 76/76. Uncommitted; stage code/security review + manual M3-S4 checkpoint pending."
     },
     {
       "id": "m3-stage-4-review",
@@ -921,8 +921,8 @@
       "dependencies": [
         "m3-task-12-race"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "in-progress",
+      "evidence": "Code APPROVE + security APPROVE (no findings) + e2e automated 76/76 PASS (.agent/reviews/m3-stage-4-{code,security,e2e}.md); manual M3-S3+M3-S4 awaiting user; gate 52 files/450 tests, Rust 161, typecheck+Clippy clean. No commit/push."
     }
   ]
 }

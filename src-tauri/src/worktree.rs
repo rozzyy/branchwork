@@ -958,7 +958,46 @@ fn create_from(
         })
 }
 
-pub fn remove(project: &Project, worktree_path: &Path, store: &Store) -> Result<(), AppError> {
+/// Branch checked out in a worktree that the caller asked to delete with it.
+/// Returns `None` for detached worktrees (nothing to delete). Refuses to
+/// delete the branch checked out in the main worktree.
+fn branch_to_delete(
+    main_repository: &git2::Repository,
+    worktree_path: &Path,
+) -> Result<Option<String>, AppError> {
+    let worktree_repo = git2::Repository::open(worktree_path).map_err(|error| {
+        AppError::validation(format!("Cannot read worktree git state: {error}"))
+    })?;
+    let head = worktree_repo.head().map_err(|error| {
+        AppError::validation(format!("Cannot read worktree branch: {error}"))
+    })?;
+    if !head.is_branch() {
+        return Ok(None);
+    }
+    let name = head
+        .shorthand()
+        .map_err(|_| AppError::validation("Worktree branch name is not valid UTF-8"))?
+        .to_owned();
+    if !git2::Reference::is_valid_name(&format!("refs/heads/{name}")) {
+        return Err(AppError::validation("Worktree branch name is invalid"));
+    }
+    if let Ok(main_head) = main_repository.head()
+        && main_head.is_branch()
+        && main_head.shorthand().ok() == Some(name.as_str())
+    {
+        return Err(AppError::validation(
+            "Refusing to delete the branch checked out in the main worktree",
+        ));
+    }
+    Ok(Some(name))
+}
+
+pub fn remove(
+    project: &Project,
+    worktree_path: &Path,
+    store: &Store,
+    delete_branch: bool,
+) -> Result<(), AppError> {
     let (main_path, repository) = project_main_repository(Path::new(&project.local_path))?;
     let worktree_path = resolve_existing_worktree_path(worktree_path)?;
     let main_path = main_path
@@ -981,6 +1020,12 @@ pub fn remove(project: &Project, worktree_path: &Path, store: &Store) -> Result<
             worktree_path.display()
         )));
     }
+    // Resolve the branch before the worktree (and its gitdir) is gone.
+    let delete_target = if delete_branch {
+        branch_to_delete(&repository, &worktree_path)?
+    } else {
+        None
+    };
     let path_arg = worktree_path.as_os_str();
     run_git_write(
         &main_path,
@@ -991,6 +1036,20 @@ pub fn remove(project: &Project, worktree_path: &Path, store: &Store) -> Result<
             path_arg,
         ],
     )?;
+    if let Some(branch) = delete_target {
+        run_git_write(
+            &main_path,
+            &[
+                OsStr::new("branch"),
+                OsStr::new("-D"),
+                OsStr::new("--"),
+                OsStr::new(&branch),
+            ],
+        )
+        .map_err(|error| {
+            format!("Worktree removed, but its branch could not be deleted: {error}")
+        })?;
+    }
     let path_text = worktree_path
         .to_str()
         .ok_or_else(|| "Worktree path is not valid UTF-8".to_string())?;
@@ -1299,7 +1358,7 @@ mod tests {
             }]
         );
 
-        remove(&project, &destination, &store).unwrap();
+        remove(&project, &destination, &store, false).unwrap();
         assert!(!destination.exists());
         assert!(store.list_pins(Some(&project.id)).unwrap().is_empty());
         assert_eq!(
@@ -1462,13 +1521,13 @@ mod tests {
         fs::write(arbitrary.join("keep.txt"), "keep").unwrap();
 
         assert!(
-            remove(&project, &main_path, &store)
+            remove(&project, &main_path, &store, false)
                 .unwrap_err()
                 .message
                 .contains("main worktree")
         );
         assert!(
-            remove(&project, &arbitrary, &store)
+            remove(&project, &arbitrary, &store, false)
                 .unwrap_err()
                 .message
                 .contains("not a registered worktree")
@@ -1489,10 +1548,105 @@ mod tests {
             })
             .unwrap();
         fs::write(linked_path.join("uncommitted.txt"), "keep").unwrap();
-        assert!(remove(&project, &linked_path, &store).is_err());
+        assert!(remove(&project, &linked_path, &store, false).is_err());
         assert!(linked_path.exists());
         assert!(linked_path.join("uncommitted.txt").exists());
         assert_eq!(store.list_pins(Some(&project.id)).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn removes_worktree_and_branch_together_when_requested() {
+        let temp = TestDir::new();
+        let main_path = temp.0.join("main");
+        fs::create_dir(&main_path).unwrap();
+        let repository = init_repository(&main_path);
+        let store = Store::in_memory().unwrap();
+        let project = register_project(&main_path, &store);
+        let destination = temp.0.join("race");
+        let watcher = WorktreeWatcher::new(|_| {});
+
+        create(&project, &destination, "race/x-a", &store, &watcher).unwrap();
+        let destination = destination.canonicalize().unwrap();
+        remove(&project, &destination, &store, true).unwrap();
+        assert!(!destination.exists());
+        assert!(repository
+            .find_branch("race/x-a", BranchType::Local)
+            .is_err());
+        assert!(store.list_pins(Some(&project.id)).unwrap().is_empty());
+    }
+
+    #[test]
+    fn keeps_the_branch_when_branch_deletion_is_not_requested() {
+        let temp = TestDir::new();
+        let main_path = temp.0.join("main");
+        fs::create_dir(&main_path).unwrap();
+        let repository = init_repository(&main_path);
+        let store = Store::in_memory().unwrap();
+        let project = register_project(&main_path, &store);
+        let destination = temp.0.join("race");
+        let watcher = WorktreeWatcher::new(|_| {});
+
+        create(&project, &destination, "race/x-a", &store, &watcher).unwrap();
+        let destination = destination.canonicalize().unwrap();
+        remove(&project, &destination, &store, false).unwrap();
+        assert!(!destination.exists());
+        assert!(repository
+            .find_branch("race/x-a", BranchType::Local)
+            .is_ok());
+    }
+
+    #[test]
+    fn refuses_to_delete_the_branch_checked_out_in_main() {
+        let temp = TestDir::new();
+        let main_path = temp.0.join("main");
+        fs::create_dir(&main_path).unwrap();
+        let repository = init_repository(&main_path);
+        let store = Store::in_memory().unwrap();
+        let project = register_project(&main_path, &store);
+        let destination = temp.0.join("race");
+        let watcher = WorktreeWatcher::new(|_| {});
+
+        create(&project, &destination, "race/x-a", &store, &watcher).unwrap();
+        // Point main's HEAD at the same branch through plumbing: the normal
+        // checkout refuses a branch that a linked worktree already holds.
+        let symbolic = std::process::Command::new("git")
+            .args(["symbolic-ref", "HEAD", "refs/heads/race/x-a"])
+            .current_dir(&main_path)
+            .output()
+            .unwrap();
+        assert!(symbolic.status.success());
+        let destination = destination.canonicalize().unwrap();
+        assert!(remove(&project, &destination, &store, true)
+            .unwrap_err()
+            .message
+            .contains("main worktree"));
+        assert!(destination.exists());
+        assert!(repository
+            .find_branch("race/x-a", BranchType::Local)
+            .is_ok());
+    }
+
+    #[test]
+    fn skips_branch_deletion_for_detached_worktrees() {
+        let temp = TestDir::new();
+        let main_path = temp.0.join("main");
+        fs::create_dir(&main_path).unwrap();
+        let repository = init_repository(&main_path);
+        let store = Store::in_memory().unwrap();
+        let project = register_project(&main_path, &store);
+        let destination = temp.0.join("race");
+        let watcher = WorktreeWatcher::new(|_| {});
+
+        create(&project, &destination, "race/x-a", &store, &watcher).unwrap();
+        let destination = destination.canonicalize().unwrap();
+        let linked = git2::Repository::open(&destination).unwrap();
+        let target = repository.head().unwrap().target().unwrap();
+        linked.set_head_detached(target).unwrap();
+        remove(&project, &destination, &store, true).unwrap();
+        assert!(!destination.exists());
+        assert!(repository
+            .find_branch("race/x-a", BranchType::Local)
+            .is_ok());
     }
 
     #[test]

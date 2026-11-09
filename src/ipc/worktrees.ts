@@ -1,5 +1,6 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { commands, type Worktree_Serialize, type WorktreeChanged } from "./bindings";
+import { unpinWorktree } from "./catalog";
 
 export type { WorktreeState } from "./bindings";
 export type Worktree = Worktree_Serialize;
@@ -37,11 +38,30 @@ export function createWorktreeAtCommit(
   return commands.worktreeCreateAtCommit(projectId, destination, branch, commit);
 }
 
-export function removeWorktree(projectId: string, path: string): Promise<void> {
+/**
+ * Create a worktree that stays out of the sidebar pins (race/handover
+ * worktrees appear in Agents, never pinned). Unpin failures propagate so
+ * the caller can surface them instead of silently pinning.
+ */
+export async function createUnpinnedWorktree(
+  projectId: string,
+  destination: string,
+  branch: string,
+): Promise<Worktree> {
+  const created = await createWorktree(projectId, destination, branch);
+  await unpinWorktree(projectId, created.path);
+  return created;
+}
+
+export function removeWorktree(
+  projectId: string,
+  path: string,
+  deleteBranch = false,
+): Promise<void> {
   if (!inTauri()) {
     return Promise.reject(new Error("Removing worktrees requires the desktop app"));
   }
-  return commands.worktreeRemove(projectId, path).then(() => undefined);
+  return commands.worktreeRemove(projectId, path, deleteBranch).then(() => undefined);
 }
 
 export function pruneWorktrees(projectId: string): Promise<void> {

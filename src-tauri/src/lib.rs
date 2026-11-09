@@ -257,10 +257,11 @@ fn worktree_remove(
     store: State<'_, Store>,
     project_id: String,
     path: String,
+    delete_branch: bool,
 ) -> Result<(), AppError> {
     validate_id(&project_id, "project")?;
     let project = project_by_id(&store, &project_id)?;
-    worktree::remove(&project, Path::new(&path), &store)
+    worktree::remove(&project, Path::new(&path), &store, delete_branch)
 }
 
 #[tauri::command]

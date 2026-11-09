@@ -641,3 +641,23 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Cause:** worktree filter unmounted/remounted every pane on project switch → 256 KiB output replay + resize/SIGWINCH storm garbles full-screen CLI apps (messy display, stray redraw chars in the input line).
 - **Fix:** off-worktree panes stay mounted but hidden (`agent-off`, `display:none`); grid always renders; empty state keys off visible count. `CliPane.syncSize` now skips duplicate dims (sends once; clears on failure so the next pass retries) — hide/show with unchanged size sends zero resizes.
 - **Tests:** rewrote the 2 scoping tests to mounted-but-hidden semantics + new empty-state-per-worktree test; CliPane debounce tests still green (single send preserved). Gate: init.sh 52 files/443 tests, Rust 157, typecheck + Clippy clean; e2e 76/76. No commit/push (not ordered).
+
+## 2026-11-09: Committed + continued (user ordered)
+
+- **Commit** `a8b289c` on `m3-stage-4` (user ordered; no push/merge): worktree scoping without remounts + preview note path + reviews are gitignored under `.agent/`.
+- **Manual spec:** M3-S4-01..04 + Stage 4 result table written to `docs/testing/m0-manual-e2e.md` (uncommitted).
+- **Next:** M3-12 Race — `.agent/tasks/m3-task-12-race.md` derived from spec §6.6.6 (prompt via `prefix`, unpin helper shared with handover, branch-deleting discard, no §6.8 compare yet). Not started.
+
+## 2026-11-09: M3-12 Race implemented (user ordered)
+
+- **Race:** ⚑ toolbar button + RaceDialog (prompt, CLI multi-select with binary gating, default profiles, missing-profile block, slug `race/<slug>-<cli>`), per-CLI unpinned worktrees via `createUnpinnedWorktree` (handover adopts it too), prompt as first input via `NewAgentRequest.prompt` → existing `prefix` mechanism, entries with live status + changed counts, Keep/Discard (confirm → stop → remove worktree AND branch → reload).
+- **Backend:** `worktree::remove(..., delete_branch)` — pre-removal branch resolve, main-branch refusal, detached skip, `branch -D`, explicit partial-failure error. 4 new Rust tests. `src/ipc/bindings.ts` regenerated via official ignored-test path.
+- **Gate:** init.sh green (52 files/449 tests; Rust 161 passed/3 ignored; typecheck + Clippy clean — one collapsible_if fixed); e2e 76/76. Spec review PASS. No commit/push (not ordered).
+- **Next:** Stage 4 code/security review, then user runs manual M3-S3+M3-S4 checkpoint. Single stage commit + ff into main only after approval + order.
+
+## 2026-11-09: Stage 4 reviews done (code+security+e2e) + modal tidy
+
+- **Reviews:** `.agent/reviews/m3-stage-4-code.md` APPROVE, `m3-stage-4-security.md` APPROVE (no findings), `m3-stage-4-e2e.md` automated 76/76 PASS. Two review-driven fixes: discard-without-project guard + empty-grid collapse (both tested).
+- **Modal tidy (user order):** `.dlg-wide` (560px) for New agent/Handover/Race, one-line ellipsis CLI card names with full-name titles, Contestants empty hint (`agents.raceEmpty`). Detector: no new findings (only pre-existing `--spring` warnings).
+- **Gate:** init.sh exit 0 + Verification Complete (52 files/450 tests; Rust 161/3 ignored; typecheck + Clippy clean); e2e 76/76. No commit/push (not ordered).
+- **Awaiting user:** manual M3-S3-01..07 + M3-S4-01..04, then stage commit order.

@@ -50,6 +50,13 @@ export interface AgentSession {
 
 export type AgentLayoutMode = "grid" | "full";
 
+/** One launched race contestant: the session plus where it runs. */
+export interface RaceEntry {
+  id: string;
+  cliId: CliId;
+  worktreePath: string;
+}
+
 export const STOP_GRACE_MS = 3000;
 
 let sessionCounter = 0;
@@ -135,6 +142,8 @@ export interface NewAgentRequest {
   cliId: CliId;
   profile?: ProfileRef | null;
   worktreePath?: string;
+  /** Sent as the session's first input line after launch (race prompts). */
+  prompt?: string;
 }
 
 interface SessionsStore {
@@ -143,9 +152,15 @@ interface SessionsStore {
   newAgentOpen: boolean;
   /** Source session id for the Handover dialog, or null when closed. */
   handoverFor: string | null;
+  /** Race dialog visibility and its launched entries. */
+  raceOpen: boolean;
+  raceEntries: RaceEntry[];
   loaded: boolean;
   setNewAgentOpen(open: boolean): void;
   setHandoverFor(id: string | null): void;
+  setRaceOpen(open: boolean): void;
+  addRaceEntry(entry: RaceEntry): void;
+  removeRaceEntry(id: string): void;
   /** True when the session's process already exited (never throws). */
   isExited(sessionId: string | null): boolean;
   /**
@@ -307,10 +322,26 @@ export const useSessions = create<SessionsStore>((set, get) => {
     layoutMode: "grid",
     newAgentOpen: false,
     handoverFor: null,
+    raceOpen: false,
+    raceEntries: [],
     loaded: false,
 
     setNewAgentOpen(open) {
       if (get().newAgentOpen !== open) set({ newAgentOpen: open });
+    },
+
+    setRaceOpen(open) {
+      if (get().raceOpen !== open) set({ raceOpen: open });
+    },
+
+    addRaceEntry(entry) {
+      if (!get().raceEntries.some((item) => item.id === entry.id)) {
+        set({ raceEntries: [...get().raceEntries, entry] });
+      }
+    },
+
+    removeRaceEntry(id) {
+      set({ raceEntries: get().raceEntries.filter((item) => item.id !== id) });
     },
 
     setHandoverFor(id) {
@@ -400,7 +431,14 @@ export const useSessions = create<SessionsStore>((set, get) => {
         limitHit: false,
       };
       set({ sessions: [...get().sessions, session] });
-      const result = await spawnAgentShell(session.id, request.cliId, profile, worktreePath, launch);
+      const result = await spawnAgentShell(
+        session.id,
+        request.cliId,
+        profile,
+        worktreePath,
+        launch,
+        request.prompt ? [request.prompt] : [],
+      );
       const live = findSession(session.id);
       if (!live) {
         if ("sessionId" in result) {

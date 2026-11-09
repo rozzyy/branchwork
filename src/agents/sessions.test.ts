@@ -134,6 +134,16 @@ describe("startSession", () => {
     expect(session).toMatchObject({ cliId: "codex", worktreePath: "/wt/a", sessionId: "pty-1", slot: "auto" });
   });
 
+  it("sends an optional prompt as the first input line after launch", async () => {
+    const profile = await seedProfile();
+    const id = await useSessions
+      .getState()
+      .startSession({ cliId: "codex", profile, worktreePath: "/wt/a", prompt: "Fix the login bug" });
+    expect(id).toBeTruthy();
+    const writes = vi.mocked(writeTerminal).mock.calls.map(([, data]) => new TextDecoder().decode(data as Uint8Array));
+    expect(writes).toEqual(["Fix the login bug\n", "'codex'\n"]);
+  });
+
   it("falls back to the default profile and refuses without worktree or binary", async () => {
     await seedProfile();
     const id = await useSessions.getState().startSession({ cliId: "codex" });

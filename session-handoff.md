@@ -5,11 +5,11 @@
 
 - **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–3 committed and fast-forwarded into `main`. No push.
 - **Branch:** `m3-stage-4` (branched from `main` at `c110d42`; WIP commit per user order 2026-11-09, no push, not merged).
-- **Active task:** `m3-task-11-handover` — in-progress (implemented; spec/code/security PASS; worktree-scoping + terminal-remount fixes committed; manual M3-S4 pending).
+- **Active task:** `m3-stage-4-review` — in-progress (code+security+e2e PASS, reports written; modal tidy done; manual checkpoint pending user run).
 
 ## Recommended Next Step
 
-Write manual M3-S4 steps, then derive `.agent/tasks/m3-task-12-race.md` (missing) from the spec/plan and work M3-12. Single stage commit + ff into `main` only after the user approves the Stage 4 checkpoint and orders it. No push.
+User runs manual M3-S3-01..07 + M3-S4-01..04 and orders the stage commit, then: single stage commit on `m3-stage-4`, ff into `main`. No push. Open gaps for next tasks: pane-header CLI switcher (spec §6.6/line 358) + Settings agent-accounts section (spec/line 566).
 
 ## M2 structure
 

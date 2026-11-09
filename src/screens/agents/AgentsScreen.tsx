@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Mous
 import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
 import { useProfiles } from "../../agents/profiles";
-import { useSessions, type AgentSession, type AgentStatus } from "../../agents/sessions";
+import { useSessions, type AgentSession, type AgentStatus, type RaceEntry } from "../../agents/sessions";
 import { useStage } from "../../state/stage";
 import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
 import { Menu, type MenuItem } from "../../ui/Menu";
+import { ask } from "../../ui/dialog";
 import { toast } from "../../ui/toast";
 import { readStatus } from "../../ipc/status";
-import { createWorktree } from "../../ipc/worktrees";
+import { createUnpinnedWorktree, removeWorktree } from "../../ipc/worktrees";
 import { readHandoverDiff, writeHandoverNote } from "../../ipc/handover";
 import { writeTerminal } from "../../ipc/pty";
 import { t } from "../../i18n/t";
@@ -33,6 +34,7 @@ export function AgentsToolbar() {
   const layoutMode = useSessions((s) => s.layoutMode);
   const setLayoutMode = useSessions((s) => s.setLayoutMode);
   const setNewAgentOpen = useSessions((s) => s.setNewAgentOpen);
+  const setRaceOpen = useSessions((s) => s.setRaceOpen);
   return (
     <>
       <h1 className="pane-title">
@@ -60,6 +62,9 @@ export function AgentsToolbar() {
             ▭ {t("agents.layoutFull")}
           </button>
         </div>
+        <button type="button" className="btn" onClick={() => setRaceOpen(true)}>
+          ⚑ {t("agents.race")}
+        </button>
         <button type="button" className="btn p" onClick={() => setNewAgentOpen(true)}>
           ＋ {t("agents.newAgent")}
         </button>
@@ -360,7 +365,7 @@ function NewAgentDialog() {
 
   return (
     <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-      <div className="dlg" role="dialog" aria-modal="true" aria-labelledby="agent-dialog-title">
+      <div className="dlg dlg-wide" role="dialog" aria-modal="true" aria-labelledby="agent-dialog-title">
         <div className="dlg-ic">✦</div>
         <h3 id="agent-dialog-title">{t("agents.dialogTitle")}</h3>
         <p>{t("agents.dialogBody")}</p>
@@ -382,7 +387,7 @@ function NewAgentDialog() {
                 <span className="agent-apick-icon" aria-hidden>
                   {entry.icon}
                 </span>
-                {entry.name}
+                <span className="agent-apick-name">{entry.name}</span>
                 <small>{id}</small>
               </label>
             );
@@ -437,6 +442,12 @@ function NewAgentDialog() {
       </div>
     </div>
   );
+}
+
+/** Parent dir of a worktree path without producing a double slash at the root. */
+function worktreeParentDir(path: string): string {
+  const parent = path.split("/").slice(0, -1).join("/");
+  return parent === "" ? "/" : parent;
 }
 
 function defaultHandoverBranch(worktreeBranch: string | null, cliId: CliId): string {
@@ -542,10 +553,11 @@ function HandoverDialog() {
           return;
         }
         const cleanBranch = branch.trim();
-        const parent = source.worktreePath.split("/").slice(0, -1).join("/") || "/";
+        const parent = worktreeParentDir(source.worktreePath);
         const dirName = cleanBranch.split("/").pop() || "handover";
+        const destination = parent === "/" ? `/${dirName}` : `${parent}/${dirName}`;
         try {
-          const created = await createWorktree(projectId, `${parent}/${dirName}`, cleanBranch);
+          const created = await createUnpinnedWorktree(projectId, destination, cleanBranch);
           targetWt = created.path;
           // Like Graph's worktree creation: refresh the list and follow the
           // new worktree so the handover target session stays visible.
@@ -600,7 +612,7 @@ function HandoverDialog() {
 
   return (
     <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setSourceId(null); }}>
-      <div className="dlg" role="dialog" aria-modal="true" aria-labelledby="handover-dialog-title">
+      <div className="dlg dlg-wide" role="dialog" aria-modal="true" aria-labelledby="handover-dialog-title">
         <div className="dlg-ic">↗</div>
         <h3 id="handover-dialog-title">{t("agents.handoverTitle")}</h3>
         <p>
@@ -616,7 +628,7 @@ function HandoverDialog() {
               <label
                 key={id}
                 className={missing ? "missing" : ""}
-                title={id === source.cliId ? srcDef.name : undefined}
+                title={id === source.cliId ? srcDef.name : entry.name}
               >
                 <input
                   type="radio"
@@ -629,7 +641,7 @@ function HandoverDialog() {
                 <span className="agent-apick-icon" aria-hidden>
                   {entry.icon}
                 </span>
-                {entry.name}
+                <span className="agent-apick-name">{entry.name}</span>
                 <small>{id}</small>
               </label>
             );
@@ -707,6 +719,247 @@ function HandoverDialog() {
   );
 }
 
+const RACEABLE_IDS = CLI_IDS.filter((id) => id !== "custom");
+
+function defaultRaceSlug(prompt: string): string {
+  const slug =
+    prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 32) || "race";
+  return slug;
+}
+
+function RaceDialog() {
+  const open = useSessions((s) => s.raceOpen);
+  const setOpen = useSessions((s) => s.setRaceOpen);
+  const sessions = useSessions((s) => s.sessions);
+  const entries = useSessions((s) => s.raceEntries);
+  // Subscribe so profile add/remove re-renders the missing-profile hints.
+  void useProfiles((s) => s.profiles);
+
+  const [prompt, setPrompt] = useState("");
+  const [selected, setSelected] = useState<CliId[]>([]);
+  const [binaries, setBinaries] = useState<Record<CliId, string | null> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    setPrompt("");
+    setSelected([]);
+    setBusy(false);
+    setBinaries(null);
+    void useSessions.getState().checkBinaries().then(setBinaries);
+  }, [open ]);
+
+  useEffect(() => {
+    if (!open) return;
+    for (const entry of entries) {
+      if (fileCounts[entry.id] === undefined) {
+        void readStatus(entry.worktreePath)
+          .then((summary) => {
+            const count = summary.staged.length + summary.unstaged.length;
+            setFileCounts((counts) => ({ ...counts, [entry.id]: count }));
+          })
+          .catch(() => setFileCounts((counts) => ({ ...counts, [entry.id]: -1 })));
+      }
+    }
+  }, [open, entries, fileCounts]);
+
+  if (!open) return null;
+
+  const fail = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    toast({ title: message, icon: "⚠" });
+  };
+
+  const toggle = (id: CliId) => {
+    setSelected((list) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]));
+  };
+
+  const missingProfiles = selected.filter(
+    (id) => !useProfiles.getState().resolveProfile(id),
+  );
+  const canStart =
+    !!binaries &&
+    !busy &&
+    prompt.trim().length > 0 &&
+    selected.length > 0 &&
+    selected.every((id) => {
+      const def = CLI_REGISTRY[id];
+      return !def.binary || !!binaries[id];
+    }) &&
+    missingProfiles.length === 0 &&
+    !!useWorktrees.getState().projectId;
+
+  const start = () => {
+    if (!canStart) return;
+    setBusy(true);
+    void (async () => {
+      const store = useSessions.getState();
+      const wtState = useWorktrees.getState();
+      const projectId = wtState.projectId;
+      const project = useRepos.getState().projects.find((p) => p.id === projectId) ?? null;
+      if (!projectId || !project) {
+        fail(new Error(t("agents.raceNoProject")));
+        setBusy(false);
+        return;
+      }
+      const slug = defaultRaceSlug(prompt.trim());
+      const parent = worktreeParentDir(project.localPath);
+      for (const cliId of selected) {
+        const profile = useProfiles.getState().resolveProfile(cliId);
+        if (!profile) {
+          fail(new Error(t("agents.raceNoProfile", { name: CLI_REGISTRY[cliId].name })));
+          continue;
+        }
+        const branch = `race/${slug}-${cliId}`;
+        const dirName = branch.split("/").pop() || `race-${cliId}`;
+        const destination = parent === "/" ? `/${dirName}` : `${parent}/${dirName}`;
+        try {
+          const created = await createUnpinnedWorktree(projectId, destination, branch);
+          const newId = await store.startSession({
+            cliId,
+            profile,
+            worktreePath: created.path,
+            prompt: prompt.trim(),
+          });
+          if (!newId) continue;
+          store.addRaceEntry({ id: newId, cliId, worktreePath: created.path });
+        } catch (error) {
+          fail(error);
+        }
+      }
+      setBusy(false);
+    })();
+  };
+
+  const keep = (id: string) => {
+    useSessions.getState().removeRaceEntry(id);
+  };
+
+  const discard = (entry: RaceEntry) => {
+    void (async () => {
+      const branch =
+        useWorktrees.getState().worktrees.find((w) => w.path === entry.worktreePath)?.branch ??
+        tail(entry.worktreePath);
+      const confirmed = await ask({
+        title: t("agents.raceDiscardTitle"),
+        body: t("agents.raceDiscardBody", { branch }),
+        ok: t("agents.raceDiscardOk"),
+        icon: "⚠",
+      });
+      if (!confirmed) return;
+      const store = useSessions.getState();
+      const wtState = useWorktrees.getState();
+      if (!wtState.projectId) {
+        fail(new Error(t("agents.raceNoProject")));
+        return;
+      }
+      await store.closeSession(entry.id, { confirm: false });
+      try {
+        await removeWorktree(wtState.projectId, entry.worktreePath, true);
+        const project =
+          useRepos.getState().projects.find((p) => p.id === wtState.projectId) ?? null;
+        if (project) await wtState.load(project);
+      } catch (error) {
+        fail(error);
+        return;
+      }
+      store.removeRaceEntry(entry.id);
+    })();
+  };
+
+  return (
+    <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+      <div className="dlg dlg-wide" role="dialog" aria-modal="true" aria-labelledby="race-dialog-title">
+        <div className="dlg-ic">⚑</div>
+        <h3 id="race-dialog-title">{t("agents.raceTitle")}</h3>
+        <div className="agent-h4">{t("agents.racePrompt")}</div>
+        <textarea
+          className="input"
+          rows={3}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder={t("agents.racePromptPlaceholder")}
+          aria-label={t("agents.racePrompt")}
+        />
+        <div className="agent-h4">{t("agents.raceClis")}</div>
+        <div className="agent-apick" role="group" aria-label={t("agents.raceClis")}>
+          {RACEABLE_IDS.map((id) => {
+            const entry = CLI_REGISTRY[id];
+            const missing = !!binaries && !!entry.binary && !binaries[id];
+            return (
+              <label key={id} className={missing ? "missing" : ""} title={entry.name}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(id)}
+                  disabled={missing}
+                  onChange={() => toggle(id)}
+                />
+                <span className="agent-apick-icon" aria-hidden>
+                  {entry.icon}
+                </span>
+                <span className="agent-apick-name">{entry.name}</span>
+                <small>{id}</small>
+              </label>
+            );
+          })}
+        </div>
+        {!binaries && <p className="agent-hint">{t("agents.dialogChecking")}</p>}
+        {selected.length === 0 && binaries && (
+          <p className="agent-hint">{t("agents.raceNeedCli")}</p>
+        )}
+        {missingProfiles.length > 0 && (
+          <p className="agent-hint">
+            {missingProfiles.map((id) => t("agents.raceNoProfile", { name: CLI_REGISTRY[id].name })).join(" · ")}
+          </p>
+        )}
+        <div className="agent-h4">{t("agents.raceEntries")}</div>
+        {entries.length === 0 ? (
+          <p className="agent-hint">{t("agents.raceEmpty")}</p>
+        ) : (
+          <ul className="agent-race-list">
+            {entries.map((entry) => {
+              const def = CLI_REGISTRY[entry.cliId];
+              const session = sessions.find((s) => s.id === entry.id);
+              const count = fileCounts[entry.id];
+              return (
+                <li key={entry.id}>
+                  <span className="agent-apick-icon" aria-hidden>
+                    {def.icon}
+                  </span>
+                  {def.name} · {tail(entry.worktreePath)} · {session?.status ?? t("agents.statusDone")} ·{" "}
+                  {count === undefined
+                    ? "…"
+                    : count < 0
+                      ? t("agents.raceChangedUnknown")
+                      : t("agents.raceChangedFiles", { count: String(count) })}
+                  <span className="sp" />
+                  <button type="button" className="btn sm" onClick={() => keep(entry.id)}>
+                    {t("agents.raceKeep")}
+                  </button>
+                  <button type="button" className="btn sm" onClick={() => discard(entry)}>
+                    {t("agents.raceDiscard")}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className="dlg-actions">
+          <button type="button" className="btn" onClick={() => setOpen(false)}>{t("agents.dialogCancel")}</button>
+          <button type="button" className="btn p" disabled={!canStart} onClick={start}>
+            {t("agents.raceStart")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AgentsView() {
   const sessions = useSessions((s) => s.sessions);
   const layoutMode = useSessions((s) => s.layoutMode);
@@ -730,6 +983,7 @@ export function AgentsView() {
     >
       <NewAgentDialog />
       <HandoverDialog />
+      <RaceDialog />
       {visible.length === 0 && (
         <div className="agent-empty" role="status">
           <span>{t("agents.empty")}</span>
@@ -738,7 +992,7 @@ export function AgentsView() {
           </button>
         </div>
       )}
-      <div className="agent-grid">
+      <div className={"agent-grid" + (visible.length === 0 ? " agent-grid-empty" : "")}>
         {ordered.map((session) => (
           <AgentPane
             key={session.id}

@@ -611,3 +611,42 @@ Expected: no switch ever kills a dock-shared PTY; usage percentages stay hidden;
 | M3-S3-05 | | |
 | M3-S3-06 | | |
 | M3-S3-07 | | |
+
+## M3 Stage 4: Agent handover
+
+### M3-S4-01 · Handover in the same worktree
+
+1. In an agent pane, press ↗; confirm From shows CLI/profile/worktree/status, the source CLI card is disabled, and the note is prefilled with status, `## Task/Done/Remaining`, changed files, and no AI-regenerate button.
+2. Edit the note; tick diff + output tail; confirm the preview shows the launch command plus `# note: .branchwork/handover.md`, and Start stays disabled until target CLI + profile resolve.
+3. Start with Same worktree; confirm `.branchwork/handover.md` is written, the target session starts, and a dimmed handover line prints in the new pane.
+
+Expected: `git status` stays clean of `.branchwork/` (excluded via `.git/info/exclude`); the source session keeps running unless Stop is ticked.
+
+### M3-S4-02 · Handover to a new worktree
+
+1. Repeat M3-S4-01 with Where = New worktree; confirm the branch defaults to `handover/<branch>-<cli>` and Start is disabled for an empty branch.
+2. Start; confirm the worktree is created, the sidebar and all pages follow it, and the new session is visible there.
+
+Expected: no leftover worktree or branch when creation fails midway (error toast, dialog stays open).
+
+### M3-S4-03 · Agents follow the active project/worktree
+
+1. With agent sessions in two worktrees (or projects), switch worktree/project; confirm only that context's sessions show — the others hide without closing.
+2. Switch back and forth; confirm terminals stay clean (no replay garble, no stray characters), and typing still goes to the intended session.
+
+Expected: hidden sessions keep running; switching never respawns or replays a terminal.
+
+### M3-S4-04 · Stop-source and validation
+
+1. Hand over with Stop ticked; confirm the source session closes without a second confirmation and the target starts.
+2. Hand over without Stop; confirm the source keeps running.
+3. Open ＋ New agent with no worktree open; confirm Start is refused with a message.
+
+### M3 Stage 4 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M3-S4-01 | | |
+| M3-S4-02 | | |
+| M3-S4-03 | | |
+| M3-S4-04 | | |

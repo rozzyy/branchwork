@@ -52,6 +52,8 @@
 .dlg-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: oklch(0 0 0 / .35); backdrop-filter: blur(6px); animation: fade .2s; }
 @keyframes fade { from { opacity: 0; } }
 .dlg { width: min(420px, 92vw); padding: 24px; border-radius: 22px; background: var(--glass2); backdrop-filter: blur(60px) saturate(1.8); -webkit-backdrop-filter: blur(60px) saturate(1.8); box-shadow: 0 40px 100px -20px oklch(0 0 0 / .6), var(--spec), 0 0 0 .5px var(--line2); animation: dlg-in .4s var(--spring); }
+/* Wider dialogs host a 4-column CLI card grid (New agent, Handover, Race). */
+.dlg-wide { width: min(560px, 94vw); }
 @keyframes dlg-in { from { opacity: 0; transform: scale(.94) translateY(12px); } }
 .dlg-ic { width: 42px; height: 42px; display: grid; place-items: center; margin-bottom: 14px; border-radius: 13px; background: var(--accs); color: var(--acc); font-size: 19px; box-shadow: var(--spec); }
 .dlg-ic.danger { background: color-mix(in oklch, var(--red) 18%, transparent); color: var(--red); }

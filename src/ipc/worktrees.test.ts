@@ -1,5 +1,6 @@
 import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import {
+  createUnpinnedWorktree,
   createWorktree,
   createWorktreeAtCommit,
   listWorktrees,
@@ -93,7 +94,51 @@ it("routes worktree lifecycle operations through typed Tauri commands", async ()
         commit: "0123456789abcdef",
       },
     },
-    { command: "worktree_remove", payload: { projectId: "project-1", path: "/repos/feature" } },
+    {
+      command: "worktree_remove",
+      payload: { projectId: "project-1", path: "/repos/feature", deleteBranch: false },
+    },
     { command: "worktree_prune", payload: { projectId: "project-1" } },
+  ]);
+});
+
+it("creates a worktree and unpins it for race/handover use", async () => {
+  mockWindows("main");
+  const calls: Array<{ command: string; payload: unknown }> = [];
+  mockIPC((command, payload) => {
+    calls.push({ command, payload });
+    if (command === "worktree_create") return { ...worktree, path: "/repos/race-x-a" };
+    return true;
+  });
+
+  await expect(
+    createUnpinnedWorktree("project-1", "/repos/race-x-a", "race/x-a"),
+  ).resolves.toMatchObject({ path: "/repos/race-x-a" });
+  expect(calls).toEqual([
+    {
+      command: "worktree_create",
+      payload: { projectId: "project-1", destination: "/repos/race-x-a", branch: "race/x-a" },
+    },
+    {
+      command: "unpin_worktree",
+      payload: { projectId: "project-1", worktreePath: "/repos/race-x-a" },
+    },
+  ]);
+});
+
+it("passes branch deletion through to the backend remove command", async () => {
+  mockWindows("main");
+  const calls: Array<{ command: string; payload: unknown }> = [];
+  mockIPC((command, payload) => {
+    calls.push({ command, payload });
+    return null;
+  });
+
+  await expect(removeWorktree("project-1", "/repos/race-x-a", true)).resolves.toBeUndefined();
+  expect(calls).toEqual([
+    {
+      command: "worktree_remove",
+      payload: { projectId: "project-1", path: "/repos/race-x-a", deleteBranch: true },
+    },
   ]);
 });

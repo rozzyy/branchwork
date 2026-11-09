@@ -6,10 +6,11 @@ import { useProfiles } from "../../agents/profiles";
 import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
 import { readStatus } from "../../ipc/status";
-import { createWorktree, listWorktrees } from "../../ipc/worktrees";
+import { createUnpinnedWorktree, createWorktree, listWorktrees, removeWorktree } from "../../ipc/worktrees";
 import { listPins, type Project } from "../../ipc/catalog";
 import { resolveCliBinary } from "../../ipc/cli";
-import { spawnTerminal } from "../../ipc/pty";
+import { spawnTerminal, writeTerminal } from "../../ipc/pty";
+import { ask } from "../../ui/dialog";
 import type { Worktree } from "../../ipc/worktrees";
 
 export const cliPaneProps: Array<{ sessionId: string; interceptInput?: (data: string) => boolean }> = [];
@@ -45,10 +46,13 @@ vi.mock("../../ipc/status", () => ({
 vi.mock("../../ipc/worktrees", () => ({
   createWorktree: vi.fn(),
   listWorktrees: vi.fn(),
+  createUnpinnedWorktree: vi.fn(),
+  removeWorktree: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("../../ipc/catalog", () => ({
   listPins: vi.fn(() => Promise.resolve([])),
+  unpinWorktree: vi.fn(() => Promise.resolve(true)),
 }));
 
 vi.mock("../../ipc/handover", () => ({
@@ -118,6 +122,10 @@ beforeEach(() => {
   vi.mocked(resolveCliBinary).mockRejectedValue(new Error("missing"));
   vi.mocked(spawnTerminal).mockReset();
   vi.mocked(createWorktree).mockReset();
+  vi.mocked(createUnpinnedWorktree).mockReset();
+  vi.mocked(removeWorktree).mockReset().mockImplementation(() => Promise.resolve());
+  vi.mocked(ask).mockReset();
+  vi.mocked(readStatus).mockReset().mockResolvedValue({ staged: [], unstaged: [] });
   vi.mocked(listWorktrees).mockReset();
   vi.mocked(listPins).mockResolvedValue([]);
 });
@@ -291,6 +299,7 @@ describe("AgentsView", () => {
     expect(
       screen.getByLabelText("Codex session in a").closest(".agent-pane"),
     ).toHaveClass("agent-off");
+    expect(document.querySelector(".agent-grid")).toHaveClass("agent-grid-empty");
   });
 
   it("switches to the created worktree after a new-worktree handover", async () => {
@@ -307,7 +316,7 @@ describe("AgentsView", () => {
       { path: "/wt/a" } as Worktree,
       { path: "/wt/new" } as Worktree,
     ]);
-    vi.mocked(createWorktree).mockResolvedValue({ path: "/wt/new" } as Worktree);
+    vi.mocked(createUnpinnedWorktree).mockResolvedValue({ path: "/wt/new" } as Worktree);
     vi.mocked(spawnTerminal).mockResolvedValue({ sessionId: "pty-9" });
     render(<AgentsView />);
     fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
@@ -336,5 +345,147 @@ describe("AgentsView", () => {
     expect(screen.getByText("Run a CLI agent in an isolated worktree. The agent stays its original CLI.")).toBeInTheDocument();
     // No worktrees and no binary: Start stays disabled.
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+
+  it("gates the race start on prompt, agents, binaries, and profiles", async () => {
+    render(
+      <>
+        <AgentsToolbar />
+        <AgentsView />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "⚑ Race" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    const start = screen.getByRole("button", { name: "Start race" });
+    expect(start).toBeDisabled();
+
+    // A selected CLI without any profile blocks Start with a message.
+    vi.mocked(resolveCliBinary).mockResolvedValue("/usr/local/bin/cli");
+    fireEvent.click(screen.getByRole("checkbox", { name: /OpenCode/ }));
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Fix it" } });
+    await waitFor(() => expect(start).toBeDisabled());
+    expect(screen.getByText(/OpenCode has no profile yet/)).toBeInTheDocument();
+  });
+
+  it("starts a race in unpinned worktrees and sends the prompt first", async () => {
+    const project = { id: "p1", localPath: "/repo" } as Project;
+    useRepos.setState({ projects: [project], activeProjectId: "p1" });
+    useProfiles.setState({
+      profiles: [
+        { cliId: "codex", slug: "work", name: "Work", createdAt: 1 },
+        { cliId: "claude", slug: "main", name: "Main", createdAt: 2 },
+      ],
+      globalDefault: null,
+      cliDefaults: {},
+      loaded: true,
+    });
+    useWorktrees.setState({
+      projectId: "p1",
+      activePath: "/wt/a",
+      worktrees: [{ path: "/wt/a" } as Worktree, { path: "/wt/b" } as Worktree],
+    });
+    vi.mocked(readStatus).mockResolvedValue({ staged: [], unstaged: [] });
+    vi.mocked(resolveCliBinary).mockResolvedValue("/usr/local/bin/cli");
+    vi.mocked(listWorktrees).mockResolvedValue([
+      { path: "/wt/a" } as Worktree,
+      { path: "/fix-it-codex" } as Worktree,
+      { path: "/fix-it-claude" } as Worktree,
+    ]);
+    const createdPaths: string[] = [];
+    vi.mocked(createUnpinnedWorktree).mockImplementation(async (_projectId, destination, _branch) => {
+      createdPaths.push(destination);
+      return { path: destination } as Worktree;
+    });
+    let ptyCounter = 0;
+    vi.mocked(spawnTerminal).mockImplementation(async () => ({ sessionId: `pty-race-${(ptyCounter += 1)}` }));
+    render(
+      <>
+        <AgentsToolbar />
+        <AgentsView />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "⚑ Race" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Fix it" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Codex/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Claude Code/ }));
+    const start = screen.getByRole("button", { name: "Start race" });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+
+    await waitFor(() => expect(useSessions.getState().raceEntries).toHaveLength(2));
+    expect(createdPaths).toEqual(["/fix-it-codex", "/fix-it-claude"]);
+    const sessions = useSessions.getState().sessions;
+    expect(
+      sessions.filter((s) => s.worktreePath === "/fix-it-codex" || s.worktreePath === "/fix-it-claude"),
+    ).toHaveLength(2);
+    // The prompt goes out before the launch argv in each new shell.
+    const writes = vi
+      .mocked(writeTerminal)
+      .mock.calls.map(([, data]) => new TextDecoder().decode(data as Uint8Array));
+    expect(writes.filter((text) => text === "Fix it\n")).toHaveLength(2);
+    expect(screen.getByText("Contestants")).toBeInTheDocument();
+  });
+
+  it("discards a race entry with confirmation, branch, and worktree", async () => {
+    const project = { id: "p1", localPath: "/repo" } as Project;
+    useRepos.setState({ projects: [project], activeProjectId: "p1" });
+    useWorktrees.setState({
+      projectId: "p1",
+      activePath: "/wt/a",
+      worktrees: [
+        { path: "/wt/a" } as Worktree,
+        { path: "/wt/fix-it-codex", branch: "race/fix-it-codex" } as Worktree,
+      ],
+    });
+    useSessions.setState({
+      sessions: [
+        {
+          id: "race-1",
+          cliId: "codex",
+          profile: { cliId: "codex", slug: "work" },
+          worktreePath: "/wt/fix-it-codex",
+          sessionId: "pty-race-1",
+          slot: "auto",
+          error: null,
+          sharedWithDock: false,
+          status: "running",
+          limitHit: false,
+        },
+      ],
+      raceEntries: [{ id: "race-1", cliId: "codex", worktreePath: "/wt/fix-it-codex" }],
+    });
+    vi.mocked(ask).mockResolvedValue(true);
+    vi.mocked(listWorktrees).mockResolvedValue([{ path: "/wt/a" } as Worktree]);
+    render(<AgentsView />);
+    act(() => {
+      useSessions.getState().setRaceOpen(true);
+    });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    await waitFor(() =>
+      expect(vi.mocked(removeWorktree)).toHaveBeenCalledWith("p1", "/wt/fix-it-codex", true),
+    );
+    await waitFor(() => expect(useSessions.getState().raceEntries).toEqual([]));
+  });
+
+  it("refuses to discard a race entry with no project open", async () => {
+    useWorktrees.setState({ projectId: null, activePath: null, worktrees: [] });
+    useSessions.setState({
+      sessions: [],
+      raceEntries: [{ id: "race-1", cliId: "codex", worktreePath: "/wt/fix-it-codex" }],
+    });
+    vi.mocked(ask).mockResolvedValue(true);
+    render(<AgentsView />);
+    act(() => {
+      useSessions.getState().setRaceOpen(true);
+    });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
+    expect(vi.mocked(removeWorktree)).not.toHaveBeenCalled();
+    expect(useSessions.getState().raceEntries).toHaveLength(1);
   });
 });
