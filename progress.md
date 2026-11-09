@@ -622,3 +622,22 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Gate:** init.sh green (52 Vitest files / 440 tests; Rust 157 passed / 3 ignored; typecheck + Clippy clean); e2e 76/76. `cargo fmt --check` diff in `branchwork-notify.rs` is pre-existing (verified via stash), untouched.
 - **Commit:** WIP on `m3-stage-4` per user order (no push, no merge — stage commit still pending checkpoint + M3-12 + reviews).
 - **Next:** M3-11 spec review + Stage-4 code/security addenda, manual M3-S4 steps, then M3-12 Race (task file `.agent/tasks/m3-task-12-race.md` does not exist yet — derive from spec §6.6.x/plan line 41).
+
+## 2026-11-09: M3-11 addenda reviews — code + security APPROVE
+
+- **Code** (`.agent/reviews/m3-task-11-code.md`): APPROVE, no blocking issues. Null paths in handover flow already toast; `checkBinaries` can't reject. 2 deferred minors: `/`-split parent derivation (macOS-correct, backend re-canonicalizes), duplicated local `slugify`.
+- **Security** (`.agent/reviews/m3-task-11-security.md`): APPROVE, no findings. Both new commands catalog-validate + canonicalize paths; fixed filenames; 200k/100k caps; append-only exclude; strict `.git` file parse; argv-only git (no shell); branch ref-name validation in `create_from`; diff/note never touch HTML.
+- **Next:** manual M3-S4 steps, then derive `.agent/tasks/m3-task-12-race.md` and work M3-12. No commit/push (not ordered).
+
+## 2026-11-09: Fix Agents page not following active worktree/project (user report)
+
+- **Bug:** `AgentsView` rendered all sessions regardless of context; switching project/worktree kept showing the previous sessions. Files/Changes/Graph/Blame already follow `activePath` — only Agents did not.
+- **Fix:** `AgentsView` filters sessions to `activePath` (null = no project open → show all, preserving old behavior there). Handover-to-new-worktree now does `load(project)` + `select(created.path)` (same pattern as Graph) so the target session stays visible and the sidebar follows.
+- **Tests (durable):** 2 new focused tests in `AgentsScreen.test.tsx` — worktree filter + switch, and handover selecting the created worktree. Both failed before the fix (authentic red). Mock-fidelity fixes: `writeTerminal`/`stopTerminal`/`closeTerminal`/`saveSetting` mocks now return promises like the real IPC wrappers (the `saveSetting` one was the actual blocker: `select()` does `void saveSetting(...).catch(...)`).
+- **Gate:** init.sh green (52 files / 442 tests; Rust 157 passed / 3 ignored; typecheck + Clippy clean); e2e 76/76. No commit/push (not ordered).
+
+## 2026-11-09: Fix garbled terminal + stray input on project switch (user report)
+
+- **Cause:** worktree filter unmounted/remounted every pane on project switch → 256 KiB output replay + resize/SIGWINCH storm garbles full-screen CLI apps (messy display, stray redraw chars in the input line).
+- **Fix:** off-worktree panes stay mounted but hidden (`agent-off`, `display:none`); grid always renders; empty state keys off visible count. `CliPane.syncSize` now skips duplicate dims (sends once; clears on failure so the next pass retries) — hide/show with unchanged size sends zero resizes.
+- **Tests:** rewrote the 2 scoping tests to mounted-but-hidden semantics + new empty-state-per-worktree test; CliPane debounce tests still green (single send preserved). Gate: init.sh 52 files/443 tests, Rust 157, typecheck + Clippy clean; e2e 76/76. No commit/push (not ordered).

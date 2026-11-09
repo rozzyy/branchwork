@@ -1,9 +1,16 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentsToolbar, AgentsView } from "./AgentsScreen";
 import { useSessions } from "../../agents/sessions";
 import { useProfiles } from "../../agents/profiles";
+import { useRepos } from "../../state/repos";
+import { useWorktrees } from "../../state/worktrees";
 import { readStatus } from "../../ipc/status";
+import { createWorktree, listWorktrees } from "../../ipc/worktrees";
+import { listPins, type Project } from "../../ipc/catalog";
+import { resolveCliBinary } from "../../ipc/cli";
+import { spawnTerminal } from "../../ipc/pty";
+import type { Worktree } from "../../ipc/worktrees";
 
 export const cliPaneProps: Array<{ sessionId: string; interceptInput?: (data: string) => boolean }> = [];
 vi.mock("../../terminal/CliPane", () => ({
@@ -20,15 +27,15 @@ vi.mock("../../ipc/cli", () => ({
 
 vi.mock("../../ipc/pty", () => ({
   spawnTerminal: vi.fn(),
-  writeTerminal: vi.fn(),
-  stopTerminal: vi.fn(),
-  closeTerminal: vi.fn(),
+  writeTerminal: vi.fn(() => Promise.resolve()),
+  stopTerminal: vi.fn(() => Promise.resolve()),
+  closeTerminal: vi.fn(() => Promise.resolve()),
   onTerminalExit: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 vi.mock("../../ipc/settings", () => ({
   loadSetting: vi.fn(),
-  saveSetting: vi.fn(),
+  saveSetting: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("../../ipc/status", () => ({
@@ -37,6 +44,11 @@ vi.mock("../../ipc/status", () => ({
 
 vi.mock("../../ipc/worktrees", () => ({
   createWorktree: vi.fn(),
+  listWorktrees: vi.fn(),
+}));
+
+vi.mock("../../ipc/catalog", () => ({
+  listPins: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock("../../ipc/handover", () => ({
@@ -46,6 +58,10 @@ vi.mock("../../ipc/handover", () => ({
 
 vi.mock("../../ui/dialog", () => ({
   ask: vi.fn(),
+}));
+
+vi.mock("../../ui/toast", () => ({
+  toast: vi.fn(),
 }));
 
 function seed() {
@@ -91,6 +107,19 @@ function seed() {
 
 beforeEach(() => {
   seed();
+  useWorktrees.setState({
+    projectId: null,
+    worktrees: [],
+    pinnedPaths: [],
+    activePath: null,
+    loading: false,
+    error: null,
+  });
+  vi.mocked(resolveCliBinary).mockRejectedValue(new Error("missing"));
+  vi.mocked(spawnTerminal).mockReset();
+  vi.mocked(createWorktree).mockReset();
+  vi.mocked(listWorktrees).mockReset();
+  vi.mocked(listPins).mockResolvedValue([]);
 });
 
 describe("AgentsView", () => {
@@ -204,6 +233,8 @@ describe("AgentsView", () => {
     expect(note.value).toContain("Status: running");
     // Target profile name is empty: Start stays disabled.
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    // Preview shows the launch command plus the fixed note path.
+    expect(screen.getByText(/note: \.branchwork\/handover\.md/)).toBeInTheDocument();
   });
 
   it("prefills a handover branch for a new worktree", async () => {
@@ -217,6 +248,79 @@ describe("AgentsView", () => {
     fireEvent.change(branch, { target: { value: "" } });
     // Empty branch invalidates the target even with a valid profile slug.
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+
+  it("keeps every session mounted but shows only the active worktree's", () => {
+    useWorktrees.setState({
+      projectId: "p1",
+      activePath: "/wt/a",
+      worktrees: [{ path: "/wt/a" } as Worktree, { path: "/wt/b" } as Worktree],
+    });
+    render(<AgentsView />);
+    // Both terminals stay mounted so switching projects never replays output
+    // or storms the PTY with resizes; only visibility changes.
+    expect(screen.getByTestId("agent-pty-1")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Codex session in a").closest(".agent-pane"),
+    ).not.toHaveClass("agent-off");
+    expect(
+      screen.getByLabelText("Claude Code session in b").closest(".agent-pane"),
+    ).toHaveClass("agent-off");
+    expect(screen.queryByText("＋ New agent")).not.toBeInTheDocument();
+
+    act(() => {
+      useWorktrees.setState({ activePath: "/wt/b" });
+    });
+    expect(
+      screen.getByLabelText("Codex session in a").closest(".agent-pane"),
+    ).toHaveClass("agent-off");
+    expect(
+      screen.getByLabelText("Claude Code session in b").closest(".agent-pane"),
+    ).not.toHaveClass("agent-off");
+  });
+
+  it("shows the empty state when the active worktree has no session yet", () => {
+    useWorktrees.setState({
+      projectId: "p1",
+      activePath: "/wt/new",
+      worktrees: [{ path: "/wt/a" } as Worktree, { path: "/wt/new" } as Worktree],
+    });
+    render(<AgentsView />);
+    // Other worktrees keep their mounted panes hidden; this one is empty.
+    expect(screen.getByText("＋ New agent")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Codex session in a").closest(".agent-pane"),
+    ).toHaveClass("agent-off");
+  });
+
+  it("switches to the created worktree after a new-worktree handover", async () => {
+    const project = { id: "p1", localPath: "/repo" } as Project;
+    useRepos.setState({ projects: [project], activeProjectId: "p1" });
+    useWorktrees.setState({
+      projectId: "p1",
+      activePath: "/wt/a",
+      worktrees: [{ path: "/wt/a" } as Worktree, { path: "/wt/b" } as Worktree],
+    });
+    vi.mocked(readStatus).mockResolvedValue({ staged: [], unstaged: [] });
+    vi.mocked(resolveCliBinary).mockResolvedValue("/usr/local/bin/cli");
+    vi.mocked(listWorktrees).mockResolvedValue([
+      { path: "/wt/a" } as Worktree,
+      { path: "/wt/new" } as Worktree,
+    ]);
+    vi.mocked(createWorktree).mockResolvedValue({ path: "/wt/new" } as Worktree);
+    vi.mocked(spawnTerminal).mockResolvedValue({ sessionId: "pty-9" });
+    render(<AgentsView />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("New worktree"));
+    fireEvent.change(screen.getByLabelText("Profile name"), { target: { value: "Target" } });
+    const start = screen.getByRole("button", { name: "Start" });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    await waitFor(() => expect(useWorktrees.getState().activePath).toBe("/wt/new"));
+    expect(
+      useSessions.getState().sessions.some((s) => s.worktreePath === "/wt/new"),
+    ).toBe(true);
   });
 
   it("shows the empty state and opens the New Agent dialog", async () => {

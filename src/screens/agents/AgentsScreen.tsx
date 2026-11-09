@@ -4,6 +4,7 @@ import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/regi
 import { useProfiles } from "../../agents/profiles";
 import { useSessions, type AgentSession, type AgentStatus } from "../../agents/sessions";
 import { useStage } from "../../state/stage";
+import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { toast } from "../../ui/toast";
@@ -213,14 +214,14 @@ function StatusChip({ status }: { status: PaneStatus }) {
   return <span className="chip">{t("agents.statusIdle")}</span>;
 }
 
-function AgentPane({ session }: { session: AgentSession }) {
+function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
   const store = useSessions.getState();
   const isExited = useSessions((s) => s.isExited);
   const status = paneStatus(session, isExited);
   const def = CLI_REGISTRY[session.cliId];
   return (
     <div
-      className={`agent-pane st-${status}`}
+      className={`agent-pane st-${status}` + (off ? " agent-off" : "")}
       data-slot={session.slot}
       aria-label={t("agents.paneLabel", { cli: def.name, name: tail(session.worktreePath) })}
     >
@@ -534,7 +535,8 @@ function HandoverDialog() {
       }
       let targetWt = source.worktreePath;
       if (where === "new") {
-        const projectId = useWorktrees.getState().projectId;
+        const wtState = useWorktrees.getState();
+        const projectId = wtState.projectId;
         if (!projectId) {
           toast({ title: t("agents.handoverNoProject"), icon: "⚠" });
           return;
@@ -545,6 +547,12 @@ function HandoverDialog() {
         try {
           const created = await createWorktree(projectId, `${parent}/${dirName}`, cleanBranch);
           targetWt = created.path;
+          // Like Graph's worktree creation: refresh the list and follow the
+          // new worktree so the handover target session stays visible.
+          const project =
+            useRepos.getState().projects.find((p) => p.id === projectId) ?? null;
+          if (project) await wtState.load(project);
+          wtState.select(targetWt);
         } catch (error) {
           fail(error);
           return;
@@ -689,7 +697,7 @@ function HandoverDialog() {
           <input type="checkbox" checked={stopSource} onChange={(e) => setStopSource(e.target.checked)} />
           {t("agents.handoverStopSource")}
         </label>
-        <div className="dlg-meta">{previewCommand(targetCli, slug)}</div>
+        <div className="dlg-meta">{previewCommand(targetCli, slug)} # {t("agents.handoverNoteFile")}</div>
         <div className="dlg-actions">
           <button type="button" className="btn" onClick={() => setSourceId(null)}>{t("agents.dialogCancel")}</button>
           <button type="button" className="btn p" disabled={!canStart} onClick={start}>{t("agents.handoverStart")}</button>
@@ -703,9 +711,15 @@ export function AgentsView() {
   const sessions = useSessions((s) => s.sessions);
   const layoutMode = useSessions((s) => s.layoutMode);
   const loaded = useSessions((s) => s.loaded);
+  // The Agents page follows the active worktree like Files/Changes/Graph do;
+  // with no project open every session stays visible. Off-worktree panes stay
+  // mounted but hidden, so switching projects never replays terminal output
+  // or storms the PTY with resizes that garble full-screen CLI apps.
+  const activePath = useWorktrees((s) => s.activePath);
   const ordered = [...sessions].sort((a, b) => slotOrder(a.slot) - slotOrder(b.slot));
+  const visible = ordered.filter((s) => activePath == null || s.worktreePath === activePath);
   // A lone default session fills the whole view; the grid kicks in on split.
-  const solo = ordered.length === 1 && ordered[0].slot === "auto";
+  const solo = visible.length === 1 && visible[0].slot === "auto";
 
   if (!loaded) return null;
   return (
@@ -716,20 +730,23 @@ export function AgentsView() {
     >
       <NewAgentDialog />
       <HandoverDialog />
-      {ordered.length === 0 ? (
+      {visible.length === 0 && (
         <div className="agent-empty" role="status">
           <span>{t("agents.empty")}</span>
           <button type="button" className="btn" onClick={() => useSessions.getState().setNewAgentOpen(true)}>
             ＋ {t("agents.newAgent")}
           </button>
         </div>
-      ) : (
-        <div className="agent-grid">
-          {ordered.map((session) => (
-            <AgentPane key={session.id} session={session} />
-          ))}
-        </div>
       )}
+      <div className="agent-grid">
+        {ordered.map((session) => (
+          <AgentPane
+            key={session.id}
+            session={session}
+            off={activePath != null && session.worktreePath !== activePath}
+          />
+        ))}
+      </div>
     </div>
   );
 }

@@ -110,14 +110,23 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
       for (const unlisten of unlisteners.splice(0)) unlisten();
     };
 
+    // Last dimensions sent to the PTY. Skipping duplicates keeps hide/show
+    // cycles and subpixel layout settling from SIGWINCH-storming full-screen
+    // CLI apps; a failed send clears it so the next pass retries.
+    let lastSent: { cols: number; rows: number } | null = null;
     const syncSize = () => {
       if (disposed || !attached || exitedRef.current) return;
       try {
         fitAddon.fit();
         const { cols, rows } = terminal;
         if (!validDimension(cols) || !validDimension(rows)) return;
+        if (lastSent && lastSent.cols === cols && lastSent.rows === rows) return;
+        lastSent = { cols, rows };
         hooksRef.current.onResize?.(cols, rows);
-        void resizeTerminal(sessionId, cols, rows).catch(showError);
+        void resizeTerminal(sessionId, cols, rows).catch((reason) => {
+          lastSent = null;
+          showError(reason);
+        });
       } catch (reason) {
         showError(reason);
       }

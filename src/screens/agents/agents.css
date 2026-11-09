@@ -67,6 +67,10 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.agent-pane.agent-off {
+  display: none;
+}
+
 .agent-pane {
   display: flex;
   flex-direction: column;

@@ -900,7 +900,7 @@
         "m3-stage-3-review"
       ],
       "status": "in-progress",
-      "evidence": "HandoverDialog + handover.rs (4/4 Rust tests) + handover IPC + output tail buffer + closeSession confirm opt implemented; init.sh 52 files/440 tests green, Rust 157, e2e 76/76; spec/code/security reviews + manual M3-S4 pending. WIP committed on m3-stage-4 per user order, no push."
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-11-spec.md; 1 minor preview-note-path finding fixed inline). init.sh 52 files/440 tests green, Rust 157, e2e 76/76; preview fix verified by focused 59/59 + typecheck. WIP committed f48b369 on m3-stage-4 per user order, no push; code + security addenda APPROVE (no findings; 2 deferred minors noted). Follow-up fix (user report): AgentsView now filters sessions by active worktree + handover-to-new-worktree does load+select (graph pattern); 2 new tests, gate 52 files/442 tests + e2e 76/76. Manual M3-S4 pending."
     },
     {
       "id": "m3-task-12-race",

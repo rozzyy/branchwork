@@ -125,6 +125,7 @@ export const en = {
   "agents.handoverStopSource": "Stop the source session",
   "agents.handoverStart": "Start",
   "agents.handoverLine": "⤴ Handover from {from} — see .branchwork/handover.md",
+  "agents.handoverNoteFile": "note: .branchwork/handover.md",
   "agents.handoverNoProject": "Open a project to create a handover worktree",
   "agents.handoverNoTarget": "Pick a target CLI",
   "agents.statusDone": "done",
