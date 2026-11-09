@@ -713,3 +713,8 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Manual:** user ran M3-S5-01..03 — OK.
 - **Tasks 13/14/15 + m3-stage-5-review → done.** All 87 features done → M3 complete.
 - **Next:** M3 release (0.3.0 bump + tag) only on user order; no push.
+
+## 2026-11-09: M3 released as v0.3.0 (user ordered push + tag)
+
+- **Release:** version bump 0.2.0 → 0.3.0 (`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`; `Cargo.lock` follows), commit `chore(release): v0.3.0`, tag `v0.3.0` ("M3: Terminal & Agents").
+- Pushed `main` + tag to origin per explicit user order.
