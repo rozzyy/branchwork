@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { create } from "zustand";
 import { t } from "../i18n/t";
 
@@ -7,7 +7,7 @@ export interface AskOptions {
   body?: string;
   ok?: string;
   danger?: boolean;
-  icon?: string;
+  icon?: ReactNode;
   input?: string; // when set, the dialog shows a text field prefilled with this value
   placeholder?: string;
   meta?: string; // monospace detail block, e.g. list of files

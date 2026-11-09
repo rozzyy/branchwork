@@ -56,6 +56,8 @@
 .dlg-wide { width: min(560px, 94vw); }
 @keyframes dlg-in { from { opacity: 0; transform: scale(.94) translateY(12px); } }
 .dlg-ic { width: 42px; height: 42px; display: grid; place-items: center; margin-bottom: 14px; border-radius: 13px; background: var(--accs); color: var(--acc); font-size: 19px; box-shadow: var(--spec); }
+/* Provider marks (agent CLIs): inline SVG, currentColor, theme-safe. */
+.cli-mark { flex: none; vertical-align: -2px; }
 .dlg-ic.danger { background: color-mix(in oklch, var(--red) 18%, transparent); color: var(--red); }
 .dlg h3 { margin: 0 0 6px; font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
 .dlg p { margin: 0; color: var(--fg2); line-height: 1.55; }

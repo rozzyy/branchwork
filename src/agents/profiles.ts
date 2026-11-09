@@ -3,8 +3,10 @@
 // or logs credentials: the user types them into the vendor CLI itself (added
 // via the Add flow below), which owns the system Keychain. Logout deletes the
 // registry's declared credential files and nothing else.
+import { createElement } from "react";
 import { create } from "zustand";
 import { CLI_REGISTRY, resolveCli, slugify, type CliId } from "./registry";
+import { CliIcon } from "./cliIcons";
 import { ensureProfileDir, logoutProfile } from "../ipc/cli";
 import { writeTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
@@ -137,7 +139,7 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
           body: t("agents.addBody", { name: def.name }),
           input: "",
           ok: t("agents.addOk"),
-          icon: def.icon,
+          icon: createElement(CliIcon, { id: def.id }),
         }));
       if (typeof label !== "string") return null;
       const profile = await get().createProfile(cliId, label);
@@ -168,7 +170,7 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
           }
         }
       } else {
-        toast({ title: t("agents.loginReady", { name: def.name }), icon: def.icon });
+        toast({ title: t("agents.loginReady", { name: def.name }), icon: createElement(CliIcon, { id: def.id }) });
       }
       return profile;
     },
@@ -185,7 +187,7 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
         body: t("agents.logoutBody"),
         ok: t("agents.logoutOk"),
         danger: true,
-        icon: def.icon,
+        icon: createElement(CliIcon, { id: def.id }),
       });
       if (confirmed !== true) return null;
       try {
@@ -195,7 +197,7 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
             removed.length > 0
               ? t("agents.loggedOut", { name: def.name, profile: profile.name })
               : t("agents.noCredentials", { name: def.name, profile: profile.name }),
-          icon: def.icon,
+          icon: createElement(CliIcon, { id: def.id }),
         });
         return removed;
       } catch (error) {

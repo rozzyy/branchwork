@@ -6,6 +6,7 @@ import { useSessions, type AgentSession, type AgentStatus, type RaceEntry } from
 import { useStage } from "../../state/stage";
 import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
+import { CliIcon } from "../../agents/cliIcons";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { ask } from "../../ui/dialog";
 import { toast } from "../../ui/toast";
@@ -222,8 +223,14 @@ function StatusChip({ status }: { status: PaneStatus }) {
 function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
   const store = useSessions.getState();
   const isExited = useSessions((s) => s.isExited);
+  const handoverFor = useSessions((s) => s.handoverFor);
   const status = paneStatus(session, isExited);
   const def = CLI_REGISTRY[session.cliId];
+  const switchAgent = (next: string) => {
+    if (next === session.cliId) return;
+    store.setHandoverTarget(next as CliId);
+    store.setHandoverFor(session.id);
+  };
   return (
     <div
       className={`agent-pane st-${status}` + (off ? " agent-off" : "")}
@@ -235,9 +242,26 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
         <span className="mono agent-wt" title={session.worktreePath}>
           {tail(session.worktreePath)}
         </span>
-        <span className="agent-cli" title={def.name}>
-          {def.icon} {def.name}
-        </span>
+        {session.cliId === "custom" ? (
+          <span className="agent-cli" title={def.name}>
+            <CliIcon id={session.cliId} /> {def.name}
+          </span>
+        ) : (
+          <select
+            className="agent-cli-switch"
+            aria-label={t("agents.switchAgent")}
+            title={t("agents.switchAgent")}
+            value={session.cliId}
+            disabled={handoverFor === session.id}
+            onChange={(e) => switchAgent(e.target.value)}
+          >
+            {RACEABLE_IDS.map((id) => (
+              <option key={id} value={id}>
+                {CLI_REGISTRY[id].name}
+              </option>
+            ))}
+          </select>
+        )}
         <ProfileChip session={session} />
         <StatusChip status={status} />
         <span className="sp" />
@@ -385,7 +409,7 @@ function NewAgentDialog() {
                   onChange={() => { setCliId(id); setProfileSlug(NEW_PROFILE); }}
                 />
                 <span className="agent-apick-icon" aria-hidden>
-                  {entry.icon}
+                  <CliIcon id={id} size={16} />
                 </span>
                 <span className="agent-apick-name">{entry.name}</span>
                 <small>{id}</small>
@@ -462,6 +486,11 @@ function defaultHandoverBranch(worktreeBranch: string | null, cliId: CliId): str
 function HandoverDialog() {
   const sourceId = useSessions((s) => s.handoverFor);
   const setSourceId = useSessions((s) => s.setHandoverFor);
+  const clearPreset = useSessions((s) => s.setHandoverTarget);
+  const close = () => {
+    setSourceId(null);
+    clearPreset(null);
+  };
   const sessions = useSessions((s) => s.sessions);
   const profiles = useProfiles((s) => s.profiles);
   const worktrees = useWorktrees((s) => s.worktrees);
@@ -483,8 +512,9 @@ function HandoverDialog() {
 
   useEffect(() => {
     if (!source) return;
+    const preset = useSessions.getState().handoverTarget;
     const first = CLI_IDS.find((id) => id !== source.cliId) ?? source.cliId;
-    setTargetCli(first);
+    setTargetCli(preset && preset !== source.cliId ? preset : first);
     setProfileSlug(NEW_PROFILE);
     setProfileName("");
     setWhere("same");
@@ -606,12 +636,12 @@ function HandoverDialog() {
           () => undefined,
         );
       }
-      setSourceId(null);
+      close();
     })();
   };
 
   return (
-    <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setSourceId(null); }}>
+    <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="dlg dlg-wide" role="dialog" aria-modal="true" aria-labelledby="handover-dialog-title">
         <div className="dlg-ic">↗</div>
         <h3 id="handover-dialog-title">{t("agents.handoverTitle")}</h3>
@@ -639,7 +669,7 @@ function HandoverDialog() {
                   onChange={() => { setTargetCli(id); setProfileSlug(NEW_PROFILE); }}
                 />
                 <span className="agent-apick-icon" aria-hidden>
-                  {entry.icon}
+                  <CliIcon id={id} size={16} />
                 </span>
                 <span className="agent-apick-name">{entry.name}</span>
                 <small>{id}</small>
@@ -711,7 +741,7 @@ function HandoverDialog() {
         </label>
         <div className="dlg-meta">{previewCommand(targetCli, slug)} # {t("agents.handoverNoteFile")}</div>
         <div className="dlg-actions">
-          <button type="button" className="btn" onClick={() => setSourceId(null)}>{t("agents.dialogCancel")}</button>
+          <button type="button" className="btn" onClick={() => close()}>{t("agents.dialogCancel")}</button>
           <button type="button" className="btn p" disabled={!canStart} onClick={start}>{t("agents.handoverStart")}</button>
         </div>
       </div>
@@ -900,7 +930,7 @@ function RaceDialog() {
                   onChange={() => toggle(id)}
                 />
                 <span className="agent-apick-icon" aria-hidden>
-                  {entry.icon}
+                  <CliIcon id={id} size={16} />
                 </span>
                 <span className="agent-apick-name">{entry.name}</span>
                 <small>{id}</small>
@@ -929,7 +959,7 @@ function RaceDialog() {
               return (
                 <li key={entry.id}>
                   <span className="agent-apick-icon" aria-hidden>
-                    {def.icon}
+                    <CliIcon id={entry.cliId} size={16} />
                   </span>
                   {def.name} · {tail(entry.worktreePath)} · {session?.status ?? t("agents.statusDone")} ·{" "}
                   {count === undefined

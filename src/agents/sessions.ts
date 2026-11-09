@@ -2,8 +2,10 @@
 // One record per agent session: a shell PTY spawned with the profile env,
 // then the registry's launch argv written into it. Status detection,
 // notifications, profile switching, and usage are later Stage 3 tasks.
+import { createElement } from "react";
 import { create } from "zustand";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "./registry";
+import { CliIcon } from "./cliIcons";
 import { ensureProfileDir, resolveCliBinary } from "../ipc/cli";
 import {
   ensureAgentHooks,
@@ -152,12 +154,15 @@ interface SessionsStore {
   newAgentOpen: boolean;
   /** Source session id for the Handover dialog, or null when closed. */
   handoverFor: string | null;
+  /** CLI preset for the Handover dialog target (pane switcher); cleared on close. */
+  handoverTarget: CliId | null;
   /** Race dialog visibility and its launched entries. */
   raceOpen: boolean;
   raceEntries: RaceEntry[];
   loaded: boolean;
   setNewAgentOpen(open: boolean): void;
   setHandoverFor(id: string | null): void;
+  setHandoverTarget(cli: CliId | null): void;
   setRaceOpen(open: boolean): void;
   addRaceEntry(entry: RaceEntry): void;
   removeRaceEntry(id: string): void;
@@ -322,6 +327,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
     layoutMode: "grid",
     newAgentOpen: false,
     handoverFor: null,
+    handoverTarget: null,
     raceOpen: false,
     raceEntries: [],
     loaded: false,
@@ -346,6 +352,10 @@ export const useSessions = create<SessionsStore>((set, get) => {
 
     setHandoverFor(id) {
       if (get().handoverFor !== id) set({ handoverFor: id });
+    },
+
+    setHandoverTarget(cli) {
+      if (get().handoverTarget !== cli) set({ handoverTarget: cli });
     },
 
     isExited(sessionId) {
@@ -408,7 +418,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
         }
       }
       if (def.binary && !binary) {
-        toast({ title: t("agents.installTitle", { name: def.name }), icon: def.icon });
+        toast({ title: t("agents.installTitle", { name: def.name }), icon: createElement(CliIcon, { id: def.id }) });
         return null;
       }
       let launch: string[];
@@ -479,7 +489,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
           body: t("agents.closeBody"),
           ok: t("agents.closeOk"),
           danger: true,
-          icon: def.icon,
+          icon: createElement(CliIcon, { id: def.id }),
         });
         if (confirmed !== true) return;
       }
@@ -502,7 +512,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
       const def = CLI_REGISTRY[removed.cliId];
       toast({
         title: t("agents.closed", { name: def.name }),
-        icon: def.icon,
+        icon: createElement(CliIcon, { id: def.id }),
         action: {
           label: t("toast.undo"),
           undo: true,
@@ -579,7 +589,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
           title: t("agents.switchTitle", { name: def.name }),
           body: t("agents.switchBody", { from: currentName, to: target.name }),
           ok: t("agents.switchOk"),
-          icon: def.icon,
+          icon: createElement(CliIcon, { id: def.id }),
         });
         if (confirmed !== true) return null;
       }

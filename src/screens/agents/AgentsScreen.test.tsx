@@ -105,6 +105,7 @@ function seed() {
     layoutMode: "grid",
     newAgentOpen: false,
     handoverFor: null,
+    handoverTarget: null,
     loaded: true,
   });
 }
@@ -134,7 +135,10 @@ describe("AgentsView", () => {
   it("renders the session grid with headers and panes", () => {
     render(<AgentsView />);
     expect(screen.getByLabelText("Codex session in a")).toBeInTheDocument();
-    expect(screen.getByTitle("Codex")).toBeInTheDocument();
+    const switchers = screen.getAllByRole("combobox", { name: "Switch agent" });
+    expect(switchers).toHaveLength(2);
+    expect(switchers[0]).toHaveValue("codex");
+    expect(switchers[1]).toHaveValue("claude");
     expect(screen.getByTitle("Profile Work")).toBeInTheDocument();
     expect(screen.getByTitle("/wt/a")).toBeInTheDocument();
     expect(screen.getByTestId("agent-pty-1")).toBeInTheDocument();
@@ -220,6 +224,36 @@ describe("AgentsView", () => {
     // A lone /account line is consumed for the profile switch.
     expect(pane?.interceptInput?.("/account")).toBe(false);
     expect(pane?.interceptInput?.("\r")).toBe(true);
+  });
+
+  it("opens the handover dialog with the switcher CLI preset", async () => {
+    render(<AgentsView />);
+    fireEvent.change(screen.getAllByRole("combobox", { name: "Switch agent" })[0], {
+      target: { value: "opencode" },
+    });
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    // The preset target is checked instead of the first-non-source default.
+    expect(screen.getByRole("radio", { name: /opencode/i })).toBeChecked();
+    expect(useSessions.getState().handoverTarget).toBe("opencode");
+    // No session starts or stops from selecting alone.
+    expect(useSessions.getState().sessions).toHaveLength(2);
+  });
+
+  it("ignores re-selecting the session's own CLI in the switcher", () => {
+    render(<AgentsView />);
+    fireEvent.change(screen.getAllByRole("combobox", { name: "Switch agent" })[0], {
+      target: { value: "codex" },
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("disables the switcher while its handover dialog is open", async () => {
+    render(<AgentsView />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getAllByRole("combobox", { name: "Switch agent" })[0]).toBeDisabled();
+    // The other session's switcher stays usable.
+    expect(screen.getAllByRole("combobox", { name: "Switch agent" })[1]).toBeEnabled();
   });
 
   it("opens the handover dialog prefilled from the session", async () => {

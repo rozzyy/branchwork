@@ -672,3 +672,44 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Manual:** user ran M3-S3-01..07 + M3-S4-01..04 — OK.
 - **Tasks 11/12 + stage-4-review → done.** Stage branch merged to main (ff-only, branch deleted, no push).
 - **Next:** M3 Stage 5 (13 CLI switcher → 14 settings accounts → 15 provider icons → review).
+
+## 2026-11-09: M3-13 CLI switcher implemented (Stage 5)
+
+- **Switcher:** agent pane chip → `select.agent-cli-switch` (all agent CLIs, current selected); choosing another CLI opens Handover with the target preset, nothing runs before Start. Re-select = no-op; disabled while its dialog is open. Preset cleared on every dialog close path.
+- **Gate (focused):** 21/21 agents tests + typecheck clean. Spec review PASS. No commit/push (not ordered).
+- **Next:** M3-14 Settings accounts, then M3-15 icons, then Stage 5 review.
+
+## 2026-11-09: M3-14 Settings accounts implemented
+
+- **Accounts card:** per-CLI add (login-terminal flow), rows with name + profile-dir path + Default badge, set/clear default (resolveProfile follows), confirmed logout deleting only declared credential files. Auto-switch untouched.
+- **Gate (focused):** 4/4 settings tests + typecheck clean. Spec review PASS. No commit/push (not ordered).
+- **Next:** M3-15 provider icons, then Stage 5 review.
+
+## 2026-11-09: M3-15 provider icons implemented
+
+- **Marks:** `CliIcon` inline SVGs (7 abstract stroke glyphs, currentColor, theme-safe); registry unicode glyphs deleted; rewired chip, switcher (name-only in native options), 3 card grids, race entries, Settings rows, 8 toast/ask sites (toast/ask icon widened to ReactNode).
+- **Gate:** init.sh exit 0 + Verification Complete (53 files/458 tests; Rust suite green; typecheck + Clippy clean). Spec review PASS. No commit/push (not ordered).
+- **Next:** Stage 5 review (code + security + e2e), then user manual checkpoint.
+
+## 2026-11-09: M3-15 switched to real provider icons (user order)
+
+- **Real artwork:** Simple Icons paths (Claude, OpenAI, OpenCode, Gemini, Copilot, Meta; CC0, trademarks belong to owners) embedded inline, monochrome currentColor; custom CLI keeps an abstract terminal glyph. Unicode glyphs gone everywhere.
+- **Gate:** init.sh exit 0 + Verification Complete (53 files/458 tests); e2e 76/76. Spec review PASS (review file updated to real-artwork verdict). No commit/push (not ordered).
+
+## 2026-11-09: Stage 5 reviews done (code+security+e2e) + manual spec
+
+- **Reviews:** `.agent/reviews/m3-stage-5-code.md` APPROVE, `m3-stage-5-security.md` APPROVE (no findings), `m3-stage-5-e2e.md` automated 76/76 PASS. No new review-driven code changes.
+- **Manual spec:** M3-S5-01..03 + result table in `docs/testing/m0-manual-e2e.md`.
+- **Gate:** init.sh exit 0 + Verification Complete (53 files/458 tests; Rust 161; typecheck + Clippy clean); e2e 76/76. No commit/push (not ordered).
+- **Awaiting user:** manual M3-S5-01..03, then stage commit order.
+
+## 2026-11-09: M3-13/14/15 marked done; Stage 5 merge ON HOLD
+
+- Tasks 13/14/15 → done (implemented, spec PASS each, gate green at completion).
+- `m3-stage-5-review` stays in-progress: automated part PASS, manual M3-S5-01..03 has no user result yet. Merge to main (and any stage commit) waits for the manual checkpoint approval per the no-commit-without-checkpoint rule.
+
+## 2026-11-09: Stage 5 checkpoint approved + merged (user ran manual OK)
+
+- **Manual:** user ran M3-S5-01..03 — OK.
+- **Tasks 13/14/15 + m3-stage-5-review → done.** All 87 features done → M3 complete.
+- **Next:** M3 release (0.3.0 bump + tag) only on user order; no push.

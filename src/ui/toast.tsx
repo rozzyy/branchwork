@@ -1,7 +1,8 @@
+import type { ReactNode } from "react";
 import { create } from "zustand";
 
 export interface ToastAction { label: string; run(): void; enabled?: boolean; undo?: boolean; }
-export interface Toast { id: number; title: string; detail?: string; icon?: string; action?: ToastAction; }
+export interface Toast { id: number; title: string; detail?: string; icon?: ReactNode; action?: ToastAction; }
 
 interface ToastStore {
   toasts: Toast[];

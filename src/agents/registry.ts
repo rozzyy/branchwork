@@ -10,7 +10,6 @@ export type CliId = "claude" | "codex" | "opencode" | "gemini" | "copilot" | "mu
 export interface CliDef {
   id: CliId;
   name: string;
-  icon: string;
   /** Binary name resolved through the login shell's PATH. Empty for Custom. */
   binary: string;
   /** Interactive argv, without any profile environment applied. */
@@ -95,7 +94,6 @@ const GENERIC_LIMIT_PATTERNS = [
 const CLAUDE: CliDef = {
   id: "claude",
   name: "Claude Code",
-  icon: "✦",
   binary: "claude",
   launch: ["claude"],
   resume: ["claude", "--continue"],
@@ -113,7 +111,6 @@ const CLAUDE: CliDef = {
 const CODEX: CliDef = {
   id: "codex",
   name: "Codex",
-  icon: "❖",
   binary: "codex",
   launch: ["codex"],
   resume: ["codex", "resume", "--last"],
@@ -130,7 +127,6 @@ const CODEX: CliDef = {
 const OPENCODE: CliDef = {
   id: "opencode",
   name: "OpenCode",
-  icon: "◍",
   binary: "opencode",
   launch: ["opencode"],
   resume: ["opencode", "--continue"],
@@ -147,7 +143,6 @@ const OPENCODE: CliDef = {
 const GEMINI: CliDef = {
   id: "gemini",
   name: "Gemini CLI",
-  icon: "✧",
   binary: "gemini",
   launch: ["gemini"],
   resume: ["gemini"],
@@ -164,7 +159,6 @@ const GEMINI: CliDef = {
 const COPILOT: CliDef = {
   id: "copilot",
   name: "GitHub Copilot",
-  icon: "◒",
   binary: "copilot",
   launch: ["copilot"],
   resume: ["copilot", "--continue"],
@@ -182,7 +176,6 @@ const COPILOT: CliDef = {
 const MUSE: CliDef = {
   id: "muse",
   name: "Muse",
-  icon: "∞",
   binary: "muse",
   launch: ["muse"],
   resume: ["muse", "resume", "--last"],
@@ -202,7 +195,6 @@ const MUSE: CliDef = {
 const CUSTOM: CliDef = {
   id: "custom",
   name: "Custom",
-  icon: "⌁",
   binary: "",
   launch: [],
   resume: [],

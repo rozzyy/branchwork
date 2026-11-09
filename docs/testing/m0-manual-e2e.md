@@ -650,3 +650,31 @@ Expected: hidden sessions keep running; switching never respawns or replays a te
 | M3-S4-02 | | |
 | M3-S4-03 | | |
 | M3-S4-04 | | |
+
+## M3 Stage 5: Switcher, accounts, provider icons
+
+### M3-S5-01 · Pane-header CLI switcher
+
+1. In an agent pane header, open the agent dropdown; confirm it lists all agent CLIs with the session's CLI selected.
+2. Pick another CLI; confirm the Handover dialog opens with that CLI preset as target, Same worktree selected, and the Start preview correct.
+3. Cancel; confirm no session started or stopped, and the preset is cleared (reopening via ↗ defaults to first non-source again).
+4. With the handover dialog open for a pane, confirm that pane's dropdown is disabled while other panes' dropdowns still work.
+
+### M3-S5-02 · Settings agent accounts
+
+1. Open Settings → Agent accounts; confirm every CLI lists its profiles with paths, and Add account buttons are present.
+2. Set one profile as default (badge appears); start a New Agent / Race with that CLI and confirm the default profile is used.
+3. Clear the default; confirm resolution falls back to the first profile.
+4. Log out of a profile; confirm the confirmation appears, only the declared credential files are removed, and the profile record stays for re-login.
+
+### M3-S5-03 · Provider icons in both themes
+
+1. In light and dark mode, confirm agent panes, CLI cards (New/Handover/Race), the contestants list, Settings rows, and toasts show the real provider marks (Claude, Codex, OpenCode, Gemini, Copilot, Meta, terminal for Custom) — monochrome, legible, no missing/tofu glyphs.
+
+### M3 Stage 5 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M3-S5-01 | | |
+| M3-S5-02 | | |
+| M3-S5-03 | | |

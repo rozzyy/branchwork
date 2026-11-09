@@ -932,8 +932,8 @@
       "dependencies": [
         "m3-stage-4-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-13-spec.md). Header select presets handover target; 21/21 agents tests + typecheck clean. Uncommitted; code/security review at stage end. Task complete (spec PASS + gate green)."
     },
     {
       "id": "m3-task-14-settings-accounts",
@@ -943,8 +943,8 @@
       "dependencies": [
         "m3-task-13-pane-cli-switcher"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-14-spec.md). Agent accounts card (add/list/default/logout); 4/4 settings tests + typecheck clean. Uncommitted; group-default UI deferred; icons (task 15) + stage review remain. Task complete (spec PASS + gate green)."
     },
     {
       "id": "m3-stage-5-review",
@@ -954,8 +954,8 @@
       "dependencies": [
         "m3-task-15-provider-icons"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Code APPROVE + security APPROVE (no findings) + e2e automated 76/76 PASS (.agent/reviews/m3-stage-5-{code,security,e2e}.md); manual M3-S5-01..03 written, awaiting user. Gate 53 files/458 tests, Rust 161, typecheck+Clippy clean. No commit/push. User ran manual M3-S5-01..03 OK 2026-11-09; stage merged to main, no push."
     },
     {
       "id": "m3-task-15-provider-icons",
@@ -965,8 +965,8 @@
       "dependencies": [
         "m3-task-14-settings-accounts"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-15-spec.md). Inline SVG marks, unicode glyphs removed, toast/ask icon widened; agents 47 + UI 31 tests green. Uncommitted; stage review remains. Task complete (spec PASS + gate green)."
     }
   ]
 }

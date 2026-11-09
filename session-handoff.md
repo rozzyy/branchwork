@@ -1,16 +1,15 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-09
-- **Current Objective:** M3 Stage 4 — M3-11 handover implemented, WIP-committed on `m3-stage-4`; reviews + M3-12 Race remain
+- **Current Objective:** M3 complete — all 87 features done (Stages 1–5 merged); release 0.3.0 + tag await user order
 
-- **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–3 committed and fast-forwarded into `main`. No push.
-- **Branch:** `m3-stage-4` (branched from `main` at `c110d42`; WIP commit per user order 2026-11-09, no push, not merged).
-- **Branch:** `main` (Stage 4 merged; `m3-stage-4` deleted). No push.
-- **Active task:** `m3-task-13-pane-cli-switcher` — next (Stage 5).
+- **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–5 committed and fast-forwarded into `main`. No push.
+- **Branch:** `main` (Stage 5 merged; `m3-stage-5` deleted). No push.
+- **Active task:** none — M3 complete.
 
 ## Recommended Next Step
 
-Work M3-13 per its task file on a new `m3-stage-5` branch from `main`. No commit/push until the user approves the Stage 5 checkpoint and orders it.
+On user order: `chore(release): v0.3.0` bump (`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`) + `git tag -a v0.3.0`. Push (+ tags) only if the user says so.
 
 ## M2 structure
 
