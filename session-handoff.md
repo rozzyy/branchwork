@@ -1,15 +1,15 @@
 # Session Handoff
 
-- **Last Updated:** 2026-11-08
-- **Current Objective:** M3 Stage 3 — all tasks 06–10 done and reviewed; manual checkpoint pending
+- **Last Updated:** 2026-11-09
+- **Current Objective:** M3 Stage 4 — M3-11 handover implemented, WIP-committed on `m3-stage-4`; reviews + M3-12 Race remain
 
-- **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–2 committed and fast-forwarded into `main`. No push.
-- **Branch:** `m3-stage-3` (uncommitted). No push.
-- **Active task:** `m3-stage-3-review` — manual checkpoint M3-S3-01..07 (then single stage commit on order).
+- **Milestone / stage:** M1 and M2 released through M2.5. M3 Stages 1–3 committed and fast-forwarded into `main`. No push.
+- **Branch:** `m3-stage-4` (branched from `main` at `c110d42`; WIP commit per user order 2026-11-09, no push, not merged).
+- **Active task:** `m3-task-11-handover` — in-progress (implemented; spec/code/security reviews + manual M3-S4 pending).
 
 ## Recommended Next Step
 
-🛑 STOP at the Stage 3 manual checkpoint: user runs M3-S3-01..07 (`docs/testing/m0-manual-e2e.md`). On approval + order: one stage commit on `m3-stage-3`, then `git switch main && git merge --ff-only m3-stage-3 && git branch -d m3-stage-3`. Never push.
+Run the M3-11 spec review, then Stage-4 code/security addenda and manual M3-S4 steps. After that, derive `.agent/tasks/m3-task-12-race.md` (missing) from the spec/plan and work M3-12. Single stage commit + ff into `main` only after the user approves the Stage 4 checkpoint and orders it. No push.
 
 ## M2 structure
 

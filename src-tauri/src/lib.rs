@@ -4,6 +4,7 @@ mod diff;
 mod error;
 mod fs;
 mod graph;
+mod handover;
 mod notify;
 mod oplog;
 mod cli;
@@ -816,6 +817,25 @@ fn notify_status(app: AppHandle, session_id: String, event: String) -> Result<()
     Ok(())
 }
 
+/// Write the handover note and ensure the `.branchwork/` git-exclude entry.
+/// The worktree must be catalog-registered; paths inside are fixed names.
+#[tauri::command]
+#[specta::specta]
+fn agent_write_handover(
+    store: State<'_, Store>,
+    worktree_path: String,
+    note: String,
+) -> Result<bool, AppError> {
+    handover::write_note(&store, Path::new(&worktree_path), &note)
+}
+
+/// Capped `git diff HEAD` text of a registered worktree for handover notes.
+#[tauri::command]
+#[specta::specta]
+fn agent_handover_diff(store: State<'_, Store>, worktree_path: String) -> Result<String, AppError> {
+    handover::read_diff(&store, Path::new(&worktree_path))
+}
+
 /// Merge agent hook entries into the isolated profile dir for CLIs with
 /// documented hook support (currently Claude Code only). Best-effort: a
 /// missing sidecar or an unsupported CLI reports false and the caller keeps
@@ -925,6 +945,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             cli_profile_dir,
             cli_logout_profile,
             cli_ensure_hooks,
+            agent_write_handover,
+            agent_handover_diff,
             notify_socket_path,
             notify_status
         ])

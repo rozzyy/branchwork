@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentsToolbar, AgentsView } from "./AgentsScreen";
 import { useSessions } from "../../agents/sessions";
 import { useProfiles } from "../../agents/profiles";
+import { readStatus } from "../../ipc/status";
 
 export const cliPaneProps: Array<{ sessionId: string; interceptInput?: (data: string) => boolean }> = [];
 vi.mock("../../terminal/CliPane", () => ({
@@ -28,6 +29,19 @@ vi.mock("../../ipc/pty", () => ({
 vi.mock("../../ipc/settings", () => ({
   loadSetting: vi.fn(),
   saveSetting: vi.fn(),
+}));
+
+vi.mock("../../ipc/status", () => ({
+  readStatus: vi.fn(),
+}));
+
+vi.mock("../../ipc/worktrees", () => ({
+  createWorktree: vi.fn(),
+}));
+
+vi.mock("../../ipc/handover", () => ({
+  writeHandoverNote: vi.fn(),
+  readHandoverDiff: vi.fn(),
 }));
 
 vi.mock("../../ui/dialog", () => ({
@@ -70,6 +84,7 @@ function seed() {
     ],
     layoutMode: "grid",
     newAgentOpen: false,
+    handoverFor: null,
     loaded: true,
   });
 }
@@ -168,6 +183,40 @@ describe("AgentsView", () => {
     // A lone /account line is consumed for the profile switch.
     expect(pane?.interceptInput?.("/account")).toBe(false);
     expect(pane?.interceptInput?.("\r")).toBe(true);
+  });
+
+  it("opens the handover dialog prefilled from the session", async () => {
+    vi.mocked(readStatus).mockResolvedValue({
+      staged: [
+        { path: "a.ts", oldPath: null, indexStatus: "M", worktreeStatus: " ", bytes: 10, large: false },
+      ],
+      unstaged: [],
+    });
+    render(<AgentsView />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText(/Handover from Codex/)).toBeInTheDocument();
+    // The source CLI cannot be the target.
+    expect(screen.getByRole("radio", { name: /codex/ })).toBeDisabled();
+    // Note prefills status plus the changed file list.
+    const note = screen.getByLabelText("Handover note") as HTMLTextAreaElement;
+    await waitFor(() => expect(note.value).toContain("a.ts"));
+    expect(note.value).toContain("Status: running");
+    // Target profile name is empty: Start stays disabled.
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+
+  it("prefills a handover branch for a new worktree", async () => {
+    vi.mocked(readStatus).mockResolvedValue({ staged: [], unstaged: [] });
+    render(<AgentsView />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("New worktree"));
+    const branch = screen.getByLabelText("Branch") as HTMLInputElement;
+    expect(branch.value).toMatch(/^handover\//);
+    fireEvent.change(branch, { target: { value: "" } });
+    // Empty branch invalidates the target even with a valid profile slug.
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
   });
 
   it("shows the empty state and opens the New Agent dialog", async () => {

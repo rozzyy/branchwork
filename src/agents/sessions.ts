@@ -79,6 +79,9 @@ export const IDLE_WAIT_MS = 4000;
  */
 const OVERLAP_CAP = 32;
 const overlaps = new Map<string, string>();
+/** Rolling pane output per session for handover notes (capped lines). */
+const LINE_CAP = 200;
+const lineBuffers = new Map<string, string[]>();
 
 /** Socket path for hook delivery, resolved once per app lifetime. */
 let notifySocket: string | null | undefined;
@@ -106,6 +109,7 @@ function clearSessionWatch(id: string) {
     idleTimers.delete(id);
   }
   overlaps.delete(id);
+  lineBuffers.delete(id);
 }
 
 /**
@@ -137,8 +141,11 @@ interface SessionsStore {
   sessions: AgentSession[];
   layoutMode: AgentLayoutMode;
   newAgentOpen: boolean;
+  /** Source session id for the Handover dialog, or null when closed. */
+  handoverFor: string | null;
   loaded: boolean;
   setNewAgentOpen(open: boolean): void;
+  setHandoverFor(id: string | null): void;
   /** True when the session's process already exited (never throws). */
   isExited(sessionId: string | null): boolean;
   /**
@@ -149,7 +156,7 @@ interface SessionsStore {
   /** Binary availability per CLI, resolved on demand for the New Agent flow. */
   checkBinaries(): Promise<Record<CliId, string | null>>;
   startSession(request: NewAgentRequest): Promise<string | null>;
-  closeSession(id: string): Promise<void>;
+  closeSession(id: string, opts?: { confirm?: boolean }): Promise<void>;
   /**
    * Relaunch the session under another profile of the same CLI, keeping the
    * worktree and resuming the conversation. Confirms when running unless
@@ -162,6 +169,8 @@ interface SessionsStore {
   switchToNextProfile(id: string, skipConfirm?: boolean): Promise<string | null>;
   /** Hide the usage-limit banner without switching. */
   dismissLimit(id: string): void;
+  /** Last pane output lines (oldest first), capped for handover notes. */
+  getOutputTail(id: string, count?: number): string[];
   toggleSlot(id: string, side: "left" | "right" | "full"): void;
   setLayoutMode(mode: AgentLayoutMode): void;
   moveToDock(id: string): void;
@@ -211,6 +220,12 @@ export const useSessions = create<SessionsStore>((set, get) => {
     const session = get().sessions.find((item) => item.sessionId === sessionId);
     if (!session || !session.sessionId || exitedSessions.has(session.sessionId)) return;
     if (session.status !== "running" && session.status !== "waiting") return;
+    const lines = lineBuffers.get(session.id) ?? [];
+    for (const raw of text.split("\n")) {
+      const line = raw.replace(/\r$/, "");
+      if (line.length > 0) lines.push(line);
+    }
+    lineBuffers.set(session.id, lines.slice(-LINE_CAP));
     const tail = (overlaps.get(session.id) ?? "").slice(-OVERLAP_CAP);
     const window = tail + text;
     overlaps.set(session.id, window.slice(-OVERLAP_CAP));
@@ -291,10 +306,15 @@ export const useSessions = create<SessionsStore>((set, get) => {
     sessions: [],
     layoutMode: "grid",
     newAgentOpen: false,
+    handoverFor: null,
     loaded: false,
 
     setNewAgentOpen(open) {
       if (get().newAgentOpen !== open) set({ newAgentOpen: open });
+    },
+
+    setHandoverFor(id) {
+      if (get().handoverFor !== id) set({ handoverFor: id });
     },
 
     isExited(sessionId) {
@@ -404,12 +424,17 @@ export const useSessions = create<SessionsStore>((set, get) => {
       return session.id;
     },
 
-    async closeSession(id) {
+    getOutputTail(id, count = 50) {
+      const lines = lineBuffers.get(id) ?? [];
+      return lines.slice(-Math.max(1, count));
+    },
+
+    async closeSession(id, opts) {
       const session = findSession(id);
       if (!session) return;
       const alreadyExited = !session.sessionId || exitedSessions.has(session.sessionId);
       const running = !!session.sessionId && !alreadyExited && !session.sharedWithDock;
-      if (running) {
+      if (running && opts?.confirm !== false) {
         const def = CLI_REGISTRY[session.cliId];
         const confirmed = await ask({
           title: t("agents.closeTitle", { name: def.name }),

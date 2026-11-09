@@ -610,3 +610,15 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Gate re-run before commit:** init.sh green (51 files / 434 tests), e2e 76/76.
 - **Commit:** single stage commit on m3-stage-3 (user ordered; no push), ff into main.
 - **Next:** M3 Stage 4 (handover, race) — derive task file first.
+
+## 2026-11-08: Stage 3 committed (c110d42) + merged to main
+
+- **Commit** `c110d42` (user ordered; no push): 49 files, Stage 3 (06-10). `m3-stage-3` ff into main, branch deleted.
+- **Next:** M3 Stage 4 — handover (11), race (12).
+
+## 2026-11-09: M3-11 handover implemented — WIP committed on m3-stage-4 (user ordered, no push)
+
+- **M3-11:** HandoverDialog per agent pane (From/To/Where, source CLI disabled, profile select, same/new worktree + branch default `handover/<branch>-<cli>`), editable note prefilled with changed files + optional last-50 output tail (200-line rolling buffer) + optional capped git diff, preview of launch command, Start gated on target CLI + profile + worktree; backend `handover.rs` (note + `.git/info/exclude`, traversal-safe via catalog validation, caps 200k/100k) with 4/4 Rust tests; `closeSession(id, {confirm})` for stop-source.
+- **Gate:** init.sh green (52 Vitest files / 440 tests; Rust 157 passed / 3 ignored; typecheck + Clippy clean); e2e 76/76. `cargo fmt --check` diff in `branchwork-notify.rs` is pre-existing (verified via stash), untouched.
+- **Commit:** WIP on `m3-stage-4` per user order (no push, no merge — stage commit still pending checkpoint + M3-12 + reviews).
+- **Next:** M3-11 spec review + Stage-4 code/security addenda, manual M3-S4 steps, then M3-12 Race (task file `.agent/tasks/m3-task-12-race.md` does not exist yet — derive from spec §6.6.x/plan line 41).

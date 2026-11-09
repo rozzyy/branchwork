@@ -431,3 +431,21 @@ describe("usage limits", () => {
     expect(useSessions.getState().sessions[0].limitHit).toBe(false);
   });
 });
+
+describe("handover output tail", () => {
+  it("keeps the last lines per session for notes", async () => {
+    const profile = await seedProfile();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile });
+    emitOutput("pty-1", "first\nsecond\nthird\n");
+    expect(useSessions.getState().getOutputTail(id!, 2)).toEqual(["second", "third"]);
+    expect(useSessions.getState().getOutputTail(id!)).toHaveLength(3);
+  });
+
+  it("closes a running session without asking when told to", async () => {
+    const profile = await seedProfile();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile });
+    await useSessions.getState().closeSession(id!, { confirm: false });
+    expect(ask).not.toHaveBeenCalled();
+    expect(stopTerminal).toHaveBeenCalledWith("pty-1", 3000);
+  });
+});

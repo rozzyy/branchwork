@@ -201,6 +201,28 @@ button.agent-profile:hover {
   flex: 1;
 }
 
+textarea.input {
+  resize: vertical;
+  min-height: 120px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.agent-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  color: var(--fg2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agent-check input {
+  accent-color: var(--acc);
+}
+
 /* Spec §6.6.3: yellow pane outline while waiting for input. */
 .agent-pane.st-waiting {
   box-shadow:

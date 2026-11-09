@@ -6,6 +6,11 @@ import { useSessions, type AgentSession, type AgentStatus } from "../../agents/s
 import { useStage } from "../../state/stage";
 import { useWorktrees } from "../../state/worktrees";
 import { Menu, type MenuItem } from "../../ui/Menu";
+import { toast } from "../../ui/toast";
+import { readStatus } from "../../ipc/status";
+import { createWorktree } from "../../ipc/worktrees";
+import { readHandoverDiff, writeHandoverNote } from "../../ipc/handover";
+import { writeTerminal } from "../../ipc/pty";
 import { t } from "../../i18n/t";
 import "./agents.css";
 
@@ -256,6 +261,15 @@ function AgentPane({ session }: { session: AgentSession }) {
         </button>
         <button
           type="button"
+          className="agent-phb"
+          title={t("agents.handover")}
+          aria-label={t("agents.handover")}
+          onClick={() => store.setHandoverFor(session.id)}
+        >
+          ↗
+        </button>
+        <button
+          type="button"
           className="agent-phb x"
           title={t("agents.closeSession")}
           aria-label={t("agents.closeSession")}
@@ -424,6 +438,267 @@ function NewAgentDialog() {
   );
 }
 
+function defaultHandoverBranch(worktreeBranch: string | null, cliId: CliId): string {
+  const base =
+    (worktreeBranch ?? "work")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "work";
+  return `handover/${base}-${cliId}`;
+}
+
+function HandoverDialog() {
+  const sourceId = useSessions((s) => s.handoverFor);
+  const setSourceId = useSessions((s) => s.setHandoverFor);
+  const sessions = useSessions((s) => s.sessions);
+  const profiles = useProfiles((s) => s.profiles);
+  const worktrees = useWorktrees((s) => s.worktrees);
+  const source = sessions.find((s) => s.id === sourceId) ?? null;
+
+  const [targetCli, setTargetCli] = useState<CliId>("codex");
+  const [profileSlug, setProfileSlug] = useState<string>(NEW_PROFILE);
+  const [profileName, setProfileName] = useState("");
+  const [where, setWhere] = useState<"same" | "new">("same");
+  const [branch, setBranch] = useState("");
+  const [branchEdited, setBranchEdited] = useState(false);
+  const [note, setNote] = useState("");
+  const [includeTail, setIncludeTail] = useState(true);
+  const [includeDiff, setIncludeDiff] = useState(false);
+  const [stopSource, setStopSource] = useState(false);
+  const [binaries, setBinaries] = useState<Record<CliId, string | null> | null>(null);
+
+  const srcBranch = worktrees.find((w) => w.path === source?.worktreePath)?.branch ?? null;
+
+  useEffect(() => {
+    if (!source) return;
+    const first = CLI_IDS.find((id) => id !== source.cliId) ?? source.cliId;
+    setTargetCli(first);
+    setProfileSlug(NEW_PROFILE);
+    setProfileName("");
+    setWhere("same");
+    setBranchEdited(false);
+    setBranch(defaultHandoverBranch(srcBranch, first));
+    setIncludeTail(true);
+    setIncludeDiff(false);
+    setStopSource(false);
+    setBinaries(null);
+    void useSessions.getState().checkBinaries().then(setBinaries);
+    const srcDef = CLI_REGISTRY[source.cliId];
+    const base =
+      `# Handover from ${srcDef.name} (${source.profile.slug}) in ${source.worktreePath}\n` +
+      `Status: ${source.status}\n\n## Task\n\n## Done\n\n## Remaining\n`;
+    void readStatus(source.worktreePath)
+      .then((summary) => {
+        const files = [...summary.staged, ...summary.unstaged].map(
+          (entry) => `- ${entry.path} (${entry.indexStatus}${entry.worktreeStatus})`,
+        );
+        setNote(files.length > 0 ? `${base}\n## Changed files\n${files.join("\n")}\n` : base);
+      })
+      .catch(() => setNote(base));
+  }, [sourceId]);
+
+  useEffect(() => {
+    if (source && !branchEdited) setBranch(defaultHandoverBranch(srcBranch, targetCli));
+  }, [targetCli]);
+
+  if (!sourceId || !source) return null;
+  const srcDef = CLI_REGISTRY[source.cliId];
+  const def = CLI_REGISTRY[targetCli];
+  const cliProfiles = profiles.filter((p) => p.cliId === targetCli);
+  const resolved = binaries?.[targetCli];
+  const binaryMissing = !!binaries && !!def.binary && !resolved;
+  const customNeedsSettings = targetCli === "custom";
+  const slug = profileSlug === NEW_PROFILE ? slugify(profileName) : profileSlug;
+  const canStart =
+    !!binaries &&
+    !binaryMissing &&
+    !customNeedsSettings &&
+    targetCli !== source.cliId &&
+    !!slug &&
+    (where === "same" || !!branch.trim());
+
+  const fail = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    toast({ title: message, icon: "⚠" });
+  };
+
+  const start = () => {
+    if (!canStart) return;
+    void (async () => {
+      const store = useSessions.getState();
+      let ref = profileSlug === NEW_PROFILE ? "" : profileSlug;
+      if (profileSlug === NEW_PROFILE) {
+        const created = await useProfiles.getState().createProfile(targetCli, profileName);
+        if (!created) return;
+        ref = created.slug;
+      }
+      let targetWt = source.worktreePath;
+      if (where === "new") {
+        const projectId = useWorktrees.getState().projectId;
+        if (!projectId) {
+          toast({ title: t("agents.handoverNoProject"), icon: "⚠" });
+          return;
+        }
+        const cleanBranch = branch.trim();
+        const parent = source.worktreePath.split("/").slice(0, -1).join("/") || "/";
+        const dirName = cleanBranch.split("/").pop() || "handover";
+        try {
+          const created = await createWorktree(projectId, `${parent}/${dirName}`, cleanBranch);
+          targetWt = created.path;
+        } catch (error) {
+          fail(error);
+          return;
+        }
+      }
+      let body = note;
+      if (includeTail) {
+        const tailLines = store.getOutputTail(source.id, 50);
+        if (tailLines.length > 0) body += `\n## Recent output\n${tailLines.join("\n")}\n`;
+      }
+      if (includeDiff) {
+        try {
+          const diff = await readHandoverDiff(source.worktreePath);
+          if (diff.trim()) body += `\n## Diff\n${diff}`;
+        } catch (error) {
+          fail(error);
+          return;
+        }
+      }
+      try {
+        await writeHandoverNote(targetWt, body);
+      } catch (error) {
+        fail(error);
+        return;
+      }
+      if (stopSource) await store.closeSession(source.id, { confirm: false });
+      const newId = await store.startSession({
+        cliId: targetCli,
+        profile: { cliId: targetCli, slug: ref },
+        worktreePath: targetWt,
+      });
+      if (!newId) return;
+      const rec = useSessions.getState().sessions.find((s) => s.id === newId);
+      if (rec?.sessionId) {
+        const line = t("agents.handoverLine", {
+          from: `${srcDef.name} (${source.profile.slug})`,
+        });
+        await writeTerminal(rec.sessionId, new TextEncoder().encode(`\x1b[2m${line}\x1b[0m\n`)).catch(
+          () => undefined,
+        );
+      }
+      setSourceId(null);
+    })();
+  };
+
+  return (
+    <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setSourceId(null); }}>
+      <div className="dlg" role="dialog" aria-modal="true" aria-labelledby="handover-dialog-title">
+        <div className="dlg-ic">↗</div>
+        <h3 id="handover-dialog-title">{t("agents.handoverTitle")}</h3>
+        <p>
+          {t("agents.handoverFrom")}: {srcDef.name} · {tail(source.worktreePath)} · {source.status}
+        </p>
+        <div className="agent-h4">{t("agents.handoverTo")}</div>
+        <div className="agent-apick" role="radiogroup" aria-label={t("agents.handoverTo")}>
+          {CLI_IDS.map((id) => {
+            const entry = CLI_REGISTRY[id];
+            const missing = !!binaries && !!entry.binary && !binaries[id];
+            const disabled = missing || id === source.cliId;
+            return (
+              <label
+                key={id}
+                className={missing ? "missing" : ""}
+                title={id === source.cliId ? srcDef.name : undefined}
+              >
+                <input
+                  type="radio"
+                  name="handover-cli"
+                  value={id}
+                  checked={targetCli === id}
+                  disabled={disabled}
+                  onChange={() => { setTargetCli(id); setProfileSlug(NEW_PROFILE); }}
+                />
+                <span className="agent-apick-icon" aria-hidden>
+                  {entry.icon}
+                </span>
+                {entry.name}
+                <small>{id}</small>
+              </label>
+            );
+          })}
+        </div>
+        {!binaries && <p className="agent-hint">{t("agents.dialogChecking")}</p>}
+        <div className="agent-h4">{t("agents.dialogProfile")}</div>
+        <select
+          className="input"
+          aria-label={t("agents.dialogProfile")}
+          value={profileSlug}
+          onChange={(e) => setProfileSlug(e.target.value)}
+        >
+          {cliProfiles.map((p) => (
+            <option key={p.slug} value={p.slug}>{p.name}</option>
+          ))}
+          <option value={NEW_PROFILE}>{t("agents.dialogNewProfile")}</option>
+        </select>
+        {profileSlug === NEW_PROFILE && (
+          <input
+            className="input"
+            value={profileName}
+            onChange={(e) => setProfileName(e.target.value)}
+            placeholder={t("agents.dialogProfileName")}
+            aria-label={t("agents.dialogProfileName")}
+          />
+        )}
+        <div className="agent-h4">{t("agents.handoverWhere")}</div>
+        <div role="radiogroup" aria-label={t("agents.handoverWhere")}>
+          <label className="agent-check">
+            <input type="radio" name="handover-where" checked={where === "same"} onChange={() => setWhere("same")} />
+            {t("agents.handoverSame")}
+          </label>
+          <label className="agent-check">
+            <input type="radio" name="handover-where" checked={where === "new"} onChange={() => setWhere("new")} />
+            {t("agents.handoverNew")}
+          </label>
+        </div>
+        {where === "new" && (
+          <input
+            className="input"
+            value={branch}
+            onChange={(e) => { setBranch(e.target.value); setBranchEdited(true); }}
+            placeholder={t("agents.handoverBranch")}
+            aria-label={t("agents.handoverBranch")}
+          />
+        )}
+        <div className="agent-h4">{t("agents.handoverNote")}</div>
+        <textarea
+          className="input"
+          rows={8}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          aria-label={t("agents.handoverNote")}
+        />
+        <label className="agent-check">
+          <input type="checkbox" checked={includeTail} onChange={(e) => setIncludeTail(e.target.checked)} />
+          {t("agents.handoverIncludeTail")}
+        </label>
+        <label className="agent-check">
+          <input type="checkbox" checked={includeDiff} onChange={(e) => setIncludeDiff(e.target.checked)} />
+          {t("agents.handoverIncludeDiff")}
+        </label>
+        <label className="agent-check">
+          <input type="checkbox" checked={stopSource} onChange={(e) => setStopSource(e.target.checked)} />
+          {t("agents.handoverStopSource")}
+        </label>
+        <div className="dlg-meta">{previewCommand(targetCli, slug)}</div>
+        <div className="dlg-actions">
+          <button type="button" className="btn" onClick={() => setSourceId(null)}>{t("agents.dialogCancel")}</button>
+          <button type="button" className="btn p" disabled={!canStart} onClick={start}>{t("agents.handoverStart")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AgentsView() {
   const sessions = useSessions((s) => s.sessions);
   const layoutMode = useSessions((s) => s.layoutMode);
@@ -440,6 +715,7 @@ export function AgentsView() {
       }
     >
       <NewAgentDialog />
+      <HandoverDialog />
       {ordered.length === 0 ? (
         <div className="agent-empty" role="status">
           <span>{t("agents.empty")}</span>

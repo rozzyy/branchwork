@@ -86,6 +86,13 @@ export const commands = {
 	 */
 	cliEnsureHooks: (cliId: string, profileDir: string) => __TAURI_INVOKE<boolean>("cli_ensure_hooks", { cliId, profileDir }),
 	/**
+	 *  Write the handover note and ensure the `.branchwork/` git-exclude entry.
+	 *  The worktree must be catalog-registered; paths inside are fixed names.
+	 */
+	agentWriteHandover: (worktreePath: string, note: string) => __TAURI_INVOKE<boolean>("agent_write_handover", { worktreePath, note }),
+	/**  Capped `git diff HEAD` text of a registered worktree for handover notes. */
+	agentHandoverDiff: (worktreePath: string) => __TAURI_INVOKE<string>("agent_handover_diff", { worktreePath }),
+	/**
 	 *  Absolute path of the notify socket hook sidecars should dial.
 	 *  Fails on platforms without socket support; callers fall back to heuristics.
 	 */
