@@ -21,9 +21,8 @@ fn git_dir(worktree: &Path) -> Result<PathBuf, AppError> {
     let target = if dot_git.is_dir() {
         dot_git
     } else if dot_git.is_file() {
-        let content = std::fs::read_to_string(&dot_git).map_err(|error| {
-            AppError::io(format!("Could not read worktree git file: {error}"))
-        })?;
+        let content = std::fs::read_to_string(&dot_git)
+            .map_err(|error| AppError::io(format!("Could not read worktree git file: {error}")))?;
         let Some(rest) = content.trim().strip_prefix("gitdir: ") else {
             return Err(AppError::validation(
                 "Worktree git file has an unexpected shape",
@@ -38,9 +37,9 @@ fn git_dir(worktree: &Path) -> Result<PathBuf, AppError> {
     } else {
         return Err(AppError::not_found("Worktree has no git dir"));
     };
-    target.canonicalize().map_err(|error| {
-        AppError::io(format!("Could not resolve worktree git dir: {error}"))
-    })
+    target
+        .canonicalize()
+        .map_err(|error| AppError::io(format!("Could not resolve worktree git dir: {error}")))
 }
 
 /// Append the handover ignore entry when it is missing. Returns true on change.
@@ -55,7 +54,7 @@ fn ensure_exclude(git: &Path) -> Result<bool, AppError> {
         Err(error) => {
             return Err(AppError::io(format!(
                 "Could not read git exclude file: {error}"
-            )))
+            )));
         }
     };
     let covered = current
@@ -102,7 +101,9 @@ pub fn read_diff(store: &Store, worktree_path: &Path) -> Result<String, AppError
         .output()
         .map_err(|error| AppError::io(format!("Could not run git diff: {error}")))?;
     if !output.status.success() {
-        return Err(AppError::validation("git diff did not succeed for this worktree"));
+        return Err(AppError::validation(
+            "git diff did not succeed for this worktree",
+        ));
     }
     let mut bytes = output.stdout;
     let truncated = bytes.len() > DIFF_CAP_BYTES;
@@ -190,7 +191,11 @@ mod tests {
         let home = TempDir::fresh("linked");
         init_repository(&home.0);
         std::fs::create_dir_all(home.0.join("wt")).unwrap();
-        std::fs::write(home.0.join("wt").join(".git"), "gitdir: ../.git/worktrees/wt\n").unwrap();
+        std::fs::write(
+            home.0.join("wt").join(".git"),
+            "gitdir: ../.git/worktrees/wt\n",
+        )
+        .unwrap();
         let gitdir = home.0.join(".git").join("worktrees").join("wt");
         std::fs::create_dir_all(gitdir.join("info")).unwrap();
         let resolved = git_dir(&home.0.join("wt")).unwrap();

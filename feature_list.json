@@ -944,7 +944,7 @@
         "m3-task-13-pane-cli-switcher"
       ],
       "status": "done",
-      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-14-spec.md). Agent accounts card (add/list/default/logout); 4/4 settings tests + typecheck clean. Uncommitted; group-default UI deferred; icons (task 15) + stage review remain. Task complete (spec PASS + gate green)."
+      "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-14-spec.md). Agent accounts card (add/list/default/logout); 4/4 settings tests + typecheck clean. Uncommitted; group-default UI deferred; icons (task 15) + stage review remain. Task complete (spec PASS + gate green). Follow-ups: Claude status probes the selected profile env; Settings add-account/login/retry/edit/remove and full-width/loading UX; removal is guarded by native confirmation, and missing Muse profile IDs cannot trigger device-wide logout. ./init.sh green (55 files/507 tests, Rust 171 passed/3 ignored). Manual retest pending."
     },
     {
       "id": "m3-stage-5-review",
@@ -967,6 +967,17 @@
       ],
       "status": "done",
       "evidence": "Implemented + spec-reviewer PASS (.agent/reviews/m3-task-15-spec.md). Inline SVG marks, unicode glyphs removed, toast/ask icon widened; agents 47 + UI 31 tests green. Uncommitted; stage review remains. Task complete (spec PASS + gate green)."
+    },
+    {
+      "id": "m3-task-16-right-project-sidebar",
+      "stage": 18,
+      "name": "Right-side project navigation",
+      "description": ".agent/tasks/m3-task-16-right-project-sidebar.md",
+      "dependencies": [
+        "m3-task-13-pane-cli-switcher"
+      ],
+      "status": "done",
+      "evidence": "Implemented the approved docs/design/prototype.html rail; code/spec review PASS. ./init.sh passed (56 Vitest files/511 tests; Rust 171 passed/3 ignored; typecheck and Clippy clean). Playwright passed 74/74, including 21 project/sidebar flows. Manual M3-S6 checkpoint is pending user verification; branch m3-stage-6, uncommitted."
     }
   ]
 }

@@ -678,3 +678,21 @@ Expected: hidden sessions keep running; switching never respawns or replays a te
 | M3-S5-01 | | |
 | M3-S5-02 | | |
 | M3-S5-03 | | |
+
+## M3 Stage 6: Right-side project navigation
+
+### M3-S6-01 · Project and group rail
+
+1. Launch the desktop app at a wide window size. Confirm application navigation and worktrees remain in the left sidebar, while all groups and projects appear in the right rail.
+2. Select a project from another group. Confirm the active group/project context updates in the title bar and the main workspace follows that project.
+3. Search by group name, project name, owner, or path. Clear the query and confirm the full catalog returns.
+4. Collapse and expand a group, including Ungrouped. Reload the app and confirm collapse state and project selection persist. Search for a project inside a collapsed group, then clear the query and confirm the group remains collapsed.
+5. Add a group, edit it, and delete it. Confirm projects move to Ungrouped on deletion and Undo restores the group. Use Project to open or clone a repository, and confirm group add/move/remove actions remain available.
+6. Toggle the project rail from the title bar, reload, and confirm its visibility persists. Resize the window below 1120px and confirm the rail overlays the workspace below the title bar without obscuring it; confirm the left sidebar and worktrees remain usable.
+7. Repeat the rail, title-bar context, selection, and search checks in light and dark themes.
+
+### M3 Stage 6 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M3-S6-01 | | |

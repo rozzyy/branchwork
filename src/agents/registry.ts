@@ -97,12 +97,17 @@ const CLAUDE: CliDef = {
   binary: "claude",
   launch: ["claude"],
   resume: ["claude", "--continue"],
-  loginCmd: null, // in-app `/login` slash command, not a shell argv
+  // Sign in through the browser first, then complete Claude's first-run
+  // onboarding in the same profile-scoped terminal.
+  loginCmd: "claude auth login && claude",
   installGuidance: "agents.installClaude",
+  // Claude's per-account config and onboarding state are isolated here.
+  // Login status must be probed with this same environment: host-default
+  // auth status can be true while this profile still needs onboarding.
   profileEnv: (profileDir) => ({ CLAUDE_CONFIG_DIR: profileDir }),
-  // Verified: ~/.claude.json exists on this host, so under CLAUDE_CONFIG_DIR
-  // the credentials live at .claude.json.
-  credentialPaths: [".claude.json"],
+  // Auth is exposed through `claude auth status`, not a verified file path.
+  // The probe determines profile login state; logout remains unavailable.
+  credentialPaths: [],
   verifiedAgainst: "claude 2.1.280",
   waitingPatterns: [...GENERIC_WAITING_PATTERNS],
   limitPatterns: [...GENERIC_LIMIT_PATTERNS],
@@ -130,11 +135,15 @@ const OPENCODE: CliDef = {
   binary: "opencode",
   launch: ["opencode"],
   resume: ["opencode", "--continue"],
-  loginCmd: null,
+  // Shell login verified: `opencode auth login` (interactive provider picker
+  // runs in the login PTY; `-p/--provider -m/--method` skip it). No
+  // `--standalone` flag in the installed 1.19.3 (OpenCode 2 only).
+  loginCmd: "opencode auth login",
   installGuidance: "agents.installOpencode",
   profileEnv: (profileDir) => ({ HOME: `${profileDir}/home` }),
-  // No verified credential layout; logout stays a no-op until documented.
-  credentialPaths: [],
+  // Verified on this host: auth lives at ~/.local/share/opencode/auth.json,
+  // which under the HOME sandbox is this nested path in the profile dir.
+  credentialPaths: ["home/.local/share/opencode/auth.json"],
   verifiedAgainst: "opencode 1.19.3",
   waitingPatterns: [...GENERIC_WAITING_PATTERNS],
   limitPatterns: [...GENERIC_LIMIT_PATTERNS],
@@ -146,6 +155,8 @@ const GEMINI: CliDef = {
   binary: "gemini",
   launch: ["gemini"],
   resume: ["gemini"],
+  // No shell login argv (installed CLI exposes none): auth completes inside
+  // the interactive TUI on first run, so addProfile lands the pane in `gemini`.
   loginCmd: null,
   installGuidance: "agents.installGemini",
   profileEnv: (profileDir) => ({ HOME: `${profileDir}/home` }),

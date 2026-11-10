@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { TitleBar } from "./shell/TitleBar";
 import { Sidebar } from "./shell/Sidebar";
+import { ProjectSidebar } from "./shell/ProjectSidebar";
 import { Stage } from "./stage/Stage";
 import { useSettings } from "./state/settings";
 import { useStage } from "./state/stage";
@@ -17,10 +18,14 @@ import { useRepos } from "./state/repos";
 import { useChanges } from "./state/changes";
 import { subscribeUndoState } from "./ipc/undo";
 import { useSessions } from "./agents/sessions";
+import { useProfiles } from "./agents/profiles";
+import { errorMessage } from "./ipc/errors";
+import { toast } from "./ui/toast";
 
 export default function App() {
   useGlobalKeys();
   const collapsed = useSidebar((s) => s.collapsed);
+  const projectRailOpen = useSidebar((s) => s.projectRailOpen);
   const dockMode = useDock((s) => s.mode);
   const dockOpen = useDock((s) => s.open);
   useEffect(() => {
@@ -31,6 +36,9 @@ export default function App() {
     void useChanges.getState().load();
     void useDock.getState().load();
     void useSessions.getState().load();
+    void useProfiles.getState().load().catch((error) => {
+      toast({ title: errorMessage(error), icon: "⚠" });
+    });
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme(useSettings.getState().theme);
     mq?.addEventListener("change", onChange);
@@ -50,7 +58,12 @@ export default function App() {
   }, []);
   const dockFlow = dockOpen && (dockMode === "bottom" || dockMode === "right") ? dockMode : "none";
   return (
-    <div className="app" data-sidebar={collapsed ? "collapsed" : "expanded"} data-dock={dockFlow}>
+    <div
+      className="app"
+      data-sidebar={collapsed ? "collapsed" : "expanded"}
+      data-project-rail={projectRailOpen ? "open" : "closed"}
+      data-dock={dockFlow}
+    >
       <TitleBar />
       <div className="body">
         <Sidebar />
@@ -58,6 +71,7 @@ export default function App() {
           <Stage />
           <TerminalDock />
         </div>
+        <ProjectSidebar />
       </div>
       <Toaster />
       <DialogHost />

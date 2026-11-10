@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSessions } from "./sessions";
-import { ensureProfileDir, resolveCliBinary } from "../ipc/cli";
+import { ensureProfileDir, probeCli, profileHasCredentials, resolveCliBinary, seedClaudeOnboarding } from "../ipc/cli";
 import { ensureAgentHooks, notifySocketPath, onAgentStatus } from "../ipc/notify";
 import {
   closeTerminal,
@@ -19,7 +19,10 @@ import { useWorktrees } from "../state/worktrees";
 
 vi.mock("../ipc/cli", () => ({
   ensureProfileDir: vi.fn(),
+  probeCli: vi.fn(),
   resolveCliBinary: vi.fn(),
+  profileHasCredentials: vi.fn(),
+  seedClaudeOnboarding: vi.fn(),
 }));
 
 vi.mock("../ipc/pty", () => ({
@@ -80,6 +83,9 @@ beforeEach(async () => {
   sessionCounter = 0;
   vi.mocked(resolveCliBinary).mockReset().mockResolvedValue("/usr/local/bin/codex");
   vi.mocked(ensureProfileDir).mockReset().mockImplementation(async (cliId, slug) => `/profiles/${cliId}-${slug}`);
+  vi.mocked(probeCli).mockReset().mockRejectedValue(new Error("no probe"));
+  vi.mocked(profileHasCredentials).mockReset().mockResolvedValue(true);
+  vi.mocked(seedClaudeOnboarding).mockReset().mockResolvedValue(true);
   vi.mocked(spawnTerminal)
     .mockReset()
     .mockImplementation(async () => ({ sessionId: `pty-${(sessionCounter += 1)}` }));
@@ -107,7 +113,16 @@ beforeEach(async () => {
   useToasts.setState({ toasts: [] });
   useSettings.setState({ agentAutoSwitch: true });
   useWorktrees.setState({ activePath: "/wt/a" });
-  useProfiles.setState({ profiles: [], globalDefault: null, cliDefaults: {}, loaded: true });
+  useProfiles.setState({
+    profiles: [],
+    globalDefault: null,
+    cliDefaults: {},
+    loaded: true,
+    usage: {},
+    cliProbes: {},
+    profileProbes: {},
+    loginPending: {},
+  });
   resetSessions();
   await useSessions.getState().load();
 });
@@ -132,6 +147,54 @@ describe("startSession", () => {
     expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("'codex'\n"));
     const session = useSessions.getState().sessions[0];
     expect(session).toMatchObject({ cliId: "codex", worktreePath: "/wt/a", sessionId: "pty-1", slot: "auto" });
+  });
+
+  it("refuses to start on a profile that never completed login", async () => {
+    const profile = await seedProfile();
+    vi.mocked(profileHasCredentials).mockResolvedValue(false);
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile, worktreePath: "/wt/a" });
+    expect(id).toBeNull();
+    expect(profileHasCredentials).toHaveBeenCalledWith("codex", "work", ["auth.json"]);
+    // No shell is burned on a doomed onboarding.
+    expect(spawnTerminal).not.toHaveBeenCalled();
+    expect(writeTerminal).not.toHaveBeenCalled();
+    expect(useSessions.getState().sessions).toHaveLength(0);
+    // The toast offers one-click login instead.
+    const toast = useToasts.getState().toasts[0];
+    expect(toast.title).toMatch(/Log in to .* first/);
+    expect(toast.action?.label).toBe("Log in");
+  });
+
+  it("refuses Claude when the selected profile probe reports logged out", async () => {
+    await useProfiles.getState().createProfile("claude", "Personal");
+    vi.mocked(probeCli).mockResolvedValueOnce(JSON.stringify({ loggedIn: false }));
+    const id = await useSessions.getState().startSession({
+      cliId: "claude",
+      profile: { cliId: "claude", slug: "personal" },
+      worktreePath: "/wt/a",
+    });
+    expect(id).toBeNull();
+    expect(probeCli).toHaveBeenCalledWith("claude", {
+      CLAUDE_CONFIG_DIR: "/profiles/claude-personal",
+    });
+    expect(spawnTerminal).not.toHaveBeenCalled();
+    expect(useSessions.getState().sessions).toHaveLength(0);
+  });
+
+  it("starts Claude with the same profile environment used by the login probe", async () => {
+    await useProfiles.getState().createProfile("claude", "Personal");
+    vi.mocked(probeCli).mockResolvedValueOnce(JSON.stringify({ loggedIn: true }));
+    await useSessions.getState().startSession({
+      cliId: "claude",
+      profile: { cliId: "claude", slug: "personal" },
+      worktreePath: "/wt/a",
+    });
+    expect(spawnTerminal).toHaveBeenCalledWith(
+      "/wt/a",
+      80,
+      24,
+      expect.objectContaining({ CLAUDE_CONFIG_DIR: "/profiles/claude-personal" }),
+    );
   });
 
   it("sends an optional prompt as the first input line after launch", async () => {
@@ -300,6 +363,26 @@ describe("session status", () => {
     expect(useSessions.getState().sessions[0].status).toBe("waiting");
     emitOutput("pty-1", "proceeding\n");
     expect(useSessions.getState().sessions[0].status).toBe("running");
+  });
+
+  it("raises the waiting toast only once no matter how often the loop cycles", async () => {
+    const profile = await seedProfile();
+    await useSessions.getState().startSession({ cliId: "codex", profile });
+    const waitingToasts = () =>
+      useToasts.getState().toasts.filter((item) => item.title.includes("needs input"));
+    emitOutput("pty-1", "Do you want to proceed? (y/n)\n");
+    expect(useSessions.getState().sessions[0].status).toBe("waiting");
+    expect(waitingToasts()).toHaveLength(1);
+    // Agent chatter flips back to running, then the heuristic fires again —
+    // status still cycles, but the user is not re-pinged.
+    emitOutput("pty-1", "thinking…\n");
+    expect(useSessions.getState().sessions[0].status).toBe("running");
+    emitOutput("pty-1", "Do you want to proceed? (y/n)\n");
+    expect(useSessions.getState().sessions[0].status).toBe("waiting");
+    expect(waitingToasts()).toHaveLength(1);
+    // A repeated hook event does not re-ping either.
+    useSessions.getState().notifySessionEvent("pty-1", "waiting");
+    expect(waitingToasts()).toHaveLength(1);
   });
 
   it("matches a pattern split across two chunks", async () => {

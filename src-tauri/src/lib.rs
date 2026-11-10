@@ -1,4 +1,5 @@
 mod blame;
+mod cli;
 mod commit;
 mod diff;
 mod error;
@@ -7,7 +8,6 @@ mod graph;
 mod handover;
 mod notify;
 mod oplog;
-mod cli;
 mod pty;
 mod repository;
 mod stage;
@@ -22,6 +22,7 @@ use serde::Serialize;
 use std::path::Path;
 use store::{Group, Project, Store, WorktreePin};
 use tauri::{AppHandle, Emitter, Manager, State, Url};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -783,8 +784,44 @@ fn cli_profile_dir(cli_id: String, slug: String) -> Result<String, AppError> {
 /// force-close. Returns true when the process exited on its own in time.
 #[tauri::command]
 #[specta::specta]
-fn pty_stop(manager: State<'_, PtyManager>, session_id: String, grace_ms: u64) -> Result<bool, AppError> {
+fn pty_stop(
+    manager: State<'_, PtyManager>,
+    session_id: String,
+    grace_ms: u64,
+) -> Result<bool, AppError> {
     manager.stop(&session_id, grace_ms)
+}
+
+/// Run a read-only vendor status probe (fixed non-interactive argv only)
+/// and return its stdout. The caller picks a CLI id, never a command.
+#[tauri::command(async)]
+#[specta::specta]
+fn cli_probe(
+    cli_id: String,
+    env: Option<std::collections::HashMap<String, String>>,
+) -> Result<String, AppError> {
+    cli::probe(&cli_id, env.as_ref())
+}
+
+/// True when any of the registry's declared credential files exists inside
+/// the profile dir — the vendor login actually completed there.
+#[tauri::command]
+#[specta::specta]
+fn cli_has_credentials(
+    cli_id: String,
+    slug: String,
+    credential_files: Vec<String>,
+) -> Result<bool, AppError> {
+    cli::has_credentials(&cli_id, &slug, &credential_files)
+}
+
+/// Seed Claude's one-time onboarding flag for an isolated profile dir.
+/// Exclusive-create only: never reads or overwrites existing credentials.
+/// Returns true when this call created the seed file.
+#[tauri::command]
+#[specta::specta]
+fn cli_seed_onboarding(cli_id: String, slug: String) -> Result<bool, AppError> {
+    cli::seed_onboarding(&cli_id, &slug)
 }
 
 /// Remove the registry's declared credential files inside a profile dir.
@@ -797,6 +834,31 @@ fn cli_logout_profile(
     credential_files: Vec<String>,
 ) -> Result<Vec<String>, AppError> {
     cli::logout_profile(&cli_id, &slug, &credential_files)
+}
+
+/// Confirm and remove a complete Branchwork account profile and its credentials.
+#[tauri::command(async)]
+#[specta::specta]
+fn cli_remove_profile(app: AppHandle, cli_id: String, slug: String) -> Result<bool, AppError> {
+    cli::validate_profile_ref(&cli_id, &slug)?;
+    let message = if cli_id == "muse" {
+        format!(
+            "Remove the Muse profile '{slug}'? This also signs out all Muse profiles on this device."
+        )
+    } else {
+        format!("Remove the {cli_id} account '{slug}' and delete its Branchwork profile data?")
+    };
+    let confirmed = app
+        .dialog()
+        .message(message)
+        .title("Confirm account removal")
+        .buttons(MessageDialogButtons::YesNo)
+        .blocking_show();
+    if !confirmed {
+        return Ok(false);
+    }
+    cli::remove_profile(&cli_id, &slug)?;
+    Ok(true)
 }
 
 /// Absolute path of the notify socket hook sidecars should dial.
@@ -813,8 +875,9 @@ fn notify_socket_path() -> Result<String, AppError> {
 #[specta::specta]
 fn notify_status(app: AppHandle, session_id: String, event: String) -> Result<(), AppError> {
     let payload = notify::validate_notify_event(&session_id, &event)?;
-    app.emit("agent:status", payload)
-        .map_err(|error| AppError::internal(format!("Could not emit agent:status event: {error}")))?;
+    app.emit("agent:status", payload).map_err(|error| {
+        AppError::internal(format!("Could not emit agent:status event: {error}"))
+    })?;
     Ok(())
 }
 
@@ -944,7 +1007,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             pty_stop,
             cli_resolve,
             cli_profile_dir,
+            cli_probe,
+            cli_has_credentials,
             cli_logout_profile,
+            cli_seed_onboarding,
+            cli_remove_profile,
             cli_ensure_hooks,
             agent_write_handover,
             agent_handover_diff,

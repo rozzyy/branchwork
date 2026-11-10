@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { create } from "zustand";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "./registry";
 import { CliIcon } from "./cliIcons";
-import { ensureProfileDir, resolveCliBinary } from "../ipc/cli";
+import { ensureProfileDir, profileHasCredentials, resolveCliBinary } from "../ipc/cli";
 import {
   ensureAgentHooks,
   notifySocketPath,
@@ -110,6 +110,13 @@ async function hookEnv(agentId: string): Promise<Record<string, string>> {
   };
 }
 const idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/**
+ * Sessions that already raised their waiting notification. Status still
+ * flips running↔waiting on every heuristic cycle, but the toast + OS ping
+ * fire only once per session — otherwise an agent streaming chattery
+ * output re-notifies every few seconds forever.
+ */
+const notifiedWaiting = new Set<string>();
 
 function clearSessionWatch(id: string) {
   const timer = idleTimers.get(id);
@@ -119,6 +126,7 @@ function clearSessionWatch(id: string) {
   }
   overlaps.delete(id);
   lineBuffers.delete(id);
+  notifiedWaiting.delete(id);
 }
 
 /**
@@ -210,13 +218,15 @@ export const useSessions = create<SessionsStore>((set, get) => {
   const updateSession = (id: string, patch: Partial<AgentSession>) =>
     set({ sessions: get().sessions.map((session) => (session.id === id ? { ...session, ...patch } : session)) });
 
-  /** Mark a live session waiting and tell the user once per transition. */
+  /** Mark a live session waiting; the toast + OS ping fire once per session. */
   const setWaiting = (id: string) => {
     const session = findSession(id);
     if (!session || session.status !== "running" || !session.sessionId) return;
     if (exitedSessions.has(session.sessionId)) return;
     updateSession(id, { status: "waiting" });
     save();
+    if (notifiedWaiting.has(id)) return;
+    notifiedWaiting.add(id);
     const title = t("agents.waitingTitle", { name: CLI_REGISTRY[session.cliId].name });
     toast({ title, icon: "⏳" });
     void notifyWhenUnfocused(title).catch(() => undefined);
@@ -290,12 +300,47 @@ export const useSessions = create<SessionsStore>((set, get) => {
     worktreePath: string,
     argv: string[],
     prefix: string[] = [],
-  ): Promise<{ sessionId: string } | { error: string }> => {
+  ): Promise<{ sessionId: string } | { error: string; loginRequired?: boolean }> => {
     let profileDir: string;
     try {
       profileDir = await ensureProfileDir(profile.cliId, profile.slug);
     } catch (error) {
       return { error: errorMessage(error) };
+    }
+    // Never launch into a doomed onboarding: when the provider keeps
+    // credentials in the profile dir, refuse to start until the vendor login
+    // actually completed there. The toast action opens the login PTY, so one
+    // click continues where the login left off. A crowded inbox of dead
+    // onboarding sessions is worse than a blocked start.
+    const linkedDef = CLI_REGISTRY[cliId];
+    if (linkedDef.credentialPaths.length > 0 || cliId === "claude") {
+      let linked: boolean | null = null;
+      try {
+        linked =
+          linkedDef.credentialPaths.length > 0
+            ? await profileHasCredentials(profile.cliId, profile.slug, linkedDef.credentialPaths)
+            : await useProfiles.getState().checkProfileLogin(profile);
+      } catch {
+        linked = linkedDef.credentialPaths.length > 0 ? false : null;
+      }
+      if (linked === false) {
+        const profileName =
+          useProfiles
+            .getState()
+            .profiles.find(
+              (candidate) => candidate.cliId === profile.cliId && candidate.slug === profile.slug,
+            )?.name ?? profile.slug;
+        const title = t("agents.loginRequired", { name: linkedDef.name, profile: profileName });
+        toast({
+          title,
+          icon: createElement(CliIcon, { id: linkedDef.id }),
+          action: {
+            label: t("agents.loginNow"),
+            run: () => void useProfiles.getState().loginProfile(profile),
+          },
+        });
+        return { error: title, loginRequired: true };
+      }
     }
     // Hook setup is best-effort: a missing sidecar or unsupported CLI only
     // loses the primary signal; the output heuristics still apply.
@@ -464,6 +509,10 @@ export const useSessions = create<SessionsStore>((set, get) => {
         exitedSessions.delete(result.sessionId);
         updateSession(session.id, { sessionId: result.sessionId, error: null, status: "running" });
         scheduleIdle(session.id);
+      } else if (result.loginRequired) {
+        set({ sessions: get().sessions.filter((item) => item.id !== session.id) });
+        save();
+        return null;
       } else {
         updateSession(session.id, { error: result.error });
         toast({ title: t("agents.spawnError", { name: def.name, message: result.error }), icon: "⚠" });

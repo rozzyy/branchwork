@@ -601,6 +601,7 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
     },
 
     async openHere(worktreePath) {
+      await get().load();
       await get().newTab(worktreePath);
       useStage.getState().go("terminal");
     },
@@ -617,6 +618,7 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
           if (exitSubscription === subscribed) exitSubscription = null;
         });
       }
+      if (get().loaded) return;
       const saved = await loadSetting<PersistedScreen>(SCREEN_KEY);
       const savedTabs = Array.isArray(saved?.tabs) ? (saved.tabs as PersistedScreenTab[]) : [];
       const tabs: ScreenTab[] = [];

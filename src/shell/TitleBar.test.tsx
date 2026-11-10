@@ -1,22 +1,20 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { TitleBar } from "./TitleBar";
 import { useRepos } from "../state/repos";
 import { useSettings } from "../state/settings";
+import { useSidebar } from "../state/sidebar";
 import { DEFAULT_THEME } from "../theme/theme";
-import type { Project } from "../ipc/catalog";
+import type { Group, Project } from "../ipc/catalog";
 
+const groups: Group[] = [{ id: "g1", name: "Team", color: "oklch(.68 .19 250)", clonePathTemplate: "~/clients/{repo}" }];
 const projects: Project[] = [
-  { id: "p1", owner: null, name: "Alpha", localPath: "/a", groupId: null },
+  { id: "p1", owner: "acme", name: "Alpha", localPath: "/a", groupId: "g1" },
   { id: "p2", owner: null, name: "Beta", localPath: "/b", groupId: null },
 ];
 
 beforeEach(() => {
   useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, openProjectIds: [], status: "idle", error: null });
-});
-
-it("renders nothing when there are no projects", () => {
-  render(<TitleBar />);
-  expect(screen.queryByRole("list", { name: "Projects" })).toBeNull();
+  useSidebar.setState({ collapsed: false, projectRailOpen: true });
 });
 
 it("shows the theme-adaptive brand mark next to the app name", () => {
@@ -27,42 +25,24 @@ it("shows the theme-adaptive brand mark next to the app name", () => {
   expect(screen.getByText("Branchwork")).toBeInTheDocument();
 });
 
-it("renders a tab per project and selects on click", () => {
-  useRepos.setState({ projects, activeProjectId: "p1", openProjectIds: ["p1", "p2"], status: "ready" });
-  const { container } = render(<TitleBar />);
-  const tabs = Array.from(container.querySelectorAll(".project-tab"));
-  expect(tabs.map((tab) => tab.textContent)).toEqual(["Alpha", "Beta"]);
-  expect(screen.getByRole("button", { name: "Alpha" })).toHaveAttribute("aria-current", "true");
-
-  fireEvent.click(screen.getByRole("button", { name: "Beta" }));
-  expect(useRepos.getState().activeProjectId).toBe("p2");
-});
-
-it("only shows open tabs", () => {
-  useRepos.setState({ projects, activeProjectId: "p1", openProjectIds: ["p1"], status: "ready" });
-  const { container } = render(<TitleBar />);
-  expect(Array.from(container.querySelectorAll(".project-tab")).map((tab) => tab.textContent)).toEqual(["Alpha"]);
-});
-
-it("the project list has one item per project, each with exactly a project button and a close button, and marks the active one", () => {
-  useRepos.setState({ projects, activeProjectId: "p1", openProjectIds: ["p1", "p2"], status: "ready" });
+it("shows the active group and project in the title bar", () => {
+  useRepos.setState({ groups, projects, activeGroupId: "g1", activeProjectId: "p1", status: "ready" });
   render(<TitleBar />);
-  const list = screen.getByRole("list", { name: "Projects" });
-  const items = within(list).getAllByRole("listitem");
-  expect(items).toHaveLength(2);
-  for (const item of items) {
-    expect(within(item).getAllByRole("button")).toHaveLength(2); // the project button and its × close button
-  }
-  expect(screen.getByRole("button", { name: "Alpha" })).toHaveAttribute("aria-current", "true");
-  expect(screen.getByRole("button", { name: "Beta" })).not.toHaveAttribute("aria-current");
+  expect(screen.getByText("Team")).toBeInTheDocument();
+  expect(screen.getByText("acme/Alpha")).toBeInTheDocument();
 });
 
-it("clicking the close button hides the tab and does not select it", () => {
-  useRepos.setState({ projects, activeProjectId: "p1", openProjectIds: ["p1", "p2"], status: "ready" });
-  const { container } = render(<TitleBar />);
-  fireEvent.click(screen.getByRole("button", { name: "Close tab Beta" }));
-  expect(Array.from(container.querySelectorAll(".project-tab")).map((tab) => tab.textContent)).toEqual(["Alpha"]);
-  expect(useRepos.getState().activeProjectId).toBe("p1");
+it("shows an empty context when no project is selected", () => {
+  render(<TitleBar />);
+  expect(screen.getByText("No project selected")).toBeInTheDocument();
+});
+
+it("toggles the project sidebar", () => {
+  render(<TitleBar />);
+  const toggle = screen.getByRole("button", { name: "Toggle project sidebar" });
+  fireEvent.click(toggle);
+  expect(useSidebar.getState().projectRailOpen).toBe(false);
+  expect(toggle).toHaveAttribute("aria-pressed", "false");
 });
 
 it("toggles the theme from the title bar", () => {

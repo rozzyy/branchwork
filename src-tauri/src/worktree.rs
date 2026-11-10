@@ -968,9 +968,9 @@ fn branch_to_delete(
     let worktree_repo = git2::Repository::open(worktree_path).map_err(|error| {
         AppError::validation(format!("Cannot read worktree git state: {error}"))
     })?;
-    let head = worktree_repo.head().map_err(|error| {
-        AppError::validation(format!("Cannot read worktree branch: {error}"))
-    })?;
+    let head = worktree_repo
+        .head()
+        .map_err(|error| AppError::validation(format!("Cannot read worktree branch: {error}")))?;
     if !head.is_branch() {
         return Ok(None);
     }
@@ -1569,9 +1569,11 @@ mod tests {
         let destination = destination.canonicalize().unwrap();
         remove(&project, &destination, &store, true).unwrap();
         assert!(!destination.exists());
-        assert!(repository
-            .find_branch("race/x-a", BranchType::Local)
-            .is_err());
+        assert!(
+            repository
+                .find_branch("race/x-a", BranchType::Local)
+                .is_err()
+        );
         assert!(store.list_pins(Some(&project.id)).unwrap().is_empty());
     }
 
@@ -1590,9 +1592,11 @@ mod tests {
         let destination = destination.canonicalize().unwrap();
         remove(&project, &destination, &store, false).unwrap();
         assert!(!destination.exists());
-        assert!(repository
-            .find_branch("race/x-a", BranchType::Local)
-            .is_ok());
+        assert!(
+            repository
+                .find_branch("race/x-a", BranchType::Local)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -1616,14 +1620,18 @@ mod tests {
             .unwrap();
         assert!(symbolic.status.success());
         let destination = destination.canonicalize().unwrap();
-        assert!(remove(&project, &destination, &store, true)
-            .unwrap_err()
-            .message
-            .contains("main worktree"));
+        assert!(
+            remove(&project, &destination, &store, true)
+                .unwrap_err()
+                .message
+                .contains("main worktree")
+        );
         assert!(destination.exists());
-        assert!(repository
-            .find_branch("race/x-a", BranchType::Local)
-            .is_ok());
+        assert!(
+            repository
+                .find_branch("race/x-a", BranchType::Local)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -1644,9 +1652,11 @@ mod tests {
         linked.set_head_detached(target).unwrap();
         remove(&project, &destination, &store, true).unwrap();
         assert!(!destination.exists());
-        assert!(repository
-            .find_branch("race/x-a", BranchType::Local)
-            .is_ok());
+        assert!(
+            repository
+                .find_branch("race/x-a", BranchType::Local)
+                .is_ok()
+        );
     }
 
     #[test]

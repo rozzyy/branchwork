@@ -24,11 +24,12 @@ pub struct AgentStatusPayload {
 /// (`BRANCHWORK_AGENT_SESSION`, known before the PTY exists); the direct IPC
 /// path may also use the `pty-N` session id. Both shapes are strict charsets
 /// with length caps, and only the two known events pass.
-pub fn validate_notify_event(session_id: &str, event: &str) -> Result<AgentStatusPayload, AppError> {
+pub fn validate_notify_event(
+    session_id: &str,
+    event: &str,
+) -> Result<AgentStatusPayload, AppError> {
     let valid = if let Some(suffix) = session_id.strip_prefix("pty-") {
-        !suffix.is_empty()
-            && suffix.len() <= 20
-            && suffix.bytes().all(|byte| byte.is_ascii_digit())
+        !suffix.is_empty() && suffix.len() <= 20 && suffix.bytes().all(|byte| byte.is_ascii_digit())
     } else if let Some(suffix) = session_id.strip_prefix("agent-") {
         !suffix.is_empty()
             && suffix.len() <= 64
@@ -168,10 +169,12 @@ pub fn ensure_claude_hooks(profile_dir: &Path, notify_bin: &Path) -> Result<bool
         }
     }
     if changed {
-        let text = serde_json::to_string_pretty(&root)
-            .map_err(|error| AppError::internal(format!("Could not serialize settings: {error}")))?;
-        std::fs::write(&path, text)
-            .map_err(|error| AppError::io(format!("Could not write profile settings.json: {error}")))?;
+        let text = serde_json::to_string_pretty(&root).map_err(|error| {
+            AppError::internal(format!("Could not serialize settings: {error}"))
+        })?;
+        std::fs::write(&path, text).map_err(|error| {
+            AppError::io(format!("Could not write profile settings.json: {error}"))
+        })?;
     }
     Ok(changed)
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Branchwork Prototype v10</title>
+<title>Branchwork Prototype v11 - Right Project Sidebar</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--ah:250;--bh:265;--k:1}
@@ -70,7 +70,7 @@ kbd{font:500 10.5px "SF Mono","JetBrains Mono",monospace;min-width:18px;text-ali
 .ibtn .n{position:absolute;top:-3px;right:-3px;min-width:15px;height:15px;border-radius:8px;background:var(--red);color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;padding:0 3px}
 
 /* shell */
-.shell{display:grid;grid-template-columns:236px 1fr;gap:0;min-height:0;padding:0 8px 8px 8px}
+.shell{position:relative;display:grid;grid-template-columns:236px minmax(0,1fr) 278px;gap:0;min-height:0;padding:0 8px 8px 8px}
 .side{border-radius:18px;background:var(--glass);box-shadow:var(--spec);display:flex;flex-direction:column;min-height:0;overflow:hidden;margin-right:8px}
 .sscroll{overflow:auto;flex:1;padding:6px 8px 10px}
 .sh{display:flex;align-items:center;justify-content:space-between;padding:12px 8px 4px;color:var(--fg3);font-size:11px;font-weight:600}
@@ -91,6 +91,56 @@ kbd{font:500 10.5px "SF Mono","JetBrains Mono",monospace;min-width:18px;text-ali
 .wtn .rt{margin-left:auto}
 .sfoot{border-top:1px solid var(--line);padding:8px}
 .ghacc{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;color:var(--fg2);font-size:12px}
+.project-rail{display:flex;flex-direction:column;min-width:0;min-height:0;margin-left:8px;border-radius:18px;background:var(--glass);box-shadow:var(--spec);overflow:hidden}
+.project-rail[hidden]{display:none}
+.pr-head{display:flex;align-items:center;gap:8px;padding:14px 12px 10px}
+.pr-head b{flex:1;font-size:12px;font-weight:650}
+.pr-head .ibtn{width:26px;height:26px;font-size:13px}
+.pr-search{padding:0 10px 10px}
+.pr-search .in{width:100%;padding:6px 9px}
+.pr-scroll{flex:1;overflow:auto;padding:0 8px 8px}
+.pr-group{padding:5px 0}
+.pr-group+.pr-group{border-top:1px solid var(--line)}
+.pr-group-head{display:flex;align-items:center;gap:3px;padding:2px 3px}
+.pr-collapse{width:18px;height:24px;border:0;border-radius:6px;background:none;color:var(--fg3);cursor:pointer}
+.pr-collapse:hover{background:var(--glass2);color:var(--fg)}
+.pr-group-toggle{flex:1;display:flex;align-items:center;gap:7px;min-width:0;padding:5px 4px;border:0;border-radius:7px;background:none;color:var(--fg2);text-align:left;cursor:pointer}
+.pr-group-toggle:hover{background:var(--glass2);color:var(--fg)}
+.pr-caret{width:11px;color:var(--fg3);font-size:10px}
+.pr-group-mark{width:9px;height:9px;flex:none;border-radius:3px}
+.pr-group-name{flex:1;overflow:hidden;font-size:11.5px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+.pr-group-count{color:var(--fg3);font-size:10.5px;font-variant-numeric:tabular-nums}
+.pr-group-menu{width:24px;height:24px;border:0;border-radius:6px;background:none;color:var(--fg3);cursor:pointer}
+.pr-group-menu:hover{background:var(--glass2);color:var(--fg)}
+.pr-project{display:flex;align-items:center;gap:8px;width:100%;min-width:0;padding:6px 8px 6px 22px;border:0;border-radius:8px;background:none;color:var(--fg2);text-align:left;cursor:pointer}
+.pr-project:hover{background:var(--glass2);color:var(--fg)}
+.pr-project.on{background:var(--accs);color:var(--fg)}
+.pr-project-mark{display:grid;width:20px;height:20px;flex:none;place-items:center;border-radius:6px;color:#fff;font-size:9px;font-weight:700}
+.pr-project-detail{display:flex;flex:1;flex-direction:column;min-width:0;gap:1px}
+.pr-project-name,.pr-project-owner{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pr-project-name{font-size:11.5px;font-weight:550}
+.pr-project-owner{color:var(--fg3);font-size:10px}
+.pr-prs{flex:none;padding:1px 5px;border-radius:999px;background:var(--s3);color:var(--fg3);font-size:9px}
+.pr-empty{padding:8px 22px;color:var(--fg3);font-size:11px}
+.pr-foot{display:flex;gap:6px;padding:9px 10px;border-top:1px solid var(--line)}
+.pr-foot .btn{flex:1;justify-content:center;padding-inline:8px}
+.project-context{display:flex;align-items:center;gap:7px;min-width:0;padding:5px 9px;border-radius:8px;color:var(--fg2);font-size:12px}
+.project-context-mark{width:8px;height:8px;flex:none;border-radius:3px}
+.project-context-group{color:var(--fg3)}
+.project-context-name{overflow:hidden;color:var(--fg);font-weight:550;text-overflow:ellipsis;white-space:nowrap}
+.project-context-sep{color:var(--fg3)}
+.shell.projects-closed{grid-template-columns:236px minmax(0,1fr)}
+.shell.projects-closed .project-rail{display:none}
+@media(max-width:1120px){
+  .shell{grid-template-columns:210px minmax(0,1fr)}
+  .shell.projects-closed{grid-template-columns:210px minmax(0,1fr)}
+  .project-rail{position:absolute;z-index:25;top:0;right:8px;bottom:8px;width:min(278px,calc(100vw - 250px));margin:0;box-shadow:var(--shadow),var(--spec),0 0 0 .5px var(--line2)}
+}
+@media(max-width:720px){
+  .shell{grid-template-columns:52px minmax(0,1fr)}
+  .shell.projects-closed{grid-template-columns:52px minmax(0,1fr)}
+  .project-rail{width:min(278px,calc(100vw - 82px))}
+}
 
 /* stage */
 .stage{border-radius:18px;background:var(--surf);box-shadow:var(--spec),0 0 0 .5px var(--line2);display:grid;grid-template-rows:52px 1fr;min-height:0;min-width:0;overflow:hidden}
@@ -605,6 +655,7 @@ input[type=range]{accent-color:var(--acc);width:180px}
     <button class="search" onclick="openPal()">⌕ <span>Search, jump, or ask Claude…</span><kbd>⌘K</kbd></button>
     <div class="tright">
       <div class="avs" id="presence"></div>
+      <button class="ibtn" id="projectRailToggle" title="Toggle project sidebar" aria-label="Toggle project sidebar" onclick="toggleProjectRail()">▤</button>
       <button class="ibtn" title="Terminal (⌃`)" onclick="toggleTerm()">❯_</button>
       <button class="ibtn" title="Inbox" onclick="go('inbox')">◉<span class="n" id="ibn">5</span></button>
       <button class="ibtn" title="Theme" onclick="toggleTheme()">◐</button>
@@ -616,6 +667,7 @@ input[type=range]{accent-color:var(--acc);width:180px}
       <div class="sfoot"><div class="ghacc"><span class="av" style="--c:var(--acc)">R</span><div><b style="color:var(--fg)">rozzyVive</b><div class="m" style="font-size:11px">GitHub · connected</div></div><button class="btn ghost sm" style="margin-left:auto" onclick="go('settings')">⚙</button></div></div>
     </aside>
     <div class="stagew" id="stagew"></div>
+    <aside class="project-rail lg" id="projectRail" aria-label="Projects"></aside>
   </div>
 </div>
 <div class="term" id="term"></div>
@@ -627,7 +679,7 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const P={you:['Rozzy','var(--acc)'],rina:['Rina','var(--pnk)'],budi:['Budi','var(--blu)'],sari:['Sari','var(--grn)'],bot:['dependabot','var(--yel)'],claude:['Claude','var(--pur)']};
 const av=(p,s=20)=>`<span class="av" style="--c:${P[p][1]};width:${s}px;height:${s}px;font-size:${Math.round(s*.45)}px">${p==='claude'?'✦':P[p][0][0]}</span>`;
 const LC=['var(--blu)','var(--grn)','var(--red)','var(--yel)','var(--pur)'];
-const S={screen:'launchpad',wt:'feat/auth-oauth',sel:1,repo:0,pr:482,agent:1,timers:[],filter:'all',inbox:0,blame:4};
+const S={screen:'launchpad',wt:'feat/auth-oauth',sel:1,repo:0,pr:482,agent:1,timers:[],filter:'all',inbox:0,blame:4,projectRailOpen:true,projectQuery:'',collapsedGroups:new Set()};
 /* ================= PROJECT GROUPS ================= */
 const GROUPS=[
   {id:'acme',n:'Acme · Work',c:'oklch(.66 .19 250)',acct:{claude:'c-work',codex:'x-api'},path:'~/work/{repo}'},
@@ -642,8 +694,26 @@ S.group='acme';S.repo='web-app';
 const curG=()=>GROUPS.find(g=>g.id===S.group)||GROUPS[0];
 const curP=()=>PROJ.find(p=>p.n===S.repo)||PROJ[0];
 const GSW=['oklch(.66 .19 250)','oklch(.72 .16 155)','oklch(.72 .16 55)','oklch(.68 .2 350)','oklch(.66 .18 300)','oklch(.7 .13 200)','oklch(.6 .02 260)'];
-function openProj(n){const p=PROJ.find(x=>x.n===n);if(p.g)S.group=p.g;S.repo=n;closePop();renderStage();toast(`Opened ${p.o}/${n}`,p.g?'Grup '+curG().n:'Tanpa grup','◫')}
-function switchGroup(id){S.group=id;S.repo=(PROJ.find(p=>p.g===id)||curP()).n;renderStage();toast('Grup: '+curG().n,PROJ.filter(p=>p.g===id).length+' project · akun default grup aktif','▣')}
+function openProj(n){const p=PROJ.find(x=>x.n===n);if(!p)return;S.group=p.g;S.repo=n;closePop();renderStage();toast(`Opened ${p.o}/${n}`,p.g?'Grup '+curG().n:'Tanpa grup','◫')}
+function switchGroup(id){const groupId=id||null;S.group=groupId;S.repo=(PROJ.find(p=>p.g===groupId)||curP()).n;renderStage();toast('Grup: '+(GROUPS.find(g=>g.id===groupId)?.n||'Tanpa grup'),PROJ.filter(p=>p.g===groupId).length+' project · akun default grup aktif','▣')}
+function toggleProjectRail(){S.projectRailOpen=!S.projectRailOpen;renderProjectRail()}
+function toggleProjectGroup(id){S.collapsedGroups.has(id)?S.collapsedGroups.delete(id):S.collapsedGroups.add(id);renderProjectRail()}
+function searchProjects(value){S.projectQuery=value;renderProjectRail();const input=$('#projectSearch');if(input){input.focus();input.setSelectionRange(value.length,value.length)}}
+function renderProjectRail(){
+  const rail=$('#projectRail'),shell=$('.shell'),toggle=$('#projectRailToggle');if(!rail||!shell)return;
+  shell.classList.toggle('projects-closed',!S.projectRailOpen);rail.hidden=!S.projectRailOpen;
+  if(toggle)toggle.setAttribute('aria-pressed',String(S.projectRailOpen));
+  if(!S.projectRailOpen)return;
+  const q=S.projectQuery.trim().toLowerCase(),groups=[...GROUPS,{id:null,n:'Ungrouped',c:'var(--fg3)'}];
+  const sections=groups.map(g=>{
+    const projects=PROJ.filter(p=>p.g===g.id&&(`${p.o}/${p.n}`).toLowerCase().includes(q));
+    if(q&&!projects.length)return'';
+    const key=g.id||'ungrouped',collapsed=S.collapsedGroups.has(key);
+    return `<section class="pr-group"><div class="pr-group-head"><button class="pr-collapse" aria-label="${collapsed?'Expand':'Collapse'} ${g.n}" aria-expanded="${!collapsed}" onclick="toggleProjectGroup('${key}')">${collapsed?'›':'⌄'}</button><button class="pr-group-toggle" title="Open ${g.n}" onclick="switchGroup('${g.id||''}')"><span class="pr-group-mark" style="background:${g.c}"></span><span class="pr-group-name">${g.n}</span><span class="pr-group-count">${projects.length}</span></button>${g.id?`<button class="pr-group-menu" title="Group settings" aria-label="Settings for ${g.n}" onclick="groupModal('${g.id}')">•••</button>`:''}</div>${collapsed?'':projects.map(p=>`<button class="pr-project ${p.n===S.repo?'on':''}" aria-current="${p.n===S.repo?'page':'false'}" title="${p.o}/${p.n}" onclick="openProj('${p.n}')"><span class="pr-project-mark" style="background:${p.c}">${p.n[0].toUpperCase()}</span><span class="pr-project-detail"><span class="pr-project-name">${p.n}</span><span class="pr-project-owner">${p.o}</span></span>${p.pr?`<span class="pr-prs">${p.pr}</span>`:''}</button>`).join('')||(!collapsed?'<div class="pr-empty">No projects yet</div>':'')}</section>`;
+  }).join('');
+  const active=curP(),group=GROUPS.find(g=>g.id===active.g);
+  rail.innerHTML=`<div class="pr-head"><b>Projects</b><button class="ibtn" title="Add project" aria-label="Add project" onclick="addProj()">＋</button></div><div class="pr-search"><input class="in" id="projectSearch" aria-label="Search projects" placeholder="⌕ Search projects…" value="${S.projectQuery.replaceAll('"','&quot;')}" oninput="searchProjects(this.value)"></div><div class="pr-scroll">${sections||'<div class="pr-empty">No matching projects</div>'}</div><div class="project-context" title="${active.o}/${active.n}"><span class="project-context-mark" style="background:${group?.c||'var(--fg3)'}"></span><span class="project-context-group">${group?.n||'Ungrouped'}</span><span class="project-context-sep">/</span><span class="project-context-name">${active.n}</span></div><div class="pr-foot"><button class="btn sm" onclick="groupModal()">＋ Group</button><button class="btn sm" onclick="addProj()">＋ Project</button></div>`;
+}
 function closePop(){$('#ppop')?.remove()}
 addEventListener('mousedown',e=>{if($('#ppop')&&!e.target.closest('#ppop,.gchip,#modal'))closePop()});
 function projPop(){if($('#ppop'))return closePop();const d=document.createElement('div');d.className='ppop';d.id='ppop';
@@ -724,7 +794,7 @@ const NAV=[
 ];
 const TOOLS=[['conflict','⚠','Resolve conflicts','2r'],['rebase','↕','Interactive rebase'],['blame','≡','Blame & history'],['compare','⇆','Compare worktrees']];
 function renderChrome(){
-  const G=curG();$('#rtabs').innerHTML=`<button class="gchip" title="Grup project (klik untuk ganti / kelola)" onclick="projPop()"><i style="background:${G.c}">${G.n[0]}</i>${G.n}<span class="m">▾</span></button><span class="tsep"></span>`+PROJ.filter(p=>p.g===S.group).map(p=>`<button class="rtab ${p.n===S.repo?'on':''}" onclick="openProj('${p.n}')"><i style="background:${p.c}">${p.n[0].toUpperCase()}</i>${p.n}</button>`).join('')+`<button class="rtab" title="Tambah project ke grup ini" onclick="addProj()">＋</button>`;
+  const active=curP(),group=GROUPS.find(g=>g.id===active.g);$('#rtabs').innerHTML=`<div class="project-context"><span class="project-context-mark" style="background:${group?.c||'var(--fg3)'}"></span><span class="project-context-group">${group?.n||'Ungrouped'}</span><span class="project-context-sep">/</span><span class="project-context-name">${active.o}/${active.n}</span></div>`;
   $('#presence').innerHTML=av('rina',24)+av('budi',24)+av('sari',24);
   const nv=([id,ic,l,b])=>`<button class="nav ${S.panes[S.fp]===id?'on':shown(id)?'on2':''}" draggable="true" ondragstart="event.dataTransfer.setData('text/scr','${id}')" onclick="navClick(event,'${id}')" oncontextmenu="navCtx(event,'${id}')" title="⌘-klik / drag ke konten untuk split view"><span class="ic">${ic}</span>${l}${S.panes.length>1&&shown(id)?`<span class="spl">${S.panes.indexOf(id)===0?(S.sdir==='h'?'◧':'⬒'):(S.sdir==='h'?'◨':'⬓')}</span>`:''}${b?`<span class="b ${b.endsWith('r')?'r':''}">${b.replace('r','')}</span>`:''}</button>`;
   $('#side').innerHTML=NAV.map(nv).join('')+
@@ -732,6 +802,7 @@ function renderChrome(){
    shownWT().map(w=>`<div class="wtn ${w.b===S.wt?'on':''}" style="--c:${w.c}" onclick="setWT('${w.b}')"><span class="ln"></span><div style="min-width:0"><div class="nm mono" style="font-size:12px">${w.b}</div><div class="sb">${w.ab?`<span>${w.ab}</span>·`:''}${w.pr?`<span>#${w.pr}</span>`:'<span>'+w.p+'</span>'}</div></div><div class="rt">${wtBadge(w)}</div><button class="tbtn" title="Open terminal" onclick="event.stopPropagation();openTermAt('${w.b}')">❯_</button>${w.b!==S.wt?`<button class="tbtn" style="margin-left:2px" title="Sembunyikan dari sidebar" onclick="event.stopPropagation();S.pins.delete('${w.b}');renderChrome()">×</button>`:''}</div>`).join('')+(WT.length>shownWT().length?`<button class="nav" style="color:var(--fg3)" onclick="wtPick(event)"><span class="ic">⋯</span>${WT.length-shownWT().length} worktree lain</button>`:'')+
    `<div class="sh">TOOLS</div>`+TOOLS.map(nv).join('')+
    `<div class="sh">STASHES <span>2</span></div><div class="nav"><span class="ic">⊟</span>WIP navbar<span class="b">4h</span></div>`;
+  renderProjectRail();
 }
 function wtBadge(w){const ss=SESS.filter(x=>x.wt===w.b&&x.agent!=='shell');if(!ss.length)return `<span class="chip ${w.st[0]}">${w.st[1]}</span>`;const s=ss.at(-1);return `<span class="chip ${stcls(s.status)}" title="${AGENTS[s.agent][0]}"><span style="color:${AGENTS[s.agent][1]}">${AGENTS[s.agent][2]}</span> ${stl(s)}</span>`}
 S.pins=new Set(['feat/auth-oauth','main','fix/cart-total','exp/redis-cache']);

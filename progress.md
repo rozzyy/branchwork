@@ -2,6 +2,74 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-10: M3 Stage 6 committed and merged (user-ordered, no push)
+
+- **Commit:** one stage commit on `m3-stage-6`, fast-forwarded into `main`, branch deleted. Covers the right-side project rail, title-bar context/toggle, New Agent dialog login reuse, agent-pane login hint, login-detected setup guidance, and the Claude onboarding seed IPC. Untracked agent-memory dirs (`.claude/`, `src-tauri/.claude/`) and `node-compile-cache/` left out of the commit.
+- **Verification at commit:** `pnpm typecheck` clean; `./init.sh` `=== Verification Complete ===` (56 files / 519 tests; Rust 173 passed, 0 failed, 3 ignored); `git diff --check` clean; user approved manual M3-S6-01 and the Claude login retest.
+- **Next:** Await user direction. Do not push.
+
+## 2026-11-10: Login-detected toast points at Claude's setup wizard (uncommitted)
+
+- **Report:** fresh `claude auth login` prints "Login successful", then the same terminal lands on "Select login method" — read as another login request.
+- **Cause:** the probe turns true the moment the browser step completes, while the second `claude` command still runs the one-time setup wizard (flag missing on old profile dirs). The success toast arrived with no mention of the wizard.
+- **Fix:** `monitorLogin` in `src/agents/profiles.ts` adds `detail: t("agents.loginFinishSetup")` (new key in `src/i18n/en.ts`) for Claude: the login is done, answer the setup screen once in the terminal. Regression test asserts the detail on the detected toast (failed with the change stashed, passes with it).
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 56 passed (56), Tests 519 passed (519); Rust 173 passed, 0 failed, 3 ignored; `git diff --check` clean.
+- **Next:** Rebuild, redo the login, follow the toast: answer the wizard once (option 1). No commit or push.
+
+## 2026-11-10: Seed Claude onboarding flag so verified logins skip the wizard (uncommitted)
+
+- **Cause (proven):** the interactive `claude` TUI runs its Welcome/theme/login-method wizard whenever the profile config lacks `hasCompletedOnboarding` — even with valid OAuth (`auth status` → logged in, `claude -p` authenticates). Real-pty captures: profile without flag → picker; host with flag → straight to prompt; test copy with only the flag added → straight to prompt (copy deleted; real credential file never read/written). A `settings.json` flag is ignored by the vendor — only `.claude.json` counts, and that file holds the OAuth secret.
+- **Fix:** new `cli_seed_onboarding` IPC (`src-tauri/src/cli.rs` + `src-tauri/src/lib.rs`, bindings regen) exclusive-creates (atomic `create_new`) the profile `.claude.json` with only `{"hasCompletedOnboarding":true}`; never reads, merges, overwrites, or logs — existing tokens can't be observed or clobbered, and the vendor merges keys on later writes (verified). Called best-effort from `createProfile` and `loginProfile` for claude only (`src/agents/profiles.ts` + `src/ipc/cli.ts` wrapper). New profiles never land on the picker; pre-existing flagless dirs (e.g. claude-personal) still need the one-time in-pane setup the banner describes — they can't be repaired without reading secrets.
+- **Coverage:** Rust tests (create-once, repeat no-op preserves content, rejects non-claude/bad slugs); `src/ipc/cli.test.ts` routing; `src/agents/profiles.test.ts` (seeded at creation, re-seeded on login reopen, never for other CLIs, survives failure). The two positive seed tests failed with the `profiles.ts` change stashed.
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 56 passed (56), Tests 518 passed (518); Rust 173 passed, 0 failed, 3 ignored; `git diff --check` clean. New profiles must be created after this change to carry the seed (restart not required for the frontend part; backend change needs a rebuilt app).
+- **Next:** Retest: create a new Claude profile → login → Add Agent → straight to prompt. Existing personal profile: finish one-time setup in the agent pane once; note weekly limit until Nov 12. No commit or push.
+
+## 2026-11-10: Login-screen picker on a verified-logged-in Claude profile (uncommitted)
+
+- **Report:** Agents → New Agent with the correct (logged-in) Claude profile still opened Claude's "Select login method" picker.
+- **Root cause (proven on this host):** the profile dir has valid OAuth (`auth status --json` → `loggedIn: true`, `claude -p` authenticates) but never completed interactive onboarding — profile `.claude.json` lacks `hasCompletedOnboarding` (host has it and skips onboarding). The TUI therefore runs Welcome → theme → login-method picker, which is visually identical to a logged-out state. Verified with real-pty captures: profile → picker; host (flag set) → straight to workspace trust; a copy of the profile with only the flag added → straight to trust (copy deleted afterwards; real credential file untouched). Separately, `claude -p` reports this account hit its weekly limit (resets Nov 12), so API calls stay refused even after onboarding until reset/account switch.
+- **Fix:** `AgentPaneBody` in `src/screens/agents/AgentsScreen.tsx` shows an inline notice when a Claude session is `waiting` while its profile probe is verified linked: finish the one-time setup in the pane (no re-login needed), plus a warning that a usage-limit report means the account is at its cap, with an "Open login terminal" action (`loginProfile`). New strings `agents.loggedInWaiting` / `agents.openLoginTerminal` in `src/i18n/en.ts`.
+- **Coverage:** two pane tests (banner shown when linked, hidden when not) + the two dialog tests; the three positive tests were observed failing with the fix stashed and pass with it.
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 56 passed (56), Tests 515 passed (515); Rust 171 passed, 0 failed, 3 ignored; `git diff --check` clean.
+- **Next:** In the agent pane, finish the one-time Claude setup (theme → login method #1 → browser auth for the same account). Note the weekly limit until Nov 12: use the host account/another profile or wait. No commit or push.
+
+## 2026-11-10: New Agent dialog reuses the Settings login (uncommitted)
+
+- **Cause:** The New Agent dialog always defaulted the profile selector to "New profile…", so opening it after a Settings login created/selected a fresh logged-out profile dir. The spawn guard then correctly blocked with "Log in … first", which looked like the Settings login was ignored. The probe itself was verified per-profile on this host (`CLAUDE_CONFIG_DIR=…/claude-personal` → `loggedIn: true`).
+- **Fix:** `src/screens/agents/AgentsScreen.tsx` preselects `resolveProfile(cliId)` (global/cli default, else first profile) on open and on CLI switch; shows live `Logged in` / `Not logged in` + inline `Sign in again` for the selected profile (same `checkProfileLogin` the guard uses, 5 s repoll); Start is disabled only when verified logged-out (`linked === false`), unknown providers stay enabled.
+- **Coverage:** Two regression tests in `src/screens/agents/AgentsScreen.test.tsx` failed before (`__new` vs `personal`) and pass now.
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 56 passed (56), Tests 513 passed (513); Rust 171 passed, 0 failed, 3 ignored; `git diff --check` clean.
+- **Next:** Restart/reload lalu ulangi langkah user: Settings → login Claude → Agents → tambah agent → profil yang sudah login langsung terpilih + Start aktif. No commit or push.
+
+## 2026-11-10: Right project-sidebar prototype + account-removal hardening (uncommitted)
+
+- **Prototype:** Updated `docs/design/prototype.html` with a searchable right-side project rail, collapsible groups, active-project state, group/project actions, a compact context breadcrumb, and a responsive overlay layout. Left navigation and worktrees remain separate. Playwright interaction check passed for search, selection, and context updates.
+- **Security fixes:** Account removal now requires native confirmation at the Tauri IPC boundary; the confirmation explains that Muse sign-out affects every Muse profile on the device. Muse vendor logout no longer runs for a missing/non-directory profile. Declining native confirmation preserves the account record.
+- **Verification:** `./init.sh` — `=== Verification Complete ===`; typecheck clean; Test Files 55 passed (55), Tests 507 passed (507); Rust 171 passed, 0 failed, 3 ignored; Clippy clean. `cargo fmt -- --check` and `git diff --check` clean.
+- **Next:** Review `docs/design/prototype.html` before any production sidebar changes; restart the app for manual Settings account-flow retest. No commit or push.
+
+## 2026-11-10: Settings profile login and management follow-up (uncommitted)
+
+- **Changed:** Settings Add profile now creates the profile in place and shows its account row with a Log in action rather than navigating immediately. Log in remains available for an unavailable/unknown status and while a login is pending. Added Edit (renames the display label, preserving the profile slug/folder) and Remove profile actions for every account state. Settings layout now uses the full available width.
+- **Coverage:** Added Settings tests for in-place profile creation, retry on unavailable/pending login, rename with stable slug, and Edit/Remove availability; added profile-store rename validation tests.
+- **Verification:** `./init.sh` exit 0 — typecheck and Clippy clean; 55 Vitest files / 499 tests passed; Rust 165 passed, 0 failed, 3 ignored; `git diff --check` clean.
+- **Next:** Restart/reload and verify Settings → Add profile → Log in, retry after cancel, rename/remove, and full-width layout. No commit or push.
+
+## 2026-11-10: Login terminal was hidden; blocked agent creation left a dead pane (uncommitted)
+
+- **Cause:** Profile login created a Terminal-screen tab but did not navigate to that screen, leaving the interactive vendor login inaccessible. If a Terminal tab was created before the screen's initial settings load, that load could also overwrite the new tab. Separately, Add Agent treated a login-blocked attempt as a created session, closing the dialog and leaving a dead pane.
+- **Fix:** Login now loads and opens the Terminal screen before starting the vendor command; terminal settings load is idempotent and `openHere` loads before adding a tab. Login-blocked starts now return no session and remove the temporary pane; the newly created profile stays selected in the dialog.
+- **Verification:** `./init.sh` exit 0 — typecheck and Clippy clean; 55 Vitest files / 494 tests passed; Rust 165 passed, 0 failed, 3 ignored.
+- **Next:** Restart the app; use Claude's Settings login and verify the Terminal screen opens visibly, complete login, then try Add Agent with that profile. No commit or push.
+
+## 2026-11-10: Claude profile login status mismatch (uncommitted)
+
+- **Cause:** Settings probed Claude's host-default config while agent sessions and login used the selected profile's `CLAUDE_CONFIG_DIR`. The host could report logged in while the isolated profile still needed login/onboarding.
+- **Fix:** Settings now probes the same profile environment as the agent, keeps each Claude profile's identity separate, and shows unknown separately from logged out when the probe cannot verify status. Starting Claude is blocked only when that profile probe explicitly reports logged out, with the existing Log in action; an unknown probe does not falsely claim the user is logged out.
+- **Regression coverage:** Added Settings coverage for host logged-in/profile logged-out mismatch and session coverage for both refusal and successful launch with the same profile environment.
+- **Verification:** `./init.sh` exit 0 — typecheck clean; 55 Vitest files / 493 tests passed; Rust 165 passed, 0 failed, 3 ignored; Clippy clean.
+- **Next:** Restart the app, confirm the prior Claude profile shows `Not logged in`, then complete login through that profile's Settings action and start an agent. No commit or push.
+
 ## 2026-11-08: Light-mode report — code verified, awaiting clean retest (branch `m3-stage-1`, uncommitted)
 
 - **Report:** screenshot 17:13 shows Settings with Light selected but the stage rendered black. Pixel inspection confirms store=light (checked pill) but dark CSS tokens (gray pill, black pane).
@@ -718,3 +786,74 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 
 - **Release:** version bump 0.2.0 → 0.3.0 (`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`; `Cargo.lock` follows), commit `chore(release): v0.3.0`, tag `v0.3.0` ("M3: Terminal & Agents").
 - Pushed `main` + tag to origin per explicit user order.
+
+## 2026-11-09: Post-M3 account-login + usage-bar fix (uncommitted)
+
+- **Report:** Add account hanya menambah profil tanpa login sungguhan; Settings perlu kelola akun sebenarnya + progress bar monitoring token ala prototype.
+- **Fix 1 — real login:** `addProfile` kini mendaratkan pane ke `loginCmd ?? launch[0]` (claude/opencode/gemini masuk ke TUI vendor, bukan shell kosong) + rollback profil bila `resolveProfileDir`/`newTab`/write gagal; custom tanpa override → toast jelas, bukan unhandled rejection. Test: rollback + custom + claude-lands-in-CLI.
+- **Fix 2 — usage bar (spec §6.6.4, no-fabrication):** store `usage` ephemeral (tidak dipersist) + `setProfileUsage` (clamp 0–100) via `src/agents/usage.tsx` (`UsageBar`, threshold prototype ≥90/≥70); tampil di chip profil Agents, menu profil (extra %), dan baris akun Settings (`Limit {window} · {%}` / `No usage data`). Angka hanya muncul bila hook CLI melaporkannya.
+- **Gate:** init.sh exit 0 (53 files / 465 tests; Rust 161 passed / 3 ignored; typecheck + Clippy clean); `pnpm test:e2e` 76/76.
+- **Belum:** commit menunggu perintah user (aturan no-commit). Belum ada wiring parser status/usage CLI sungguhan — itu lanjutan bila format CLI terverifikasi.
+
+## 2026-11-09: Login ala Orca untuk seluruh provider (uncommitted)
+
+- **Investigasi:** `orca account add --help` → Orca menjalankan login vendor di terminal (`claude login` / `codex login`, device flow untuk codex; `opencode auth login --standalone` untuk OpenCode 2; `devin auth login --force-manual-token-flow`), lalu mendaftarkan akun (email, authMethod, home isolasi per akun). `orca account list --json` terverifikasi di host ini.
+- **Koreksi registry (terverifikasi via `--help` asli):** claude `null` → `"claude auth login"` (`claude auth login/logout/status [--json]` ada di 2.1.280 — komentar lama "in-app /login" terbukti basi); opencode `null` → `"opencode auth login"` (picker interaktif jalan di PTY login; `--standalone` hanya OpenCode 2, tidak ada di 1.19.3 terinstal); gemini tetap `null` (CLI tidak punya argv login — grep 0 hasil; auth selesai di dalam TUI). codex/copilot/muse sudah benar.
+- **Bonus terverifikasi (belum di-wiring):** `muse usage [--json]` (subscription allowance sungguhan), `claude auth status --json`, `codex login status` — sumber data jujur untuk usage bar & label akun.
+- **Test:** claude/opencode/gemini login-case baru + registry suite (23 passed); **Gate:** init.sh exit 0 (53 files / 467 tests; Rust 161/3 ignored); e2e 76/76. Belum commit — menunggu perintah user.
+
+## 2026-11-09: Baris akun tidak lagi terlihat terhubung sebelum login (uncommitted)
+
+- **Laporan:** setelah Add account, baris (mis. Personal) langsung menampilkan Log out seolah sudah terkoneksi, padahal login belum selesai.
+- **Akar masalah:** profil dicatat di store sebelum login PTY selesai; UI menyamakan "ada profil" = "terhubung".
+- **Perbaikan:** perintah Rust baru `cli_has_credentials` (file kredensial mana pun dari registry ada di profile dir; validasi nama file sama ketatnya dengan logout) + `profileHasCredentials` di IPC + aksi `loginProfile` (buka ulang PTY login untuk profil yang ada; hasil refactor `openLoginTab` bersama addProfile). Baris Settings memeriksa kredensial saat mount dan fail-closed: Logout hanya bila terverifikasi; bila belum → tombol Log in (lanjutkan login di PTY) + Remove (konfirmasi danger, hanya hapus record); provider tanpa declared paths (copilot/muse/opencode/gemini) tetap seperti semula. Saat memeriksa, tombol Logout nonaktif.
+- **Test:** Rust `has_credentials_reports_only_declared_files` (+ traversal); IPC routing; `loginProfile` sukses/unknown; Settings: baris belum-login (Log in + Remove, tanpa Log out), remove terkonfirmasi. Scope regresi ini dipertahankan bersama proyek.
+- **Gate:** init.sh exit 0 (53 files / 471 tests; Rust 162 passed / 3 ignored; typecheck + Clippy bersih); e2e 76/76. Belum commit — menunggu perintah user.
+
+## 2026-11-09: Status baris akun tidak refresh sesudah logout (uncommitted)
+
+- **Laporan:** sesudah klik Log out, tombol Logout tetap ada sampai reload.
+- **Akar masalah:** status `linked` hanya dihitung saat mount; sesudah logout tidak di-cek ulang. Selain itu, saat pemeriksaan berjalan sempat tampil tombol Logout nonaktif yang terlihat seperti sudah terhubung.
+- **Perbaikan (`SettingsScreen.tsx`):** cek kredensial diekstrak jadi `check()`; dipanggil ulang sesudah `logoutProfile` berhasil; polling 5 detik selama `linked === false` agar baris berbalik jadi Logout sendiri setelah login diselesaikan di PTY tanpa reload; saat `linked === null` tidak ada affordance Logout sama sekali (key `settings.checkingAccount` yang tak terpakai dihapus).
+- **Test:** regresi "flips to Log in right after logout without a reload" dipertahankan bersama proyek.
+- **Gate:** init.sh exit 0 (53 files / 472 tests; Rust 162/3 ignored); e2e 76/76. Belum commit — menunggu perintah user. Catatan: perubahan Rust (`cli_has_credentials`) butuh restart penuh aplikasi, HMR saja tidak cukup.
+
+## 2026-11-09: Guard sesi terhadap profil belum login + sesi basi (uncommitted)
+
+- **Laporan (screenshot 20:57):** sesi Rozzy yang profilnya sudah terhubung tetap onboarding ("Let's get started") — sesi itu lahir sebelum kredensial ada; claude yang sudah jalan tidak pernah membaca ulang kredensial. Verifikasi: `claude auth status --json` dengan `CLAUDE_CONFIG_DIR` profil Rozzy → `loggedIn: true` (isolasi env benar, bukan bug env).
+- **Perbaikan:** `spawnAgentShell` (satu-satunya pintu start/switch/race) menolak profil yang file kredensialnya belum ada — tanpa membakar PTY; toast berisi tombol Log in (buka PTY login), record sesi menyimpan error yang terlihat di pane. i18n: `agents.loginRequired`, `agents.loginNow`.
+- **Test:** "refuses to start on a profile that never completed login" (tanpa spawn/write, error + toast action); mock `profileHasCredentials` ditambahkan ke `AgentsScreen.test.tsx` (ini yang membuat gate sempat merah 1 test). Scope regresi dipertahankan.
+- **Gate:** init.sh exit 0 (53 files / 473 tests; Rust 162/3 ignored); e2e 76/76. Sesi basi yang sudah telanjur jalan harus ditutup manual (×) lalu New agent lagi. Belum commit — menunggu perintah user.
+
+## 2026-11-09: Claude pindah ke HOME sandbox + loader login (uncommitted)
+
+- **Akar relogin (terbukti):** token OAuth claude ada di `~/.claude/.credentials.json` (HOME), BUKAN di `CLAUDE_CONFIG_DIR`. Uji decisive: HOME kosong + CLAUDE_CONFIG_DIR=profil berisi oauth state → `loggedIn:false`. Jadi isolasi lama tidak pernah bisa memisahkan akun; sesi selalu jatuh ke onboarding. Klaim "Verified" lama di registry tidak valid dan sudah dikoreksi.
+- **Perbaikan:** `profileEnv` claude → `HOME=$profileDir/home` (metode Orca; sama seperti codex/copilot/opencode/gemini). `credentialPaths` → `["home/.claude/.credentials.json"]` (hanya file token: sinyal presisi + logout aman). Rust: validasi `valid_credential_path` per-segmen (`..`, absolut, segmen kosong ditolak; satu level nesting diizinkan) dipakai logout + has_credentials. Hooks claude pindah ke `{profile}/home/.claude.json` (file yang benar-benar dibaca claude sandbox).
+- **Dampak:** profil claude lama (Personal/Rozzy) harus login SEKALI lagi di dalam sandbox (tombol Log in di Settings); login host utama tidak tersentuh. Logout kini menghapus token sandbox, bukan kredensial host.
+- **Loader:** `BusyButton` (spinner `currentColor`, hormati prefers-reduced-motion) dipakai di Add account + Log in; spinner `role=status` saat cek kredensial. Menu chip + toast action tidak bisa menampung loader (ditutup/tidak ada slot) — feedbacknya berupa tab PTY yang terbuka.
+- **Test:** BusyButton busy/reject; Settings pending spinner; registry env claude; Rust nesting/traversal + hooks path; guard sesi tetap hijau. Scope regresi dipertahankan.
+- **Gate:** init.sh exit 0 (54 files / 476 tests; Rust 162/3 ignored; typecheck + Clippy bersih); e2e 76/76. Belum commit — butuh restart penuh (Rust berubah).
+
+## 2026-11-09: Dialog Keychain → claude kembali ke state-isolation (uncommitted)
+
+- **Laporan (screenshot 22:18):** login claude di sandbox HOME memicu dialog macOS "Keychain Not Found ... to store 'apple'"; sandbox tetap kosong (login gagal total).
+- **Investigasi:** isi rumah per-akun Orca ternyata symlink massal ke `~/.claude/` asli + tanpa `.credentials.json` per-akun — Orca pun tidak mengisolasi token (auth dishare, state dipisah). Keychain item "Claude Code" tidak ada; dialog berasal dari proses sandbox yang kehilangan akses ke login keychain (path keychain diturunkan dari HOME).
+- **Keputusan:** claude kembali ke `CLAUDE_CONFIG_DIR` (isolasi state: settings/history/projects per profil) + `credentialPaths: []` (auth = login host bersama; status unknown → baris selalu tawarkan Logout, guard sesi tidak memblokir). Revert: `ensure_claude_hooks` → `settings.json` (+test), validasi nested-path dihapus (kembali file-only + traversal test awal). Klaim "Verified" keliru di registry dikoreksi dengan bukti (HOME kosong → loggedIn:false; sandbox → dialog Keychain).
+- **Jujur untuk user:** profil claude = profil state terisolasi + login host bersama (keterbatasan vendor, sama seperti Orca). Tidak ada lagi dialog Keychain (login berjalan dengan HOME asli).
+- **Gate:** init.sh exit 0 (54 files / 476 tests; Rust 162/3 ignored; typecheck + Clippy bersih); e2e 76/76. Belum commit — butuh restart penuh. Jangan klik "Reset To Defaults" bila dialog masih muncul dari proses lama.
+
+## 2026-11-09: Notifikasi "needs input" berulang (uncommitted)
+
+- **Laporan:** toast "Claude needs input" muncul terus-menerus, bahkan saat melihat agent lain.
+- **Akar masalah:** `noteSessionActivity` mengembalikan status ke `running` pada *setiap* output baru, lalu diam 4 dtk → `waiting` + toast lagi. Agen yang cerewet me-notif tiap beberapa detik selamanya. Toast bersifat global sehingga terlihat dari pane agent mana pun.
+- **Perbaikan (`sessions.ts`):** status tetap bolak-balik running↔waiting seperti biasa (badge jujur), tetapi toast + OS ping hanya sekali per sesi (`notifiedWaiting`, dibersihkan di `clearSessionWatch` yang dipakai semua jalur tutup/selesai).
+- **Test:** "raises the waiting toast only once no matter how often the loop cycles" (pola → waiting → output → pola lagi → hook event; toast tetap 1).
+- **Gate:** init.sh exit 0 + Verification Complete (55 files / 491 tests; Rust 165 passed / 3 ignored; clippy bersih); e2e 76/76. Belum commit — menunggu perintah user.
+
+## 2026-11-10: M3 Stage 6 right-side project/group navigation (uncommitted)
+
+- Implemented the production right rail from `docs/design/prototype.html`, retaining the left navigation/worktree sidebar and replacing title-bar project tabs with active group/project context.
+- Added searchable, collapsible group sections, active-project selection, group/project actions through the existing management popover, persisted rail visibility, and a narrow-window overlay below the title bar. All new visible strings are localized in `src/i18n/en.ts`.
+- Added focused component/store tests and updated the repository Playwright flow to exercise the new sidebar instead of removed project tabs.
+- **Review:** M3 Task 16 spec/code review PASS; no security surfaces changed. Reports: `.agent/reviews/m3-task-16-spec.md`, `.agent/reviews/m3-task-16-code-review.md`, `.agent/reviews/m3-task-16-e2e.md`.
+- **Validation:** `./init.sh` passed (56 Vitest files / 511 tests; Rust 171 passed / 3 ignored; typecheck and Clippy clean); `pnpm test:e2e` passed 74/74. Manual M3-S6 checkpoint remains pending user verification. No commit or push.

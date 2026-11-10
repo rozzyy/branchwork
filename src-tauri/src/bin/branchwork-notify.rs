@@ -38,10 +38,7 @@ fn run(session: &std::ffi::OsString, event: &std::ffi::OsString) -> i32 {
 }
 
 #[cfg(not(unix))]
-fn run(
-    _session: &std::ffi::OsString,
-    _event: &std::ffi::OsString,
-) -> i32 {
+fn run(_session: &std::ffi::OsString, _event: &std::ffi::OsString) -> i32 {
     eprintln!("branchwork-notify: not supported on this platform");
     2
 }

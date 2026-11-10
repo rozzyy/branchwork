@@ -13,7 +13,7 @@ const swatchColor = (hue: number) => `oklch(.68 .19 ${hue})`;
 const DEFAULT_CLONE_TEMPLATE = "~/clients/{repo}";
 const REPO_SUFFIX = "/{repo}";
 
-const projectLabel = (p: Project) => (p.owner ? `${p.owner}/${p.name}` : p.name);
+export const projectLabel = (p: Project) => (p.owner ? `${p.owner}/${p.name}` : p.name);
 
 /** Drops the trailing `/{repo}` from a clone path template to get the folder to show the user. */
 const folderFromTemplate = (template: string): string =>
@@ -33,8 +33,7 @@ interface SwitcherState {
   toggle(): void;
 }
 
-// ponytail: local popover-open store, same pattern as usePalette/useDialog — lets the chip and
-// the "+" entry point (rendered elsewhere in TitleBar) share one popover instance.
+// Shared by the title-bar switcher and the project rail's group/project actions.
 export const useSwitcher = create<SwitcherState>((set, get) => ({
   open: false,
   show: () => set({ open: true }),
@@ -42,14 +41,14 @@ export const useSwitcher = create<SwitcherState>((set, get) => ({
   toggle: () => set({ open: !get().open }),
 }));
 
-interface Section {
+export interface Section {
   id: string | null;
   name: string;
   color: string | null;
   projects: Project[];
 }
 
-function buildSections(groups: Group[], projects: Project[], query: string): Section[] {
+export function buildSections(groups: Group[], projects: Project[], query: string): Section[] {
   const sections: Section[] = [
     ...byName(groups).map((g) => ({ id: g.id, name: g.name, color: g.color, projects: projectsForGroup(projects, g.id, groups) })),
     { id: null, name: t("groups.ungrouped"), color: null, projects: projectsForGroup(projects, null, groups) },
@@ -140,20 +139,34 @@ function GroupForm({ initial, onCancel, onSave }: { initial: Group | null; onCan
   );
 }
 
-function GroupSwitcherPopover({ anchorEl }: { anchorEl: HTMLElement | null }) {
+export function GroupSwitcherPopover({
+  anchorEl,
+  initialEditing = null,
+  initialQuery = "",
+}: {
+  anchorEl: HTMLElement | null;
+  initialEditing?: Group | "new" | null;
+  initialQuery?: string;
+}) {
   const groups = useRepos((s) => s.groups);
   const projects = useRepos((s) => s.projects);
   const activeGroupId = useRepos((s) => s.activeGroupId);
   const collapsedGroupIds = useRepos((s) => s.collapsedGroupIds);
-  const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<Group | "new" | null>(null);
+  const [query, setQuery] = useState(initialQuery);
+  const [editing, setEditing] = useState<Group | "new" | null>(initialEditing);
   const [moveMenu, setMoveMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [pos] = useState(() => {
     const r = anchorEl?.getBoundingClientRect();
-    return r ? { left: r.left, top: r.bottom + 6 } : { left: 12, top: 46 };
+    if (!r) return { left: 12, top: 46 };
+    const width = Math.min(340, window.innerWidth - 24);
+    const height = Math.min(520, window.innerHeight * 0.7);
+    return {
+      left: Math.max(12, Math.min(r.left, window.innerWidth - width - 12)),
+      top: Math.max(12, Math.min(r.bottom + 6, window.innerHeight - height - 12)),
+    };
   });
 
   const sections = useMemo(() => buildSections(groups, projects, query), [groups, projects, query]);

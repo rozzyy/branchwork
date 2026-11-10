@@ -72,6 +72,19 @@ beforeEach(async () => {
 });
 
 describe("tabs and splits", () => {
+  it("does not reload persisted state over the live tabs", async () => {
+    await useTerminalScreen.getState().newTab("/wt/a");
+    vi.mocked(loadSetting).mockResolvedValueOnce({
+      tabs: [],
+      selectedTabId: null,
+    });
+
+    await useTerminalScreen.getState().load();
+
+    expect(useTerminalScreen.getState().tabs).toHaveLength(1);
+    expect(useTerminalScreen.getState().tabs[0].name).toBe("a");
+  });
+
   it("opens a new tab with a spawned shell and selects it", async () => {
     const id = await useTerminalScreen.getState().newTab("/wt/a");
     expect(id).toBeTruthy();

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
-import { useProfiles } from "../../agents/profiles";
+import { useProfiles, usageKey } from "../../agents/profiles";
+import { UsageBar } from "../../agents/usage";
 import { useSessions, type AgentSession, type AgentStatus, type RaceEntry } from "../../agents/sessions";
 import { useStage } from "../../state/stage";
 import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
 import { CliIcon } from "../../agents/cliIcons";
 import { Menu, type MenuItem } from "../../ui/Menu";
+import { BusyButton } from "../../ui/BusyButton";
 import { ask } from "../../ui/dialog";
 import { toast } from "../../ui/toast";
 import { readStatus } from "../../ipc/status";
@@ -96,6 +98,17 @@ function AgentPaneBody({ session }: { session: AgentSession }) {
     },
     [session.id, store],
   );
+  // The vendor login screen can appear while the profile is verified as
+  // logged in: Claude runs its one-time setup per profile dir, and a capped
+  // account lands on the same picker. Say so instead of leaving a bare
+  // "needs input" state that reads as a lost login.
+  const allProfiles = useProfiles((s) => s.profiles);
+  const profileProbe = useProfiles((s) => s.profileProbes)?.[usageKey(session.profile)];
+  const showLoginHint =
+    session.cliId === "claude" && session.status === "waiting" && profileProbe?.linked === true;
+  const profileName =
+    allProfiles.find((p) => p.cliId === session.profile.cliId && p.slug === session.profile.slug)?.name ??
+    session.profile.slug;
   if (!session.sessionId) {
     return (
       <div className="agent-pane-error" role="status">
@@ -108,6 +121,19 @@ function AgentPaneBody({ session }: { session: AgentSession }) {
   }
   return (
     <>
+      {showLoginHint && (
+        <div className="agent-limit" role="status">
+          <span>{t("agents.loggedInWaiting", { profile: profileName })}</span>
+          <span className="sp" />
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => void useProfiles.getState().loginProfile(session.profile)}
+          >
+            {t("agents.openLoginTerminal")}
+          </button>
+        </div>
+      )}
       {session.limitHit && (
         <div className="agent-limit" role="status">
           <span>{t("agents.limitTitle")}</span>
@@ -134,6 +160,8 @@ function ProfileChip({ session }: { session: AgentSession }) {
   // Subscribe to the raw array (stable identity); filtering here keeps the
   // selector snapshot cached and avoids a render loop.
   const allProfiles = useProfiles((s) => s.profiles);
+  const usageBy = useProfiles((s) => s.usage);
+  const usage = usageBy[usageKey(session.profile)];
   const profiles = allProfiles.filter((p) => p.cliId === session.cliId);
   const profileName =
     profiles.find((p) => p.slug === session.profile.slug)?.name ?? session.profile.slug;
@@ -145,15 +173,23 @@ function ProfileChip({ session }: { session: AgentSession }) {
   const items: MenuItem[] = [
     { kind: "header", label: t("agents.profilesMenu", { name: def.name }) },
     ...profiles.map(
-      (p): MenuItem => ({
-        kind: "item",
-        label: p.name,
-        icon: p.slug === session.profile.slug ? "✓" : undefined,
-        onSelect: () => {
-          setMenu(null);
-          void useSessions.getState().switchProfile(session.id, { cliId: p.cliId, slug: p.slug });
-        },
-      }),
+      (p): MenuItem => {
+        const itemUsage = usageBy[usageKey({ cliId: p.cliId, slug: p.slug })];
+        return {
+          kind: "item",
+          label: p.name,
+          icon: p.slug === session.profile.slug ? "✓" : undefined,
+          extra: itemUsage ? (
+            <span className="agent-menu-usage">
+              {itemUsage.percent}% <UsageBar usage={itemUsage} />
+            </span>
+          ) : undefined,
+          onSelect: () => {
+            setMenu(null);
+            void useSessions.getState().switchProfile(session.id, { cliId: p.cliId, slug: p.slug });
+          },
+        };
+      },
     ),
     { kind: "separator" },
     {
@@ -186,6 +222,7 @@ function ProfileChip({ session }: { session: AgentSession }) {
         onClick={open}
       >
         ◔ {profileName}
+        {usage && <UsageBar usage={usage} />}
       </button>
       {menu && <Menu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={items} />}
     </>
@@ -350,15 +387,49 @@ function NewAgentDialog() {
   const [profileName, setProfileName] = useState("");
   const [worktreePath, setWorktreePath] = useState<string>("");
   const [binaries, setBinaries] = useState<Record<CliId, string | null> | null>(null);
+  // Verified login state of the selected profile: true/false when the
+  // provider exposes a check, null while checking or when it does not.
+  const [linked, setLinked] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setBinaries(null);
-    setProfileSlug(NEW_PROFILE);
+    // Reuse the login the user already completed in Settings: preselect the
+    // resolved profile instead of always starting from a fresh logged-out one.
+    // `cliId` is read from this render on purpose (no reset while open).
+    setProfileSlug(useProfiles.getState().resolveProfile(cliId)?.slug ?? NEW_PROFILE);
     setProfileName("");
     setWorktreePath(activePath ?? "");
     void useSessions.getState().checkBinaries().then(setBinaries);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activePath]);
+
+  useEffect(() => {
+    if (!open || profileSlug === NEW_PROFILE) {
+      setLinked(null);
+      return;
+    }
+    const ref = { cliId, slug: profileSlug };
+    let live = true;
+    setLinked(null);
+    const read = () => {
+      void useProfiles
+        .getState()
+        .checkProfileLogin(ref)
+        .then((value) => {
+          if (live) setLinked(value);
+        })
+        .catch(() => {
+          if (live) setLinked(null);
+        });
+    };
+    read();
+    const timer = setInterval(read, 5000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [open, cliId, profileSlug]);
 
   if (!open) return null;
   const def = CLI_REGISTRY[cliId];
@@ -368,7 +439,7 @@ function NewAgentDialog() {
   const customNeedsSettings = cliId === "custom";
   const slug = profileSlug === NEW_PROFILE ? slugify(profileName) : profileSlug;
   const canStart =
-    !!binaries && !binaryMissing && !customNeedsSettings && !!worktreePath && !!slug;
+    !!binaries && !binaryMissing && !customNeedsSettings && !!worktreePath && !!slug && linked !== false;
   const start = () => {
     if (!canStart) return;
     void (async () => {
@@ -377,6 +448,8 @@ function NewAgentDialog() {
         const created = await useProfiles.getState().createProfile(cliId, profileName);
         if (!created) return;
         ref = created.slug;
+        setProfileSlug(created.slug);
+        setProfileName("");
       }
       const started = await useSessions.getState().startSession({
         cliId,
@@ -406,7 +479,7 @@ function NewAgentDialog() {
                   value={id}
                   checked={cliId === id}
                   disabled={missing}
-                  onChange={() => { setCliId(id); setProfileSlug(NEW_PROFILE); }}
+                  onChange={() => { setCliId(id); setProfileSlug(useProfiles.getState().resolveProfile(id)?.slug ?? NEW_PROFILE); }}
                 />
                 <span className="agent-apick-icon" aria-hidden>
                   <CliIcon id={id} size={16} />
@@ -443,6 +516,17 @@ function NewAgentDialog() {
             aria-label={t("agents.dialogProfileName")}
             onKeyDown={(e) => { if (e.key === "Enter") start(); }}
           />
+        )}
+        {profileSlug !== NEW_PROFILE && linked === true && (
+          <p className="agent-hint">{t("settings.loggedIn")}</p>
+        )}
+        {profileSlug !== NEW_PROFILE && linked === false && (
+          <p className="agent-hint">
+            {t("settings.notLoggedIn")}{" "}
+            <BusyButton size="sm" onExecute={() => useProfiles.getState().loginProfile({ cliId, slug: profileSlug })}>
+              {t("settings.signInAgain")}
+            </BusyButton>
+          </p>
         )}
         <div className="agent-h4">{t("agents.dialogWorktree")}</div>
         <select

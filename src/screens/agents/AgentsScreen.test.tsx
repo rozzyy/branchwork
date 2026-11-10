@@ -8,7 +8,7 @@ import { useWorktrees } from "../../state/worktrees";
 import { readStatus } from "../../ipc/status";
 import { createUnpinnedWorktree, createWorktree, listWorktrees, removeWorktree } from "../../ipc/worktrees";
 import { listPins, type Project } from "../../ipc/catalog";
-import { resolveCliBinary } from "../../ipc/cli";
+import { ensureProfileDir, probeCli, profileHasCredentials, resolveCliBinary } from "../../ipc/cli";
 import { spawnTerminal, writeTerminal } from "../../ipc/pty";
 import { ask } from "../../ui/dialog";
 import type { Worktree } from "../../ipc/worktrees";
@@ -23,7 +23,10 @@ vi.mock("../../terminal/CliPane", () => ({
 
 vi.mock("../../ipc/cli", () => ({
   ensureProfileDir: vi.fn(),
+  probeCli: vi.fn(),
   resolveCliBinary: vi.fn(() => Promise.reject(new Error("missing"))),
+  profileHasCredentials: vi.fn(),
+  seedClaudeOnboarding: vi.fn(() => Promise.resolve(true)),
 }));
 
 vi.mock("../../ipc/pty", () => ({
@@ -74,6 +77,8 @@ function seed() {
     globalDefault: null,
     cliDefaults: {},
     loaded: true,
+    usage: {},
+    cliProbes: {},
   });
   useSessions.setState({
     sessions: [
@@ -121,6 +126,9 @@ beforeEach(() => {
     error: null,
   });
   vi.mocked(resolveCliBinary).mockRejectedValue(new Error("missing"));
+  vi.mocked(ensureProfileDir).mockReset().mockImplementation(async (cliId, slug) => `/profiles/${cliId}-${slug}`);
+  vi.mocked(probeCli).mockReset().mockRejectedValue(new Error("no probe"));
+  vi.mocked(profileHasCredentials).mockReset().mockResolvedValue(true);
   vi.mocked(spawnTerminal).mockReset();
   vi.mocked(createWorktree).mockReset();
   vi.mocked(createUnpinnedWorktree).mockReset();
@@ -203,6 +211,17 @@ describe("AgentsView", () => {
     expect(screen.getByRole("menuitem", { name: /Manage accounts/ })).toBeInTheDocument();
   });
 
+  it("shows the live usage bar on the profile chip only when reported", async () => {
+    const { unmount } = render(<AgentsView />);
+    expect(document.querySelector(".agent-profile .ubar")).toBeNull();
+    unmount();
+    useProfiles.getState().setProfileUsage({ cliId: "codex", slug: "work" }, { window: "5h", percent: 72 });
+    render(<AgentsView />);
+    expect(document.querySelector(".agent-profile .ubar")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Profile Work/ }));
+    expect(await screen.findByRole("menuitem", { name: /Work.*72%/ })).toBeInTheDocument();
+  });
+
   it("shows the usage-limit banner with Switch and Dismiss", () => {
     useSessions.setState({
       sessions: [{ ...useSessions.getState().sessions[0], limitHit: true }],
@@ -211,6 +230,70 @@ describe("AgentsView", () => {
     expect(screen.getByText("Usage limit reached")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Switch" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+  });
+
+  it("explains the login screen when the profile is verified logged in", () => {
+    useProfiles.setState({
+      profiles: [{ cliId: "claude", slug: "personal", name: "Personal", createdAt: 1 }],
+      globalDefault: null,
+      cliDefaults: {},
+      loaded: true,
+      usage: {},
+      cliProbes: {},
+      profileProbes: { "claude:personal": { linked: true, identity: null } },
+      loginPending: {},
+    });
+    useSessions.setState({
+      sessions: [
+        {
+          id: "c1",
+          cliId: "claude",
+          profile: { cliId: "claude", slug: "personal" },
+          worktreePath: "/wt/b",
+          sessionId: "pty-9",
+          slot: "auto",
+          error: null,
+          sharedWithDock: false,
+          status: "waiting",
+          limitHit: false,
+        },
+      ],
+    });
+    render(<AgentsView />);
+    expect(screen.getByText(/already logged in/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open login terminal" })).toBeInTheDocument();
+  });
+
+  it("hides the login hint when the profile is not verified", () => {
+    useProfiles.setState({
+      profiles: [{ cliId: "claude", slug: "personal", name: "Personal", createdAt: 1 }],
+      globalDefault: null,
+      cliDefaults: {},
+      loaded: true,
+      usage: {},
+      cliProbes: {},
+      profileProbes: { "claude:personal": { linked: false, identity: null } },
+      loginPending: {},
+    });
+    useSessions.setState({
+      sessions: [
+        {
+          id: "c1",
+          cliId: "claude",
+          profile: { cliId: "claude", slug: "personal" },
+          worktreePath: "/wt/b",
+          sessionId: "pty-9",
+          slot: "auto",
+          error: null,
+          sharedWithDock: false,
+          status: "waiting",
+          limitHit: false,
+        },
+      ],
+    });
+    render(<AgentsView />);
+    expect(screen.queryByText(/already logged in/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open login terminal" })).toBeNull();
   });
 
   it("intercepts a lone /account line instead of sending it", () => {
@@ -379,6 +462,68 @@ describe("AgentsView", () => {
     expect(screen.getByText("Run a CLI agent in an isolated worktree. The agent stays its original CLI.")).toBeInTheDocument();
     // No worktrees and no binary: Start stays disabled.
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+
+  it("preselects the resolved profile so a Settings login is reused", async () => {
+    useProfiles.setState({
+      profiles: [{ cliId: "claude", slug: "personal", name: "Personal", createdAt: 1 }],
+      globalDefault: null,
+      cliDefaults: {},
+      loaded: true,
+      usage: {},
+      cliProbes: {},
+      profileProbes: {},
+      loginPending: {},
+    });
+    useWorktrees.setState({
+      projectId: "p1",
+      worktrees: [{ path: "/wt/a" } as Worktree],
+      pinnedPaths: [],
+      activePath: "/wt/a",
+      loading: false,
+      error: null,
+    });
+    vi.mocked(resolveCliBinary).mockResolvedValue("/usr/local/bin/claude");
+    vi.mocked(probeCli).mockResolvedValue(JSON.stringify({ loggedIn: true }));
+    useSessions.setState({ sessions: [] });
+    render(<AgentsView />);
+    fireEvent.click(screen.getByRole("button", { name: "＋ New agent" }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveValue("personal"));
+    expect(await screen.findByText("Logged in")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+  });
+
+  it("blocks Start and offers inline login for a logged-out profile", async () => {
+    useProfiles.setState({
+      profiles: [{ cliId: "claude", slug: "personal", name: "Personal", createdAt: 1 }],
+      globalDefault: null,
+      cliDefaults: {},
+      loaded: true,
+      usage: {},
+      cliProbes: {},
+      profileProbes: {},
+      loginPending: {},
+    });
+    useWorktrees.setState({
+      projectId: "p1",
+      worktrees: [{ path: "/wt/a" } as Worktree],
+      pinnedPaths: [],
+      activePath: "/wt/a",
+      loading: false,
+      error: null,
+    });
+    vi.mocked(resolveCliBinary).mockResolvedValue("/usr/local/bin/claude");
+    vi.mocked(probeCli).mockResolvedValue(JSON.stringify({ loggedIn: false }));
+    useSessions.setState({ sessions: [] });
+    render(<AgentsView />);
+    fireEvent.click(screen.getByRole("button", { name: "＋ New agent" }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    const profileSelect = screen.getByLabelText("Profile");
+    await waitFor(() => expect(profileSelect).toHaveValue("personal"));
+    expect(await screen.findByText("Not logged in")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sign in again" })).toBeInTheDocument();
   });
 
   it("gates the race start on prompt, agents, binaries, and profiles", async () => {

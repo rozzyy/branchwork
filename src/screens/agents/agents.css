@@ -211,6 +211,42 @@ button.agent-profile:hover {
   color: var(--fg);
 }
 
+/* Live usage bar (prototype `.ubar`, spec §6.6.4): rendered only when a
+ * vendor-CLI hook reports usage; hidden otherwise — never fabricated. */
+.ubar {
+  display: inline-block;
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: oklch(0.6 0 0 / 0.3);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.ubar > i {
+  display: block;
+  height: 100%;
+  background: var(--ubar-c, var(--grn));
+  border-radius: 2px;
+}
+
+button.agent-profile .ubar {
+  margin-left: 6px;
+}
+
+.agent-menu-usage {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11px;
+  color: var(--fg3);
+  white-space: nowrap;
+}
+
+.agent-menu-usage .ubar {
+  width: 54px;
+  margin-left: 6px;
+}
+
 /* Usage-limit banner (spec §6.6.4): inline, above the terminal. */
 .agent-limit {
   flex: none;

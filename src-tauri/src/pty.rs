@@ -212,7 +212,10 @@ impl SessionTerminator {
         if error.raw_os_error() == Some(libc::ESRCH) {
             return Ok(());
         }
-        Err(pty_error("Could not interrupt terminal process group", error))
+        Err(pty_error(
+            "Could not interrupt terminal process group",
+            error,
+        ))
     }
 }
 
@@ -729,7 +732,9 @@ const MAX_SPAWN_ENV_VALUE_LEN: usize = 8192;
 /// Keys are shell-name shaped (`CLAUDE_CONFIG_DIR`); values must not carry NUL.
 pub fn validate_spawn_env(env: &std::collections::HashMap<String, String>) -> Result<(), AppError> {
     if env.len() > MAX_SPAWN_ENV_VARS {
-        return Err(AppError::validation("Too many terminal environment variables"));
+        return Err(AppError::validation(
+            "Too many terminal environment variables",
+        ));
     }
     for (key, value) in env {
         let mut chars = key.chars();
@@ -940,14 +945,18 @@ mod tests {
 
         for key in ["", "a b", "a-b", "a.b", "9LIVES", "A;B", "A=B", "é"] {
             let env = HashMap::from([(key.to_string(), "v".to_string())]);
-            assert!(validate_spawn_env(&env).is_err(), "{key:?} must be rejected");
+            assert!(
+                validate_spawn_env(&env).is_err(),
+                "{key:?} must be rejected"
+            );
         }
         let nul = HashMap::from([("OK_VAR".to_string(), "a\0b".to_string())]);
         assert!(validate_spawn_env(&nul).is_err());
         let big = HashMap::from([("OK_VAR".to_string(), "x".repeat(9000))]);
         assert!(validate_spawn_env(&big).is_err());
-        let many: HashMap<String, String> =
-            (0..65).map(|i| (format!("VAR_{i}"), "v".to_string())).collect();
+        let many: HashMap<String, String> = (0..65)
+            .map(|i| (format!("VAR_{i}"), "v".to_string()))
+            .collect();
         assert!(validate_spawn_env(&many).is_err());
 
         let good = HashMap::from([
@@ -968,7 +977,10 @@ mod tests {
             sender.send(event).unwrap();
         });
         let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
-        command.args(["-c", "printf 'marker-%s' \"$BRANCHWORK_SPAWN_ENV_TEST\"; sleep 30"]);
+        command.args([
+            "-c",
+            "printf 'marker-%s' \"$BRANCHWORK_SPAWN_ENV_TEST\"; sleep 30",
+        ]);
         let mut env = HashMap::new();
         env.insert("BRANCHWORK_SPAWN_ENV_TEST".to_string(), "yes42".to_string());
         apply_spawn_env(&mut command, &env).unwrap();
@@ -1388,7 +1400,9 @@ mod tests {
         let mut output = String::new();
         loop {
             if start.elapsed() > budget {
-                panic!("timed out waiting for the exit event after typing `exit`; output so far: {output:?}");
+                panic!(
+                    "timed out waiting for the exit event after typing `exit`; output so far: {output:?}"
+                );
             }
             let wait = (budget - start.elapsed()).min(Duration::from_secs(5));
             match receiver.recv_timeout(wait) {

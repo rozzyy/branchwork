@@ -74,10 +74,28 @@ export const commands = {
 	/**  Create (when needed) the isolated profile dir for a CLI and return it. */
 	cliProfileDir: (cliId: string, slug: string) => __TAURI_INVOKE<string>("cli_profile_dir", { cliId, slug }),
 	/**
+	 *  Run a read-only vendor status probe (fixed non-interactive argv only)
+	 *  and return its stdout. The caller picks a CLI id, never a command.
+	 */
+	cliProbe: (cliId: string, env: { [key in string]: string } | null) => __TAURI_INVOKE<string>("cli_probe", { cliId, env }),
+	/**
+	 *  True when any of the registry's declared credential files exists inside
+	 *  the profile dir — the vendor login actually completed there.
+	 */
+	cliHasCredentials: (cliId: string, slug: string, credentialFiles: string[]) => __TAURI_INVOKE<boolean>("cli_has_credentials", { cliId, slug, credentialFiles }),
+	/**
 	 *  Remove the registry's declared credential files inside a profile dir.
 	 *  Returns the names actually removed; nothing else is touched.
 	 */
 	cliLogoutProfile: (cliId: string, slug: string, credentialFiles: string[]) => __TAURI_INVOKE<string[]>("cli_logout_profile", { cliId, slug, credentialFiles }),
+	/**
+	 *  Seed Claude's one-time onboarding flag for an isolated profile dir.
+	 *  Exclusive-create only: never reads or overwrites existing credentials.
+	 *  Returns true when this call created the seed file.
+	 */
+	cliSeedOnboarding: (cliId: string, slug: string) => __TAURI_INVOKE<boolean>("cli_seed_onboarding", { cliId, slug }),
+	/**  Confirm and remove a complete Branchwork account profile and its credentials. */
+	cliRemoveProfile: (cliId: string, slug: string) => __TAURI_INVOKE<boolean>("cli_remove_profile", { cliId, slug }),
 	/**
 	 *  Merge agent hook entries into the isolated profile dir for CLIs with
 	 *  documented hook support (currently Claude Code only). Best-effort: a
