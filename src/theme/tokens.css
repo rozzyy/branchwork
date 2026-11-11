@@ -59,6 +59,27 @@
 }
 
 * { box-sizing: border-box; }
+/* Square inner UI (user order): section cards and terminal meet at right
+ * angles. Controls keep their shape per UI best practice — buttons/chips
+ * stay pill-shaped, glyphs stay round, small icon controls keep a hint of
+ * radius, and modals/toasts/icon tiles stay rounded. These selectors
+ * outrank the blanket rule. */
+* { border-radius: 0 !important; }
+.btn, .seg, .seg button, .chip, .switch, .group-chip, .search,
+.term-screen-broadcast { border-radius: 999px !important; }
+.switch::after, .spin, .swatch, .worktree-dot, .files-dirty-dot, .etab .dd,
+.repo-account-avatar, .blame-avatar, .term-dock-dot, .term-screen-dot,
+.agent-dot { border-radius: 50% !important; }
+.icon-btn, .ib2, .kbd, .project-tab, .project-tab-close,
+.project-sidebar-add, .project-sidebar-group-menu, .project-sidebar-collapse,
+.project-sidebar-project-mark, .repo-account, .agent-grp,
+.agent-grp button { border-radius: 7px !important; }
+.file-icon, .etab .x { border-radius: 3px !important; }
+.dlg { border-radius: 22px !important; }
+.dlg-ic { border-radius: 13px !important; }
+.dlg-meta { border-radius: 10px !important; }
+.toast { border-radius: 14px !important; }
+.toast-ic { border-radius: 8px !important; }
 html, body, #root { height: 100%; margin: 0; }
 html, body { background: transparent; }
 /* In a plain browser (no native vibrancy) show a backdrop so glass is visible. */

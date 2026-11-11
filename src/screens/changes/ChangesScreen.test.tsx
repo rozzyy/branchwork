@@ -117,6 +117,13 @@ it("switches between list and tree layouts", async () => {
   expect(screen.getAllByText("src/auth", { selector: ".changes-file-dir" })).toHaveLength(2);
 });
 
+it("shows loading feedback while the active worktree is being resolved", () => {
+  act(() => useWorktrees.setState({ activePath: null, loading: true }));
+  render(<ChangesView />);
+  expect(screen.getByRole("status")).toHaveTextContent("Loading changes…");
+  act(() => useWorktrees.setState({ loading: false }));
+});
+
 it("colors the first-line commit counter at 50, 51, 72, and 73 characters", async () => {
   await setup();
   const input = screen.getByPlaceholderText('Message (⌘↵ to commit in "main")');

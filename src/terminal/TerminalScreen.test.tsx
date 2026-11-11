@@ -2,9 +2,11 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalScreen } from "./screen";
 import { TerminalScreen } from "./TerminalScreen";
-import { spawnTerminal } from "../ipc/pty";
+import { closeTerminal, spawnTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { useWorktrees } from "../state/worktrees";
+import { useRepos } from "../state/repos";
+import { useFiles } from "../state/files";
 
 vi.mock("../ipc/pty", () => ({
   spawnTerminal: vi.fn(),
@@ -41,7 +43,21 @@ beforeEach(async () => {
     .mockImplementation(async () => ({ sessionId: `pty-${(sessionCounter += 1)}` }));
   vi.mocked(loadSetting).mockReset().mockResolvedValue(null);
   vi.mocked(saveSetting).mockReset().mockResolvedValue(undefined);
-  useWorktrees.setState({ activePath: "/wt/a" });
+  useRepos.setState({
+    projects: [
+      { id: "p1", owner: null, name: "Project A", localPath: "/wt/a", groupId: null },
+      { id: "p2", owner: null, name: "Project B", localPath: "/wt/b", groupId: null },
+    ],
+    activeProjectId: "p1",
+    status: "ready",
+  });
+  useFiles.setState({ dirty: {} });
+  useWorktrees.setState({
+    projectId: "p1",
+    worktrees: [{ path: "/wt/a" } as never],
+    activePath: "/wt/a",
+    loading: false,
+  });
   useTerminalScreen.setState({ tabs: [], selectedTabId: null, loaded: false });
 });
 
@@ -50,6 +66,11 @@ function key(target: Element, init: KeyboardEventInit & { code: string }): void 
 }
 
 describe("TerminalScreen", () => {
+  it("shows loading feedback while terminal state is being restored", () => {
+    render(<TerminalScreen />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading terminal…");
+  });
+
   it("renders tabs, panes, and the status bar", async () => {
     render(<TerminalScreen />);
     await waitFor(() => expect(useTerminalScreen.getState().loaded).toBe(true));
@@ -62,6 +83,85 @@ describe("TerminalScreen", () => {
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("pane 1/1");
     expect(status).toHaveTextContent("80×24");
+  });
+
+  it("shows only the selected project's tabs after a project switch without closing hidden sessions", () => {
+    const tabFor = (id: string, worktreePath: string) => {
+      const paneId = `${id}-pane`;
+      return {
+        id,
+        name: id,
+        layout: { kind: "pane" as const, id: paneId },
+        panes: {
+          [paneId]: {
+            id: paneId,
+            sessionId: `${id}-session`,
+            worktreePath,
+            cwd: worktreePath,
+            error: null,
+            cols: 80,
+            rows: 24,
+          },
+        },
+        focusedPaneId: paneId,
+        maximizedPaneId: null,
+        broadcast: false,
+      };
+    };
+    useTerminalScreen.setState({
+      tabs: [tabFor("Project A", "/wt/a"), tabFor("Project B", "/wt/b")],
+      selectedTabId: "Project A",
+      loaded: true,
+    });
+
+    render(<TerminalScreen />);
+    expect(screen.getByRole("tab", { name: "Project A" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Project B" })).not.toBeInTheDocument();
+
+    act(() => useRepos.getState().selectProject("p2"));
+
+    expect(screen.queryByRole("tab", { name: "Project A" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Project B" })).toBeInTheDocument();
+    expect(screen.getByTestId("clipane-Project B-session")).toBeInTheDocument();
+    expect(screen.queryByTestId("clipane-Project A-session")).not.toBeInTheDocument();
+    expect(useTerminalScreen.getState().tabs).toHaveLength(2);
+    expect(closeTerminal).not.toHaveBeenCalled();
+  });
+
+  it("defaults a new tab to the active project when the selected tab belongs to another project", async () => {
+    const paneId = "old-pane";
+    useTerminalScreen.setState({
+      tabs: [
+        {
+          id: "old-tab",
+          name: "Old project",
+          layout: { kind: "pane", id: paneId },
+          panes: {
+            [paneId]: {
+              id: paneId,
+              sessionId: "old-session",
+              worktreePath: "/wt/a",
+              cwd: "/wt/a",
+              error: null,
+              cols: 80,
+              rows: 24,
+            },
+          },
+          focusedPaneId: paneId,
+          maximizedPaneId: null,
+          broadcast: false,
+        },
+      ],
+      selectedTabId: "old-tab",
+      loaded: true,
+    });
+
+    act(() => useRepos.getState().selectProject("p2"));
+    await act(async () => {
+      await useTerminalScreen.getState().newTab();
+    });
+
+    expect(spawnTerminal).toHaveBeenCalledWith("/wt/b", 80, 24, undefined);
   });
 
   it("splits with ⌘D and moves focus with ⌥⌘ arrows", async () => {

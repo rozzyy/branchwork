@@ -374,6 +374,7 @@ describe("resolution and defaults", () => {
         { cliId: "codex", slug: "work", name: "Work", createdAt: 1 },
         { cliId: "nope", slug: "x", name: "X" },
         { cliId: "codex", slug: 42, name: "Bad" },
+        { cliId: "toString", slug: "x", name: "Inherited", createdAt: 2 },
       ],
       globalDefault: { cliId: "codex", slug: "work" },
       cliDefaults: { codex: { cliId: "codex", slug: "work" }, bad: { cliId: "x", slug: "y" } },
@@ -383,6 +384,31 @@ describe("resolution and defaults", () => {
     expect(state.profiles).toHaveLength(1);
     expect(state.globalDefault).toEqual({ cliId: "codex", slug: "work" });
     expect(state.cliDefaults).toEqual({ codex: { cliId: "codex", slug: "work" } });
+  });
+
+  it("strips unknown fields from restored profiles and defaults before persisting", async () => {
+    vi.mocked(loadSetting).mockResolvedValue({
+      profiles: [{ cliId: "codex", slug: "work", name: "Work", createdAt: 1, token: "secret" }],
+      globalDefault: { cliId: "codex", slug: "work", password: "secret" },
+      cliDefaults: { codex: { cliId: "codex", slug: "work", apiKey: "secret" } },
+    });
+
+    await useProfiles.getState().load();
+    expect(useProfiles.getState().profiles).toEqual([
+      { cliId: "codex", slug: "work", name: "Work", createdAt: 1 },
+    ]);
+    expect(useProfiles.getState().globalDefault).toEqual({ cliId: "codex", slug: "work" });
+    expect(useProfiles.getState().cliDefaults).toEqual({ codex: { cliId: "codex", slug: "work" } });
+
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const calls = vi.mocked(saveSetting).mock.calls;
+    const saved = calls[calls.length - 1]?.[1];
+    expect(JSON.stringify(saved)).not.toMatch(/secret|token|password|apiKey/i);
+    expect(saved).toEqual({
+      profiles: [{ cliId: "codex", slug: "work", name: "Work", createdAt: 1 }],
+      globalDefault: { cliId: "codex", slug: "work" },
+      cliDefaults: { codex: { cliId: "codex", slug: "work" } },
+    });
   });
 
   it("records profile loading errors so Settings can offer retry", async () => {

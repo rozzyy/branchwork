@@ -15,7 +15,6 @@ import { Palette } from "./palette/Palette";
 import { useGlobalKeys } from "./keys/globalKeys";
 import { useSidebar } from "./state/sidebar";
 import { useRepos } from "./state/repos";
-import { useChanges } from "./state/changes";
 import { subscribeUndoState } from "./ipc/undo";
 import { useSessions } from "./agents/sessions";
 import { useProfiles } from "./agents/profiles";
@@ -33,7 +32,6 @@ export default function App() {
     void useStage.getState().load();
     void useSidebar.getState().load();
     void useRepos.getState().load();
-    void useChanges.getState().load();
     void useDock.getState().load();
     void useSessions.getState().load();
     void useProfiles.getState().load().catch((error) => {

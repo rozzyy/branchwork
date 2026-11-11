@@ -379,13 +379,15 @@ fn seed_onboarding_in(home: &Path, cli_id: &str, slug: &str) -> Result<bool, App
         Ok(mut file) => {
             use std::io::Write;
             file.write_all(br#"{"hasCompletedOnboarding":true}"#)
-                .map_err(|error| AppError::io(format!("could not seed onboarding flag: {error}")))?;
+                .map_err(|error| {
+                    AppError::io(format!("could not seed onboarding flag: {error}"))
+                })?;
             Ok(true)
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(AppError::not_found(
-            "profile dir does not exist",
-        )),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(AppError::not_found("profile dir does not exist"))
+        }
         Err(error) => Err(AppError::io(format!(
             "could not seed onboarding flag: {error}"
         ))),
@@ -536,7 +538,9 @@ mod tests {
             r#"{"hasCompletedOnboarding":true,"oauthAccount":{"token":"secret"}}"#,
         )
         .unwrap();
-        assert!(!seed_onboarding_in(&_guard.0, "claude", "seed-1").expect("repeat seed must succeed"));
+        assert!(
+            !seed_onboarding_in(&_guard.0, "claude", "seed-1").expect("repeat seed must succeed")
+        );
         assert!(
             std::fs::read_to_string(dir.join(".claude.json"))
                 .unwrap()

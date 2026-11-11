@@ -9,6 +9,7 @@ import { useWorktrees } from "../../state/worktrees";
 import { Button } from "../../ui/Button";
 import { Segmented } from "../../ui/controls";
 import { FileIcon } from "../../ui/fileIcon";
+import { ScreenLoader } from "../../ui/ScreenLoader";
 import { useGraphUi } from "../graph/graphState";
 import { useBlameUi } from "./blameState";
 import "./blame.css";
@@ -200,6 +201,7 @@ function BlameTree() {
 
 export function BlameView() {
   const activePath = useWorktrees((s) => s.activePath);
+  const worktreesLoading = useWorktrees((s) => s.loading);
   const current = useFiles((s) => s.current);
   const go = useStage((s) => s.go);
   const selectedLine = useBlameUi((s) => s.selectedLine);
@@ -243,6 +245,10 @@ export function BlameView() {
     })();
     return () => { cancelled = true; };
   }, [activePath, current, selectLine]);
+
+  if (!activePath && worktreesLoading) {
+    return <ScreenLoader>{t("blame.loading")}</ScreenLoader>;
+  }
 
   if (!activePath || !current) {
     return (

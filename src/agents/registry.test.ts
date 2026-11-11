@@ -18,6 +18,16 @@ describe("CLI registry", () => {
     }
   });
 
+  it("falls back to a fresh launch when resume fails on a profile without history", () => {
+    expect(CLI_REGISTRY.claude.resumeLine).toBe("claude --continue || claude");
+    expect(CLI_REGISTRY.codex.resumeLine).toBe("codex resume --last || codex");
+    expect(CLI_REGISTRY.opencode.resumeLine).toBe("opencode --continue || opencode");
+    expect(CLI_REGISTRY.copilot.resumeLine).toBe("copilot --continue || copilot");
+    expect(CLI_REGISTRY.muse.resumeLine).toBe("muse resume --last || muse");
+    expect(CLI_REGISTRY.gemini.resumeLine).toBeNull();
+    expect(CLI_REGISTRY.custom.resumeLine).toBeNull();
+  });
+
   it("marks unverifiable CLIs instead of fabricating verification", () => {
     expect(CLI_REGISTRY.gemini.verifiedAgainst).toBeNull();
     expect(CLI_REGISTRY.custom.verifiedAgainst).toBeNull();
@@ -54,6 +64,11 @@ describe("CLI registry", () => {
     expect(resolved.binary).toBe("/opt/claude");
     expect(resolved.launch).toEqual(["wrapped-claude", "--safe"]);
     expect(resolved.resume).toEqual(["claude", "--continue"]);
+    // Without a resume override the raw line survives untouched.
+    expect(resolved.resumeLine).toBe("claude --continue || claude");
+    // A resume override loses the raw line: callers quote the argv instead.
+    const overridden = resolveCli(def, { resume: ["wrapped-claude", "--continue"] });
+    expect(overridden.resumeLine).toBeNull();
     expect(resolved.envFor("/p")).toEqual({ CLAUDE_CONFIG_DIR: "/p", EXTRA: "1" });
     expect(def.binary).toBe("claude");
     expect(def.launch).toEqual(["claude"]);

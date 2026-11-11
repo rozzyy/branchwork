@@ -4,11 +4,13 @@ mod commit;
 mod diff;
 mod error;
 mod fs;
+mod gh;
 mod graph;
 mod handover;
 mod notify;
 mod oplog;
 mod pty;
+mod repogit;
 mod repository;
 mod stage;
 mod stash;
@@ -836,6 +838,229 @@ fn cli_logout_profile(
     cli::logout_profile(&cli_id, &slug, &credential_files)
 }
 
+/// Store a user-supplied GitHub token under an account name in the platform
+/// credential store. Never synthesized: the caller passes the token the
+/// user provided.
+#[tauri::command]
+#[specta::specta]
+fn gh_auth_set_token(token: String, account: String) -> Result<(), AppError> {
+    gh::set_token(&token, &account)
+}
+
+/// True when a token is stored (for the account, or any account when
+/// omitted). The token itself is never returned.
+#[tauri::command]
+#[specta::specta]
+fn gh_auth_status(account: Option<String>) -> Result<gh::GhAuthStatus, AppError> {
+    gh::status(account.as_deref())
+}
+
+/// Delete the stored token for an account. `Ok(false)` when absent.
+#[tauri::command]
+#[specta::specta]
+fn gh_auth_sign_out(account: String) -> Result<bool, AppError> {
+    gh::sign_out(&account)
+}
+
+/// Start a device authorization. Returns the user code and verification URI;
+/// the device code stays backend-side under the returned request id.
+#[tauri::command]
+#[specta::specta]
+fn gh_auth_start() -> Result<gh::DeviceStart, AppError> {
+    gh::device_start()
+}
+
+/// Poll one in-flight device authorization once (interval-enforced).
+#[tauri::command]
+#[specta::specta]
+fn gh_auth_poll(request_id: String) -> Result<gh::DevicePoll, AppError> {
+    gh::device_poll(&request_id)
+}
+
+/// Verify a user-supplied PAT, store it under its username, return the name.
+#[tauri::command]
+#[specta::specta]
+fn gh_auth_pat(token: String) -> Result<gh::PatResult, AppError> {
+    gh::pat_login(&token)
+}
+
+/// Open the device-flow verification page in the system browser.
+/// Strict allowlist enforced in the backend: only the GitHub device-login
+/// page may be opened, never an arbitrary URL.
+#[tauri::command]
+#[specta::specta]
+fn gh_open_url(url: String) -> Result<(), AppError> {
+    gh::open_verification_uri(&url)
+}
+
+/// Resolve the `origin` remote of the active worktree to owner/repo/URL.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_remote(
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<gh::GhRemote, AppError> {
+    gh::repo_remote(&store, Path::new(&worktree_path))
+}
+
+/// Repository overview for the repo screen as one stored account.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_meta(owner: String, repo: String, account: String) -> Result<gh::GhRepoMeta, AppError> {
+    gh::repo_meta(&owner, &repo, &account)
+}
+
+/// Top contributors for the repo screen sidebar as one stored account.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_contributors(
+    owner: String,
+    repo: String,
+    account: String,
+) -> Result<Vec<gh::GhContributor>, AppError> {
+    gh::repo_contributors(&owner, &repo, &account)
+}
+
+/// Star or unstar a repo. Returns the new starred state.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_set_starred(
+    owner: String,
+    repo: String,
+    account: String,
+    starred: bool,
+) -> Result<bool, AppError> {
+    gh::repo_set_starred(&owner, &repo, &account, starred)
+}
+
+/// Subscribe or unsubscribe a repo. Returns the new subscription state.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_set_watched(
+    owner: String,
+    repo: String,
+    account: String,
+    watch: bool,
+) -> Result<String, AppError> {
+    gh::repo_set_watched(&owner, &repo, &account, watch)
+}
+
+/// Fork a repo into the viewer's account. Returns the fork URL.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_fork(owner: String, repo: String, account: String) -> Result<String, AppError> {
+    gh::repo_fork(&owner, &repo, &account)
+}
+
+/// Issue list for the repo screen Issues tab as one stored account.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_issues(
+    owner: String,
+    repo: String,
+    account: String,
+    state: String,
+) -> Result<gh::GhIssueList, AppError> {
+    gh::repo_issues(&owner, &repo, &account, &state)
+}
+
+/// Pull request list for the repo screen Pulls tab as one stored account.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_pulls(
+    owner: String,
+    repo: String,
+    account: String,
+    state: String,
+) -> Result<gh::GhPullList, AppError> {
+    gh::repo_pulls(&owner, &repo, &account, &state)
+}
+
+/// Open a GitHub repository page in the system browser. The URL is built
+/// server-side from validated names, never from caller-supplied URLs.
+#[tauri::command]
+#[specta::specta]
+fn gh_open_repo(owner: String, repo: String) -> Result<(), AppError> {
+    gh::open_repo(&owner, &repo)
+}
+
+/// Open a fixed GitHub repository section or pull request in the system
+/// browser. The backend allowlists the route and builds the URL.
+#[tauri::command]
+#[specta::specta]
+fn gh_open_repo_page(
+    owner: String,
+    repo: String,
+    page: String,
+    pull_number: Option<u64>,
+) -> Result<(), AppError> {
+    gh::open_repo_page(&owner, &repo, &page, pull_number)
+}
+
+/// Latest Actions runs for the repo screen Actions tab as one stored account.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_runs(owner: String, repo: String, account: String) -> Result<Vec<gh::GhRun>, AppError> {
+    gh::repo_runs(&owner, &repo, &account)
+}
+
+/// Re-run the failed jobs of one Actions run as one stored account.
+#[tauri::command]
+#[specta::specta]
+fn gh_repo_rerun(
+    owner: String,
+    repo: String,
+    account: String,
+    run_id: u64,
+) -> Result<(), AppError> {
+    gh::repo_rerun(&owner, &repo, &account, run_id)
+}
+
+/// Branch selector data for the repo screen Code tab.
+#[tauri::command]
+#[specta::specta]
+fn git_repo_branches(
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<repogit::GitBranches, AppError> {
+    repogit::branches(&store, Path::new(&worktree_path))
+}
+
+/// Latest commit on a ref for the repo screen latest-commit bar.
+#[tauri::command]
+#[specta::specta]
+fn git_repo_latest_commit(
+    store: State<'_, Store>,
+    worktree_path: String,
+    gitref: String,
+) -> Result<repogit::GitCommit, AppError> {
+    repogit::latest_commit(&store, Path::new(&worktree_path), &gitref)
+}
+
+/// File table of a ref and subdir with per-file history.
+#[tauri::command]
+#[specta::specta]
+fn git_repo_tree(
+    store: State<'_, Store>,
+    worktree_path: String,
+    gitref: String,
+    subdir: String,
+) -> Result<Vec<repogit::GitTreeEntry>, AppError> {
+    repogit::tree(&store, Path::new(&worktree_path), &gitref, &subdir)
+}
+
+/// Read a committed file from a ref for the Repository screen README preview.
+#[tauri::command]
+#[specta::specta]
+fn git_repo_read_file(
+    store: State<'_, Store>,
+    worktree_path: String,
+    gitref: String,
+    path: String,
+) -> Result<Vec<u8>, AppError> {
+    repogit::read_file(&store, Path::new(&worktree_path), &gitref, &path)
+}
+
 /// Confirm and remove a complete Branchwork account profile and its credentials.
 #[tauri::command(async)]
 #[specta::specta]
@@ -1012,6 +1237,29 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             cli_logout_profile,
             cli_seed_onboarding,
             cli_remove_profile,
+            gh_auth_set_token,
+            gh_auth_status,
+            gh_auth_sign_out,
+            gh_auth_start,
+            gh_auth_poll,
+            gh_auth_pat,
+            gh_open_url,
+            gh_repo_remote,
+            gh_repo_meta,
+            gh_repo_contributors,
+            gh_repo_set_starred,
+            gh_repo_set_watched,
+            gh_repo_fork,
+            gh_repo_issues,
+            gh_repo_pulls,
+            gh_open_repo,
+            gh_open_repo_page,
+            gh_repo_runs,
+            gh_repo_rerun,
+            git_repo_branches,
+            git_repo_latest_commit,
+            git_repo_tree,
+            git_repo_read_file,
             cli_ensure_hooks,
             agent_write_handover,
             agent_handover_diff,

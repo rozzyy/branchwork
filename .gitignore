@@ -28,3 +28,7 @@ dist-ssr
 
 test-results/
 playwright-report/
+
+# Agent/tool caches
+.claude/
+node-compile-cache/

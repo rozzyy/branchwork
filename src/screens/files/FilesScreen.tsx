@@ -33,6 +33,7 @@ import { FileIcon } from "../../ui/fileIcon";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { ask } from "../../ui/dialog";
 import { toast } from "../../ui/toast";
+import { ScreenLoader } from "../../ui/ScreenLoader";
 import "./files.css";
 
 const def = screenById("files");
@@ -233,6 +234,7 @@ function TreeNode({
 
 export function FilesView() {
   const activePath = useWorktrees((s) => s.activePath);
+  const worktreesLoading = useWorktrees((s) => s.loading);
   const activeWorktree = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath) ?? null);
   const worktrees = useWorktrees((s) => s.worktrees);
   const projectName = useRepos((s) => s.projects.find((p) => p.id === s.activeProjectId)?.name);
@@ -251,6 +253,7 @@ export function FilesView() {
   const setShowIgnoredAction = useFiles((s) => s.setShowIgnored);
 
   const [treeMap, setTreeMap] = useState<TreeMap>({});
+  const [treeLoading, setTreeLoading] = useState(true);
   const [loadingFolders, setLoadingFolders] = useState<Record<string, true>>({});
   const [treeError, setTreeError] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; path: string; isDir: boolean } | null>(null);
@@ -289,8 +292,11 @@ export function FilesView() {
       setTreeMap({});
       setChangedPaths(new Set());
       setLoadingFolders({});
+      setTreeLoading(false);
       return;
     }
+    setTreeLoading(true);
+    setTreeError(null);
     // I7/R4: never walk the whole tree. Re-fetch the root plus only the folders already loaded
     // (expanding one caches it — see `handleToggle` — and it stays cached, expanded or not,
     // until the next reload) so a folder's status letters/dot stay fresh once re-opened.
@@ -319,6 +325,8 @@ export function FilesView() {
     } catch (error) {
       if (generationRef.current !== gen) return;
       setTreeError(errorMessage(error));
+    } finally {
+      if (generationRef.current === gen) setTreeLoading(false);
     }
   }, [activePath, showIgnored]);
 
@@ -686,6 +694,10 @@ export function FilesView() {
   const searchCandidates = useMemo(() => flattenFiles(searchIndex ?? {}), [searchIndex]);
   const searchResults = fuzzyQuery.trim() ? rank(searchCandidates, fuzzyQuery, (c) => c.path) : [];
 
+  if (!activePath && worktreesLoading) {
+    return <ScreenLoader>{t("files.loading")}</ScreenLoader>;
+  }
+
   if (!activePath) {
     return (
       <div className="placeholder">
@@ -745,6 +757,10 @@ export function FilesView() {
         <div className="files-tree">
           {treeError ? (
             <p className="files-tree-error" role="alert">{t("files.loadError", { message: treeError })}</p>
+          ) : treeLoading ? (
+            <div className="files-tree-empty" role="status">
+              <span className="spin" aria-hidden="true" /> {t("files.loading")}
+            </div>
           ) : fuzzyQuery.trim() ? (
             searchResults.length > 0 ? (
               searchResults.map(({ path }) => (

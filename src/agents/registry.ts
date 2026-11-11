@@ -16,6 +16,12 @@ export interface CliDef {
   launch: string[];
   /** Argv that continues the conversation after a profile switch. */
   resume: string[];
+  /**
+   * Raw shell line for the resume, or null to join `resume` argv quoted.
+   * Carries a `|| <fresh launch>` fallback: vendors exit non-zero when the
+   * profile has no conversation yet, and the pane must not end at a shell.
+   */
+  resumeLine: string | null;
   /** Interactive login command, or null when the CLI has none. */
   loginCmd: string | null;
   installGuidance: MsgKey;
@@ -97,6 +103,9 @@ const CLAUDE: CliDef = {
   binary: "claude",
   launch: ["claude"],
   resume: ["claude", "--continue"],
+  // Raw resume line with a fresh-launch fallback: `--continue` exits
+  // non-zero on a profile with no conversation, and the TUI must not die.
+  resumeLine: "claude --continue || claude",
   // Sign in through the browser first, then complete Claude's first-run
   // onboarding in the same profile-scoped terminal.
   loginCmd: "claude auth login && claude",
@@ -119,6 +128,7 @@ const CODEX: CliDef = {
   binary: "codex",
   launch: ["codex"],
   resume: ["codex", "resume", "--last"],
+  resumeLine: "codex resume --last || codex",
   loginCmd: "codex login",
   installGuidance: "agents.installCodex",
   profileEnv: (profileDir) => ({ CODEX_HOME: profileDir }),
@@ -135,6 +145,7 @@ const OPENCODE: CliDef = {
   binary: "opencode",
   launch: ["opencode"],
   resume: ["opencode", "--continue"],
+  resumeLine: "opencode --continue || opencode",
   // Shell login verified: `opencode auth login` (interactive provider picker
   // runs in the login PTY; `-p/--provider -m/--method` skip it). No
   // `--standalone` flag in the installed 1.19.3 (OpenCode 2 only).
@@ -155,6 +166,7 @@ const GEMINI: CliDef = {
   binary: "gemini",
   launch: ["gemini"],
   resume: ["gemini"],
+  resumeLine: null,
   // No shell login argv (installed CLI exposes none): auth completes inside
   // the interactive TUI on first run, so addProfile lands the pane in `gemini`.
   loginCmd: null,
@@ -173,6 +185,7 @@ const COPILOT: CliDef = {
   binary: "copilot",
   launch: ["copilot"],
   resume: ["copilot", "--continue"],
+  resumeLine: "copilot --continue || copilot",
   loginCmd: "copilot login",
   installGuidance: "agents.installCopilot",
   profileEnv: (profileDir) => ({ HOME: `${profileDir}/home` }),
@@ -190,6 +203,7 @@ const MUSE: CliDef = {
   binary: "muse",
   launch: ["muse"],
   resume: ["muse", "resume", "--last"],
+  resumeLine: "muse resume --last || muse",
   loginCmd: "muse login",
   installGuidance: "agents.installMuse",
   // Orca's method: no HOME sandboxing for muse (it has no vendor config-dir
@@ -209,6 +223,7 @@ const CUSTOM: CliDef = {
   binary: "",
   launch: [],
   resume: [],
+  resumeLine: null,
   loginCmd: null,
   installGuidance: "agents.installCustom",
   profileEnv: () => ({}),
@@ -243,6 +258,8 @@ export interface ResolvedCli {
   binary: string;
   launch: string[];
   resume: string[];
+  /** Raw resume line, or null when the resume argv must be quoted instead. */
+  resumeLine: string | null;
   loginCmd: string | null;
   guidance: string;
   /** Profile environment for `profileDir`, with overrides merged in. */
@@ -262,6 +279,8 @@ export function resolveCli(def: CliDef, overrides?: CliOverrides): ResolvedCli {
     binary: overrides?.binary ?? def.binary,
     launch: [...launch],
     resume: [...resume],
+    // A resume override has no raw line: callers quote the argv instead.
+    resumeLine: overrides?.resume ? null : def.resumeLine,
     loginCmd: def.loginCmd,
     guidance: overrides?.installGuidance ?? t(def.installGuidance),
     envFor: (profileDir) => ({ ...baseEnv(profileDir), ...extraEnv }),

@@ -130,8 +130,9 @@ test.describe("M0 Stage 2 settings", () => {
   test("Input dialog: Enter creates the prefilled file and shows a toast", async ({ page }) => {
     await openSettings(page);
     await page.getByRole("button", { name: "Input dialog", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    const input = page.getByRole("textbox");
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const input = dialog.getByRole("textbox");
     await expect(input).toHaveValue("src/new-file.ts");
     await input.press("Enter");
     await expect(page.getByRole("status").filter({ hasText: "Created src/new-file.ts" })).toBeVisible();

@@ -12,12 +12,15 @@ import { Menu, type MenuItem } from "../../ui/Menu";
 import { BusyButton } from "../../ui/BusyButton";
 import { ask } from "../../ui/dialog";
 import { toast } from "../../ui/toast";
+import { ScreenLoader } from "../../ui/ScreenLoader";
 import { readStatus } from "../../ipc/status";
 import { createUnpinnedWorktree, removeWorktree } from "../../ipc/worktrees";
 import { readHandoverDiff, writeHandoverNote } from "../../ipc/handover";
 import { writeTerminal } from "../../ipc/pty";
 import { t } from "../../i18n/t";
 import "./agents.css";
+
+const SELECTABLE_CLI_IDS = CLI_IDS.filter((id) => id !== "custom");
 
 function tail(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? path;
@@ -468,7 +471,7 @@ function NewAgentDialog() {
         <p>{t("agents.dialogBody")}</p>
         <div className="agent-h4">{t("agents.dialogCli")}</div>
         <div className="agent-apick" role="radiogroup" aria-label={t("agents.dialogCli")}>
-          {CLI_IDS.map((id) => {
+          {SELECTABLE_CLI_IDS.map((id) => {
             const entry = CLI_REGISTRY[id];
             const missing = !!binaries && !!entry.binary && !binaries[id];
             return (
@@ -734,7 +737,7 @@ function HandoverDialog() {
         </p>
         <div className="agent-h4">{t("agents.handoverTo")}</div>
         <div className="agent-apick" role="radiogroup" aria-label={t("agents.handoverTo")}>
-          {CLI_IDS.map((id) => {
+          {SELECTABLE_CLI_IDS.map((id) => {
             const entry = CLI_REGISTRY[id];
             const missing = !!binaries && !!entry.binary && !binaries[id];
             const disabled = missing || id === source.cliId;
@@ -833,7 +836,7 @@ function HandoverDialog() {
   );
 }
 
-const RACEABLE_IDS = CLI_IDS.filter((id) => id !== "custom");
+const RACEABLE_IDS = SELECTABLE_CLI_IDS;
 
 function defaultRaceSlug(prompt: string): string {
   const slug =
@@ -1088,7 +1091,7 @@ export function AgentsView() {
   // A lone default session fills the whole view; the grid kicks in on split.
   const solo = visible.length === 1 && visible[0].slot === "auto";
 
-  if (!loaded) return null;
+  if (!loaded) return <ScreenLoader>{t("agents.loading")}</ScreenLoader>;
   return (
     <div
       className={

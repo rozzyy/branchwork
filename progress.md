@@ -2,6 +2,72 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-11: Headless Repo trace + frame inspection (branch `m4-stage-1`, uncommitted)
+
+- **Trace:** entry RepoView → remote `rozzyy/branchwork` (SSH alias `github-pribadi`) → account resolution (no memory for owner → username match) → `gh_repo_meta(owner, repo, account=rozzyy)` asserted via recorded IPC args → Keychain token → `graphql` → `api_json` → `api_failure` (401 surfaces invalid-token text; genuine invisibility keeps "Could not resolve") → header/tabs/file table/sidebar/Issues header.
+- **Exercise:** throwaway Playwright spec (deleted after) against `pnpm dev` + full `__TAURI_INTERNALS__` invoke stub with live-shaped fixtures: 2 passed, 0 page errors; load ~1185 ms, issues tab ~155 ms, actions tab ~60 ms. Four screenshots inspected pixel-by-pixel in `/tmp/bw-repo-{code,issues,actions,error}.png`: underline tabs + Issues 2 badge, bordered file/commit/README boxes, sidebar stats + Latest pill + language bar, issues header "2 Open / 1 Closed" + status icons + Start buttons, actions chips + Re-run, honest invalid-token error with no mask.
+- **Conclusion:** current build is prototype-faithful; user's "jauh beda" matches a stale frontend (`dist/` not rebuilt). Needs: user re-links both tokens + full `pnpm tauri build` + restart.
+- **Next:** M4-10 Poller after user confirms. No commit or push.
+
+## 2026-11-11: Dead-token error misdiagnosis + prototype pass (branch `m4-stage-1`, uncommitted)
+
+- **Root cause:** both stored GitHub tokens return 401 "Bad credentials" (revoked/expired), but `api_json` only surfaced GraphQL `errors[]`, so dead tokens fell through to a fabricated "Could not resolve to a Repository" in `repo_meta`. Fixed: new pure `api_failure` surfaces REST-style `message` errors, mapping "Bad credentials" to "GitHub rejected the stored token (invalid or revoked) - link the account again in Settings" (+ test). Account resolution/memory verified correct (DB: rozzyy default, only `shopfoodie → rozzyrahmanda`).
+- **User action needed:** link ulang kedua token di Settings → GitHub (keduanya mati), lalu rebuild + restart app.
+- **Prototype pass:** underline tabs with icons + Issues count; file list + commit header in bordered box (author avatar, sha · age); README box with header + license; sidebar homepage row, stars/watching/forks lines, counts in Releases/Contributors headings; Issues box header with both Open/Closed totals (extra totals query) + status icons; Public pill; owner tinted accent. No new theme tokens/CSP changes (initial discs, no remote images).
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 62 passed (62), Tests 558 passed (558); Rust 198 passed, 0 failed, 3 ignored; Clippy clean; `git diff --check` clean.
+- **Next:** user re-links tokens + rebuilds, then retests branchwork/kantor repos. M4-10 Poller after that. No commit or push.
+
+## 2026-11-11: Repo casing + prototype tidy follow-up (branch `m4-stage-1`, uncommitted)
+
+- **Report:** org repos showed lowercase (`shopfoodie/...`) although the remote spells `Shopfoodie/...`; Repo UI needed prototype alignment.
+- **Fix:** `split_remote_host`/`parse_github_remote_with` keep owner/repo casing (host match `eq_ignore_ascii_case`, `.git` stripped case-insensitively, `ssh -G` retry with lowered alias); header renders owner/repo spans + Private pill; Issues IPC returns `{total, issues}` with totals on filter buttons + tab; `GhRepoMeta.is_private`, `GhRelease.is_latest` (Latest pill), `GhRun.actor_avatar`; compact counts (12.4k); per-login avatar colors (initial discs, no remote images → CSP unchanged); per-owner memory keys stay lowercased by design (case-insensitive). Tests updated (Rust casing cases, IPC shape, component casing/totals/Latest).
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 62 passed (62), Tests 558 passed (558); Rust 197 passed, 0 failed, 3 ignored; `git diff --check` clean.
+- **Next:** M4-10 Poller. Manual M4-S1-01/02 (browser + network) still open. Rebuild/restart app for Rust + frontend changes to take effect. No commit or push.
+
+## 2026-11-10: M4-04 PR list (branch `m4-stage-1`, uncommitted)
+
+- **Built:** `gh_repo_remote` (catalog-validated worktree → `git remote get-url origin` → owner/repo/URL, scp/https/ssh) + `gh_prs` (one GraphQL round-trip, states per filter, backend-side mine/review-requested filtering, 60 s per-repo cache) + `PrsScreen` (filter tabs, chips, account badge, loading/empty/error/no-remote/no-account states, selection note) wired into nav; 17 `prs.*` strings.
+- **Review:** spec-reviewer PASS all 6 ACs (`.agent/reviews/m4-task-04-spec.md`); post-review hardening (reject leading-dot owner/repo segments + tests).
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 61 passed (61), Tests 551 passed (551); Rust 188 passed, 0 failed, 3 ignored; Clippy clean; `git diff --check` clean.
+- **Next:** M4-05 PR detail. Live GraphQL test pending (needs network + linked account). Checkpoint M4.1 manual UI (device flow/PAT) still open. No commit or push.
+
+## 2026-11-10: Device flow opens the verification URI (checkpoint feedback, uncommitted)
+
+- **Request:** app should open the device-flow URI instead of forcing copy-paste.
+- **Fix:** `gh_open_url` command (strict allowlist: only `https://github.com/login/device*`, validated in pure `validate_open_url`; `open`/`xdg-open`/`cmd start` argv, no shell) + `openGithubUrl` wrapper; `DeviceFlowBox` auto-opens on start and offers an "Open in browser" button, URI stays visible as manual fallback. Tests: allowlist accept/reject, IPC routing, auto-open assertion.
+- **Verification:** focused suites green (Rust `gh::` 10 passed; TS 25 passed); `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===` (60 files / 544 tests; Rust 183 passed); Clippy + `diff --check` clean.
+- **Next:** Rebuild, retry device flow (enable Device Flow on the OAuth App first). No commit or push.
+
+## 2026-11-10: M4 Stage 1 review — code + security PASS, manual spec written (branch `m4-stage-1`, uncommitted)
+
+- **Reviews:** code-reviewer PASS (`.agent/reviews/m4-stage-1-code-review.md`, 3 medium findings fixed: sign-out prune-on-error, PENDING sweep + cap + hashed request ids, pure `should_poll` + tests; drive-bys: case-insensitive dedupe/host, PAT placeholder, test rename; `cli.rs` hunks kept as canonical fmt). Security-reviewer PASS (`.agent/reviews/m4-stage-1-security.md`; `ps`-visibility + no-zeroing documented accepted).
+- **Manual spec:** `M4-S1-01`/`M4-S1-02` + result table in `docs/testing/m0-manual-e2e.md`.
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 60 passed (60), Tests 544 passed (544); Rust 182 passed, 0 failed, 3 ignored; Clippy clean; `git diff --check` clean.
+- **Next:** 🛑 MANUAL TEST CHECKPOINT M4.1 — run M4-S1-01/02 in the app (needs browser + network). No commit, no push, no Stage 2 until user approves.
+
+## 2026-11-10: M4-03 Auth UI in Settings (branch `m4-stage-1`, uncommitted)
+
+- **Built:** `GithubAccounts` section in Settings (account rows with live status + silent stale prune + retry, device-flow box with code/URI + interval polling + cancel, PAT box with password field, danger-confirmed sign-out, default set/clear) wired into `SettingsView`; 10 new `settings.github*` strings.
+- **Review:** spec-reviewer PASS all 6 ACs (`.agent/reviews/m4-task-03-spec.md`); advisories addressed (cancel comment, dead branch removed, +5 tests: cancel/expired/prune-false/prune-throw/default toggle).
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 60 passed (60), Tests 544 passed (544); Rust 180 passed, 0 failed, 3 ignored; Clippy clean; `git diff --check` clean.
+- **Next:** M4 Stage 1 review task (manual device-flow/PAT UI test needs browser + network). No commit or push.
+
+## 2026-11-10: M4-02 Device flow + PAT, multi-account (branch `m4-stage-1`, uncommitted)
+
+- **Built:** `gh_auth_start` (device_code backend-only in pending map) + interval-enforced `gh_auth_poll` (slow_down backoff, terminal states) + `gh_auth_pat` verify-and-store, per-account `TokenStore`/`set/status/sign_out`, `curl`-argv-only HTTP (30 s cap), `resolveAccountForRemote` + owner parser, `useGithubAccounts` username-only index persisted via settings.
+- **Review:** first spec-review FAIL on criterion 6 only (index unwired) → added `store.ts` + tests → re-review PASS all 7 ACs (`.agent/reviews/m4-task-02-spec.md`). Scope clean (no UI/poller); credential safety clean.
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 59 passed (59), Tests 532 passed (532); Rust 180 passed, 0 failed, 3 ignored; Clippy clean; `git diff --check` clean.
+- **Next:** M4-03 auth UI in Settings. Manual device-flow/PAT test still pending (needs browser + network). No commit or push.
+
+## 2026-11-10: M4-01 Keychain token store + IPC (branch `m4-stage-1`, uncommitted)
+
+- **Built:** `src-tauri/src/gh.rs` (`TokenStore` trait; `KeychainStore` via `security` CLI, `MemoryStore` cfg(test); single `dev.branchwork.app`/`github-token` entry; argv-only invocation, validated input) + `gh_auth_set_token/status/sign_out` commands, regen bindings, `src/ipc/github.ts` wrapper + routing tests.
+- **Review:** spec-reviewer PASS on all 5 ACs (`.agent/reviews/m4-task-01-spec.md`); scope clean (no UI/device flow); `cli.rs` diff is rustfmt-only.
+- **Verification:** `pnpm typecheck` clean; `./init.sh` — `=== Verification Complete ===`; Test Files 57 passed (57), Tests 521 passed (521); Rust 177 passed, 0 failed, 3 ignored; Clippy clean; `git diff --check` clean.
+- **Next:** M4-02 device flow + PAT. No commit or push.
+
+## 2026-11-10: M3 Stage 6 committed and merged (user-ordered, no push)
+
 ## 2026-11-10: M3 Stage 6 committed and merged (user-ordered, no push)
 
 - **Commit:** one stage commit on `m3-stage-6`, fast-forwarded into `main`, branch deleted. Covers the right-side project rail, title-bar context/toggle, New Agent dialog login reuse, agent-pane login hint, login-detected setup guidance, and the Claude onboarding seed IPC. Untracked agent-memory dirs (`.claude/`, `src-tauri/.claude/`) and `node-compile-cache/` left out of the commit.
@@ -857,3 +923,126 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Added focused component/store tests and updated the repository Playwright flow to exercise the new sidebar instead of removed project tabs.
 - **Review:** M3 Task 16 spec/code review PASS; no security surfaces changed. Reports: `.agent/reviews/m3-task-16-spec.md`, `.agent/reviews/m3-task-16-code-review.md`, `.agent/reviews/m3-task-16-e2e.md`.
 - **Validation:** `./init.sh` passed (56 Vitest files / 511 tests; Rust 171 passed / 3 ignored; typecheck and Clippy clean); `pnpm test:e2e` passed 74/74. Manual M3-S6 checkpoint remains pending user verification. No commit or push.
+
+## 2026-11-10: PR list dukung SSH-alias remote (uncommitted, di atas M4-04)
+
+- **Laporan user:** tab PR menampilkan "The active worktree is not on a GitHub repo" padahal repo ada di GitHub — `origin` = `git@github-pribadi:rozzyy/branchwork.git` (SSH alias multi-akun), parser hanya menerima host persis `github.com`.
+- **Perbaikan backend (`src-tauri/src/gh.rs`):** `split_remote_host` + `parse_github_remote_with` (host policy injectable); `repo_remote` menyelesaikan alias via `ssh -G <host>` (resolusi config lokal, tanpa koneksi; fixed argv, tanpa shell) lalu parse ulang. `parse_github_remote` strict kini `#[cfg(test)]`.
+- **Perbaikan frontend:** `resolveAccountForOwner` baru di `src/github/accounts.ts` (`resolveAccountForRemote` mendelegasikan); `PrsView` memakai `remote.owner` tervalidasi backend, bukan parse ulang URL.
+- **Test:** `ssh_alias_hosts_resolve_to_github`, `ssh_alias_resolver_rejects_bad_hostnames`, `resolveAccountForOwner` (2). Alur: test gagal dulu → fix → focused pass.
+- **Gate:** `cargo test --lib gh::` 17 passed; clippy + fmt bersih; vitest fokus 15 passed; `pnpm typecheck` bersih; `./init.sh` = `=== Verification Complete ===`; `git diff --check` bersih. Belum commit — menunggu perintah user.
+
+## 2026-11-10: Tab PR bisa pilih akun per repo-owner (uncommitted)
+
+- **Laporan user:** repo kantor `Shopfoodie/hiiboss-selly` (remote `git@github-work:...`) error "Could not resolve to a Repository" karena chip akun menampilkan `rozzyy` (pribadi, tanpa akses), seharusnya `rozzyrahmanda` (kantor). Akar masalah: owner org tidak cocok dengan username akun mana pun sehingga auto-resolve jatuh ke akun default.
+- **Perbaikan:** dropdown Account di tab PR (hanya bila >1 akun; 1 akun tetap chip seperti dulu) + ingatan pilihan per repo-owner di `useGithubAccounts.ownerAccounts` (persist di settings, username saja), + hint "Not visible to this account? Pick another account above." saat error Could-not-resolve.
+- **Test:** `setAccountForOwner`/load-filter per-entry, pilih akun memicu `ghPrs` dengan akun baru, hint muncul. Alur: 4 test gagal dulu → fix → focused pass (24 passed).
+- **Gate:** `pnpm typecheck` bersih; `./init.sh` exit 0; `git diff --check` bersih. Belum commit — menunggu perintah user.
+
+## 2026-11-10: Menu Pull Request dihapus per perintah user (uncommitted)
+
+- **Perintah user:** hapus menu Pull Request (PR sudah ada di menu repository). Dengan akun rozzyy + repo branchwork menu PR sempat jalan (kosong, benar tidak ada PR).
+- **Dihapus total (satu slice vertikal):** `src/screens/prs/` (screen + 9 test), wiring `registry.ts`/`views.tsx`, `nav.prs` + 20 kunci `prs.*`, `ghPrs`/`ghRepoRemote` di `src/ipc/github.ts` (+test), slice backend `gh.rs` (GhRemote/PrSummary/PrFilter, parse/filter/cache, `prs`/`repo_remote`, SSH-alias resolver + 6 test), 2 command `lib.rs`, bindings regen, memori per-owner + `resolveAccountFor*` (+test). Auth GitHub (token/device flow/PAT/Settings) tidak tersentuh.
+- **Aman:** `isValidStage` menolak layout tersimpan berisi `prs` → fallback default, tanpa crash/migrasi.
+- **Meta:** feature_list M4-04 done+catatan hapus; M4-05/06 + m4-stage-2-review done-batal (bukti tertulis); plan Stage 2 ditandai REMOVED; berikut: m4-task-07 Repository screen.
+- **Gate:** `pnpm typecheck` bersih; `cargo clippy -D warnings` + `cargo fmt --check` bersih; `./init.sh` exit 0; `git diff --check` bersih. Belum commit — menunggu perintah user.
+
+## 2026-11-10: M4-07 Repository screen (uncommitted)
+
+- Implemented per `.agent/tasks/m4-task-07.md` (new): backend `gh_repo_remote` (SSH-alias aware) + `gh_repo_meta`/`gh_repo_contributors`/`gh_repo_set_starred|watched`/`gh_repo_fork` + new `repogit` local-git module (branches/latest-commit/tree with per-file history, catalog-validated, fixed argv); Rust fixture + temp-repo tests (incl. validate_ref/subdir guards).
+- Frontend `src/ipc/repo.ts` (+routing/mapping tests), `RepoScreen` (header Star/Watch/Fork + Code tab with branch selector, counts, Go to file, clone-URL copy, latest-commit bar, file table with drill-in, README via MarkdownPreview; sidebar About/topics/license/counts/releases/contributors/languages) wired to `VIEWS.repo`; 27 `repo.*` i18n keys; 6 component tests. CSP-safe: no external images/links (initials, text).
+- Out of scope respected: no Issues/Actions tabs, no PR refs, no Add file, default/first account serves all repos.
+- **Gate:** `pnpm typecheck` clean; `cargo clippy -D warnings` + `cargo fmt --check` clean; `./init.sh` = `=== Verification Complete ===` (62 files/547 tests; Rust 193 passed/3 ignored); `git diff --check` clean. Belum commit — menunggu perintah user.
+
+## 2026-11-10: M4-08 Issues + Start → worktree (uncommitted)
+
+- Implemented per `.agent/tasks/m4-task-08.md` (new): backend `gh_repo_issues` (GraphQL open/closed, fixture parse tests + bad-state guard); RepoScreen Issues tab (Open/Closed tabs, label dropdown, comment counts, agent badge when `fix/issue-<n>` worktree has a live session); Start creates `fix/issue-<n>` branch + pinned worktree + terminal tab, reuses the existing worktree, toasts `Closes #n` + issue URL (PR-body paste stays web-side since the PR menu was removed).
+- Tests: 5 new component tests (list/filter/label/badge/create/reuse); fixed own test bugs (label text collision, project fixture casing).
+- **Gate:** `pnpm typecheck` clean; `cargo clippy -D warnings` + `cargo fmt --check` clean; `./init.sh` = `=== Verification Complete ===` (62 files/552 tests; Rust 195 passed/3 ignored); `git diff --check` clean. Belum commit — menunggu perintah user.
+
+## 2026-11-10: M4-09 Actions (uncommitted)
+
+- Implemented per `.agent/tasks/m4-task-09.md` (new): backend `gh_repo_runs` (REST `/actions/runs`, capped 30, parse tests incl. first-commit-line + bad-row filtering) + `gh_repo_rerun` (`rerun-failed-jobs`, zero-id guard, empty-body 201 handled without JSON parse); RepoScreen Actions tab (status chips queued/in-progress/success/failure/neutral, Re-run with confirm dialog on failed runs, age/actor/SHA); 3 component tests + IPC routing tests.
+- Fixed live bug from user report: `REPO_META_QUERY` had `node` outside `edges{}` ("Field 'node' doesn't exist on type 'LanguageConnection'"); brace balance verified programmatically.
+- **Gate:** `pnpm typecheck` clean; `cargo clippy -D warnings` + `cargo fmt --check` clean; `./init.sh` = `=== Verification Complete ===` (62 files/555 tests; Rust 197 passed/3 ignored); `git diff --check` clean. Belum commit — menunggu perintah user.
+
+## 2026-11-10: Pemilih akun kembali di tab Repository (uncommitted)
+
+- **Laporan user:** `Shopfoodie/hiiboss-core-api` error Could-not-resolve sementara branchwork tampil — penyebab: owner org tidak cocok username mana pun sehingga akun default (`rozzyy`, tanpa akses org) dipakai.
+- **Perbaikan:** ingatan akun per repo-owner + dropdown Account di header repo (khusus multi-akun; 1 akun tetap chip). Pilihan tersimpan di settings (username saja) dan dipakai lintas Code/Issues/Actions.
+- **Test:** store (ingat/persist/filter-load) + komponen (default dulu untuk org, ganti akun memicu fetch ulang + tersimpan). Alur: tambah test dulu → implement → focused pass (25 passed).
+- **Gate:** `pnpm typecheck` bersih; `cargo clippy -D warnings` + `cargo fmt --check` bersih; `./init.sh` = `=== Verification Complete ===` (62 files/558 tests; Rust 197 passed/3 ignored); `git diff --check` bersih. Belum commit — menunggu perintah user.
+
+## 2026-11-11: M4-09b Repository navigation and Stage 3 review
+
+- Implemented the prototype Repository navigation, in-app Pull requests list and filters, fixed external GitHub routes, compact account switcher/header actions, selected-ref README reads, safe rerun HTTP-status handling, and stale-refresh/status guards.
+- Review fixes: workflow reruns require HTTP 201; refresh responses are discarded after worktree changes; README reads the selected ref with a 10 MiB cap; unknown Actions statuses and non-success/failure conclusions are neutral. Updated stale Playwright selectors for the moved Pull requests menu, Repository empty state, and Settings dialog.
+- **Reviews:** M4-09b spec PASS; Stage 3 code review PASS; security review found no exploitable vulnerabilities; E2E report records 74/74 Playwright tests passing. Reports: `.agent/reviews/m4-task-09b-spec.md`, `.agent/reviews/m4-stage-3-code-review.md`, `.agent/reviews/m4-stage-3-security.md`, `.agent/reviews/m4-stage-3-e2e.md`.
+- **Gate:** `./init.sh` → `=== Verification Complete ===` (62 Vitest files / 562 tests; Rust 208 passed / 3 ignored; TypeScript and Clippy clean); `cargo fmt --check` and `git diff --check` clean. The first final attempt hit a timing-sensitive worktree event test; the isolated test and full retry passed.
+- M4-09b is done. Stage 3 review is at the M4.3 manual checkpoint; user verification of M4-S3-01..03 is pending. No commit, push, or M4-10 work without user go-ahead.
+
+## 2026-11-11: Repository menu scope follow-up
+
+- Per user request, removed Projects, Wiki, Security, Insights, and Settings from Repository navigation, along with their tab strings/styles. Pull-request links and the fixed-route backend remain unchanged.
+- Updated M4-09b acceptance text and the manual checkpoint to M4-S3-01..03. Added a screen regression test asserting the five sections are absent. Focused `RepoScreen` tests: 19 passed; typecheck clean.
+- Still paused at Checkpoint M4.3. No commit, push, or M4-10 work.
+
+## 2026-11-11: Private repository authentication follow-up
+
+- Verified the Orca session's GitHub CLI account `rozzyrahmanda` can query the private repository, and SSH authenticates as the same user and can read its Git refs.
+- Branchwork now prefers `gh auth token --user <selected-account>` for API requests when available, verifies the token's GitHub identity, keeps it memory-only, and falls back to its existing Keychain token. SSH remains unsuitable for GraphQL.
+- Moved authorization headers and OAuth device-flow fields to curl's stdin config to remove secrets from process arguments; security re-review confirmed the finding fixed and no remaining issues.
+- Added the private organization repository check to M4-S3-01. `./init.sh` passed: 62 Vitest files / 562 tests; Rust 210 passed / 3 ignored; TypeScript and Clippy clean. `cargo fmt --check`, `git diff --check`, and feature-list JSON validation passed. App restart and manual M4.3 verification are still required; no commit, push, or M4-10 work.
+
+## 2026-11-11: UI loading follow-up
+
+- Added immediate accessible loading feedback for Repository data and first-load states in Changes, Files, Graph, Blame, Agents, and Terminal. Moved Changes diff-mode preference loading from the app shell into its screen consumers; kept global shell state global.
+- Focused Repository tests: 21 passed. `pnpm typecheck` and `git diff --check` passed. `./init.sh` → `=== Verification Complete ===` (62 Vitest files / 567 tests; Rust 210 passed / 3 ignored; TypeScript and Clippy clean).
+- Still paused at the M4.3 manual checkpoint; restart the app and run M4-S3-01..03. No commit, push, or M4-10 work.
+
+## 2026-11-11: Repository navigation + Terminal project-switch follow-up
+
+- Repository view is now lazy behind a lightweight destination boundary: clicking Repository paints the title/loading state before importing the data screen or starting repository requests. A route regression test verifies the shell is visible before `ghRepoRemote` starts and stays visible while it is pending.
+- Full-screen Terminal now renders only tabs whose panes belong to the selected project's root/worktrees. Switching projects hides (but retains) foreign tabs and sessions; unscoped new tabs use the active project path rather than a stale focused pane from the previous project.
+- Focused validation: `pnpm exec vitest run src/screens/repo/RepoNavigation.test.tsx src/terminal/TerminalScreen.test.tsx` → 2 files / 7 tests passed; `pnpm typecheck` clean; `git diff --check` clean.
+- Regression validation: `./init.sh` → `=== Verification Complete ===`; 63 Vitest files / 570 tests passed; Rust 210 passed / 3 ignored; TypeScript and Clippy clean.
+- M4.3 manual checkpoint remains pending. Preserve `m4-stage-1`; no commit, push, or M4-10 work.
+
+## 2026-11-11: Agent feature audit
+
+- Audited the agent CLI registry, profile/login flows, session lifecycle and PTY attachment, status hooks/heuristics, profile switching/limits, handover, race, Settings, and provider icons against their task criteria and automated coverage.
+- Fixed two gaps: restored profile/default objects are now allowlisted and sanitized so unknown fields (including credential-shaped keys) are not retained or re-persisted; done hook events and abnormal PTY exits now raise a single toast as well as an unfocused notification.
+- Agent-focused regression tests: 7 files / 119 passed. `./init.sh` → `=== Verification Complete ===` (63 Vitest files / 572 tests; Rust 210 passed / 3 ignored; TypeScript and Clippy clean). `pnpm test:e2e` passed 74/74.
+- Found one incomplete surface: Custom appears in the CLI picker, but no Settings control persists/applies its launch override, so New Agent blocks it. Making Custom usable needs a product/UI decision; existing registry override composition is tested in isolation.
+- Real vendor login/provider interactions were not re-run during this audit; those depend on the user's CLI installation and account state. Existing M3 manual checkpoints remain recorded as approved. No commit or push; M4.3 remains pending.
+
+## 2026-11-11: Hide unsupported Custom CLI from Agent pickers
+
+- Removed Custom from the New Agent and Handover CLI pickers while keeping it in the registry and Settings account list; updated focused tests to cover both dialogs.
+- `pnpm exec vitest run src/screens/agents/AgentsScreen.test.tsx` passed (27 tests); `pnpm typecheck` and `git diff --check` passed.
+- `./init.sh` → `=== Verification Complete ===` (63 Vitest files / 572 tests; Rust 210 passed / 3 ignored; TypeScript and Clippy clean). M4.3 remains pending; no commit or push.
+
+## 2026-11-11: User-reported fixes during M4.3 manual testing
+
+- Removed the "…needs input" in-app toast per user order: waiting status now only flips the pane status dot and sidebar badge, and the one-shot OS ping still fires when the app is unfocused. Sessions tests updated to assert no waiting toast ever appears.
+- Fixed the agent profile-switch glitch the user reported: `switchProfile` used to stop the old terminal before resolving resume argv and the login gate, so a refused switch (logged-out target, resume error) killed the running session. The launch is now prepared (profile dir, login gate, env) before the old terminal is stopped; the switch also hardens the undo path's `resolveCli` call. Regression test: a logged-out target refuses the switch with the old session left running.
+- UI per user order: all inner UI borders are square (`border-radius: 0` override in tokens.css, keeping no exceptions) and section spacing is thinner in Settings (`h3` margins 22/10 → 12/6, screen padding 20/28/40 → 14/20/28, `opt` rows 12/16 → 8/14) and the Repository screen (gap 12 → 8, padding 16 → 12).
+- `./init.sh` → `=== Verification Complete ===` (63 Vitest files / 573 tests; Rust 210 passed / 3 ignored; TypeScript and Clippy clean). M4.3 remains pending; no commit or push.
+
+## 2026-11-12: Switch hardening, status-blink gate, resume fallback, button radius restore
+
+- Second round of user-reported glitches, fixed and verified live in the running app via cua-driver GUI control:
+  - Status kedip-kedip: waiting→running flips now require ≥1024 cumulative output bytes within a 1500 ms window (`outputVolume` in `sessions.ts`), tiny TUI redraw bursts can no longer fake running, and the idle heuristic is skipped while a hook waiting event is active (`hookActive`). Verified: the dot stays stable across snapshots (fresh idle claude = steady "waiting", switch = steady "running" then stable).
+  - Dim `↻ …` switch line removed entirely (no shell prefix at all); i18n key `agents.switchLine` deleted. Verified: no `m↻: command not found` garbage in the terminal.
+  - Resume fallback: every CLI got `resumeLine` with a `|| <fresh launch>` fallback (claude `claude --continue || claude`, codex `codex resume --last || codex`, opencode/copilot/muse analogous, gemini/custom null). The switch types one raw shell line, so a profile without history falls through to a fresh launch instead of stranding the pane at a shell prompt. Verified: `claude --continue || claude` → "No conversation found to continue" → fresh Claude banner appeared automatically.
+  - Profile switch verified end-to-end in-app: Personal → Work-3 confirm dialog → old session stopped, Work-3 pane spawned with its own `CLAUDE_CONFIG_DIR`, no quoted-argv error, no "needs input" toast (stop notice toast is by design).
+- UI per user feedback: the blanket square-override kept squashing buttons, so controls now keep their shape per UI best practice — `.btn`/`.seg`/`.chip`/`.switch`/`.group-chip`/`.search` stay 999 px pills, dots/avatars/spinner/switch knob stay 50% circles, small icon controls (`.icon-btn`, tabs, close buttons, `.kbd`, `.repo-account`, `.agent-grp`) keep a 7 px (icon tiles 3 px) radius; sections/cards/inputs stay square. Verified in-app: pills and circles round, containers meet at right angles.
+- `pnpm typecheck` clean; agent tests pass (43 in sessions.test.ts + registry tests); full vitest count now 63 files / 575 tests. M4.3 manual checkpoint remains pending; no commit or push.
+
+## 2026-11-12: Empty agent pane root cause, radius refinement bookkeeping
+
+- Reproduced the user's "agent pane goes empty seconds after a switch" report live via cua-driver: the pane went blank the moment Claude reached `waiting` on a logged-in profile. Root cause was layout, not the PTY: `.agent-pane-body` was a row flexbox, so the "already logged in" banner (`flex: none`, long text) and the `CliPane` sat side by side and the terminal collapsed to 0 width (the limit banner would do the same). Fix: `flex-direction: column` on `.agent-pane-body` (`src/screens/agents/agents.css`). Verified in-app after HMR: Claude TUI renders under the banner; Personal → Work-3 → Personal switch round keeps the pane visible throughout (Work-3 falls through `claude --continue || claude` to a fresh "Not logged in" Claude as expected).
+- No regression test: the defect is pure CSS layout, which Vitest/jsdom cannot observe and the Playwright e2e has no live PTY. Covered by the manual E2E switch step instead.
+- Two confirmed non-bugs recorded for the manual report: (1) `agentSessions` is persisted write-only (`saveSetting` in `sessions.ts`, never loaded), so a webview reload (dev HMR) drops the session list while the Rust PTYs keep running. Spec §3.4 only requires the terminal dock to restore (fresh shells), so this is a dev-only artifact, not a stage defect. (2) `Could not detach terminal after pane unmount … notFound` console noise when a pane unmounts after its PTY already exited; harmless.
+- Radius refinement per user: modal `.dlg` 22 px (`.dlg-ic` 13 px, `.dlg-meta` 10 px), toast 14 px (`.toast-ic` 8 px), icon tiles 7 px / `.file-icon` 3 px stay rounded; card sections and the terminal (including `.term-dock-newtab`, `.term-screen-tab`, `.term-screen-tab-close`) stay square. Verified in the switch confirm dialog screenshot.
+- Gate: `pnpm typecheck` clean; `git diff --check` clean; `src/screens/agents/AgentsScreen.test.tsx` 27/27. M4.3 manual checkpoint remains pending; no commit or push.

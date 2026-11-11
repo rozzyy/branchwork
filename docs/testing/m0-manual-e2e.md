@@ -696,3 +696,59 @@ Expected: hidden sessions keep running; switching never respawns or replays a te
 | Step | Pass/Fail | Notes |
 |---|---|---|
 | M3-S6-01 | | |
+
+## M4 Stage 1: GitHub auth
+
+### M4-S1-01 · Device flow sign-in
+
+1. Open Settings → GitHub accounts. Confirm the section is empty on first run (no accounts, no tokens).
+2. Click "Sign in with GitHub". Confirm a user code and the `github.com/login/device` verification URI appear, and the app polls without freezing the UI.
+3. In a browser, open the URI, enter the code, and authorize. Confirm the account appears in the list with a "Logged in" chip and a toast names the account (username only, never a token).
+4. Reload the app. Confirm the account is still listed as logged in (Keychain persistence, no re-login).
+5. Press Cancel on a fresh sign-in before authorizing. Confirm polling stops and no account is added.
+6. Let a code expire (or deny it). Confirm the inline expired/denied message appears and no account is added.
+
+### M4-S1-02 · PAT sign-in and sign-out
+
+1. In GitHub accounts, enter a wrong token in the PAT field. Confirm an inline error appears and nothing is stored (status stays unlinked).
+2. Enter a valid PAT. Confirm the account joins the list with "Logged in" and a toast names the username.
+3. Add a second account (device flow or PAT). Confirm both list, set one as default, and clear the default.
+4. Sign out of an account with confirmation. Confirm the token is gone (status check no longer linked) and the row is pruned; default falls back to the remaining account.
+5. Decline the sign-out confirmation. Confirm nothing changes.
+
+### M4 Stage 1 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M4-S1-01 | | |
+| M4-S1-02 | | |
+
+## M4 Stage 3: Repository navigation
+
+### M4-S3-01 · Repository header and account switching
+
+1. Open a GitHub repository with at least two linked accounts. Confirm the repository owner/name, group chip, account control, Star, Watch, Fork, and Refresh fit without overlapping.
+2. Confirm Star and Watch counts are visible, their active states are clear, and each action is disabled while its request is in flight.
+3. Open the account control and choose another account. Confirm the selected account is shown and repository data refreshes for that account.
+4. Switch to another repository owned by an organization. Confirm its remembered account is selected after leaving and returning to the repository.
+5. Open a private organization repository accessible to the selected account and configured in GitHub CLI. Confirm its metadata and API-backed tabs load without exposing or copying any token.
+
+### M4-S3-02 · Pull request list and routes
+
+1. Open Pull requests. Confirm the tab count matches the open plus closed totals and both filters show their counts.
+2. Select Open and Closed. Confirm each list shows the request number, title, status (including Merged), author, source/target branches, comment count, and update age when available.
+3. Open a request from its title and its external-link button. Confirm both open the matching GitHub `/pull/<number>` page in the system browser.
+4. Confirm empty and loading states render without affecting the other repository sections.
+
+### M4-S3-03 · Issues and Actions regression
+
+1. On Issues, switch between Open and Closed and filter by a label. Start an issue worktree and confirm its terminal opens.
+2. On Actions, inspect run status and rerun a failed workflow after confirmation. Decline a second rerun and confirm no request is sent.
+
+### M4 Stage 3 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M4-S3-01 | | |
+| M4-S3-02 | | |
+| M4-S3-03 | | |

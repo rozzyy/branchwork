@@ -140,6 +140,11 @@ beforeEach(() => {
 });
 
 describe("AgentsView", () => {
+  it("shows loading feedback while agent sessions are being restored", () => {
+    useSessions.setState({ loaded: false });
+    render(<AgentsView />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading agents…");
+  });
   it("renders the session grid with headers and panes", () => {
     render(<AgentsView />);
     expect(screen.getByLabelText("Codex session in a")).toBeInTheDocument();
@@ -317,6 +322,7 @@ describe("AgentsView", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     // The preset target is checked instead of the first-non-source default.
     expect(screen.getByRole("radio", { name: /opencode/i })).toBeChecked();
+    expect(screen.queryByRole("radio", { name: /custom/i })).not.toBeInTheDocument();
     expect(useSessions.getState().handoverTarget).toBe("opencode");
     // No session starts or stops from selecting alone.
     expect(useSessions.getState().sessions).toHaveLength(2);
@@ -455,7 +461,8 @@ describe("AgentsView", () => {
     fireEvent.click(screen.getByRole("button", { name: "＋ New agent" }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
     const radios = screen.getAllByRole("radio");
-    expect(radios).toHaveLength(7);
+    expect(radios).toHaveLength(6);
+    expect(screen.queryByRole("radio", { name: /custom/i })).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /codex/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Profile")).toBeInTheDocument();
     expect(screen.getByLabelText("Worktree")).toBeInTheDocument();

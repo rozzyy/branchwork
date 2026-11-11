@@ -26,6 +26,7 @@ import { ask } from "../ui/dialog";
 import { useDock } from "./dock";
 import { useStage } from "../state/stage";
 import { useWorktrees } from "../state/worktrees";
+import { useRepos } from "../state/repos";
 
 export interface ScreenPaneState {
   id: string;
@@ -311,7 +312,25 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
       const selected = get().tabs.find((tab) => tab.id === get().selectedTabId);
       const focusedWorktree =
         selected && selected.focusedPaneId ? selected.panes[selected.focusedPaneId]?.worktreePath : undefined;
-      const target = worktreePath ?? focusedWorktree ?? useWorktrees.getState().activePath;
+      const activeProjectId = useRepos.getState().activeProjectId;
+      const activeProject = useRepos.getState().projects.find((project) => project.id === activeProjectId);
+      const worktreeState = useWorktrees.getState();
+      const belongsToActiveProject = (path: string | undefined) =>
+        !!path &&
+        !!activeProject &&
+        (path === activeProject.localPath ||
+          (worktreeState.projectId === activeProject.id &&
+            worktreeState.worktrees.some((worktree) => worktree.path === path)));
+      const activeProjectPath =
+        activeProject && worktreeState.projectId === activeProject.id
+          ? worktreeState.activePath ?? activeProject.localPath
+          : activeProject?.localPath;
+      const target =
+        worktreePath ??
+        (belongsToActiveProject(focusedWorktree) ? focusedWorktree : undefined) ??
+        activeProjectPath ??
+        focusedWorktree ??
+        worktreeState.activePath;
       if (!target) {
         toast({ title: t("screen.noWorktree"), icon: "⚠" });
         return null;

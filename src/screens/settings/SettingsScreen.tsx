@@ -4,6 +4,7 @@ import { useSettings } from "../../state/settings";
 import { CLI_IDS, CLI_REGISTRY, type CliId } from "../../agents/registry";
 import { CliIcon } from "../../agents/cliIcons";
 import { useProfiles, usageKey } from "../../agents/profiles";
+import { GithubAccounts } from "./GithubAccounts";
 import { parseClaudeAuth, parseMuseUsage, PROBED_CLIS } from "../../agents/probe";
 import { probeCli, profileHasCredentials } from "../../ipc/cli";
 
@@ -448,6 +449,8 @@ export function SettingsView() {
       </div>
       <h3>{t("settings.agentAccounts")}</h3>
       <AgentAccounts />
+      <h3>{t("settings.githubAccounts")}</h3>
+      <GithubAccounts />
 
       <h3>{t("settings.demo")}</h3>
       <div className="card demo">

@@ -103,6 +103,15 @@ impl AppError {
         }
     }
 
+    pub fn rate_limited(message: impl Into<String>) -> Self {
+        Self {
+            kind: ErrorKind::RateLimited,
+            message: message.into(),
+            detail: None,
+            recoverable: true,
+        }
+    }
+
     pub fn git_conflict(message: impl Into<String>, stderr: impl Into<String>) -> Self {
         let detail = stderr.into();
         Self {

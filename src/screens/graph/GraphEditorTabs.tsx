@@ -50,8 +50,11 @@ export function GraphEditorTabs({
   const requestId = useRef(0);
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
-  useEffect(() => () => {
-    requestId.current++;
+  useEffect(() => {
+    void useChanges.getState().load();
+    return () => {
+      requestId.current++;
+    };
   }, []);
 
   const loadDiff = useCallback((tab: DiffTab) => {

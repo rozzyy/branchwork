@@ -348,6 +348,7 @@ textarea.input {
   flex: 1;
   min-height: 0;
   display: flex;
+  flex-direction: column;
 }
 
 .agent-pane-body .cli-pane {

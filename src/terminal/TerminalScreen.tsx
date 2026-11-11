@@ -3,8 +3,10 @@ import { CliPane } from "./CliPane";
 import { useTerminalScreen, type ScreenPaneState, type ScreenTab } from "./screen";
 import type { LayoutNode } from "./layout";
 import { useWorktrees } from "../state/worktrees";
+import { useRepos } from "../state/repos";
 import { worktreeColor } from "../shell/Sidebar";
 import { Menu, type MenuItem } from "../ui/Menu";
+import { ScreenLoader } from "../ui/ScreenLoader";
 import { t } from "../i18n/t";
 import "./terminal-screen.css";
 
@@ -380,7 +382,22 @@ export function TerminalScreen() {
   const tabs = useTerminalScreen((s) => s.tabs);
   const selectedTabId = useTerminalScreen((s) => s.selectedTabId);
   const loaded = useTerminalScreen((s) => s.loaded);
-  const selected = tabs.find((tab) => tab.id === selectedTabId) ?? null;
+  const activeProjectId = useRepos((s) => s.activeProjectId);
+  const activeProject = useRepos((s) => s.projects.find((project) => project.id === s.activeProjectId) ?? null);
+  const worktreesProjectId = useWorktrees((s) => s.projectId);
+  const worktrees = useWorktrees((s) => s.worktrees);
+  const projectPaths = new Set([
+    ...(activeProject ? [activeProject.localPath] : []),
+    ...(activeProjectId !== null && worktreesProjectId === activeProjectId
+      ? worktrees.map((worktree) => worktree.path)
+      : []),
+  ]);
+  // Hide mixed-project tabs as a whole so hidden panes cannot receive broadcast input.
+  const visibleTabs = tabs.filter((tab) =>
+    Object.values(tab.panes).every((pane) => projectPaths.has(pane.worktreePath)),
+  );
+  const selected =
+    visibleTabs.find((tab) => tab.id === selectedTabId) ?? visibleTabs[visibleTabs.length - 1] ?? null;
 
   useEffect(() => {
     void useTerminalScreen.getState().load();
@@ -431,7 +448,7 @@ export function TerminalScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!loaded) return null;
+  if (!loaded) return <ScreenLoader>{t("screen.loading")}</ScreenLoader>;
   if (!selected) {
     return (
       <div className="term-screen term-screen-empty" role="status">
@@ -445,7 +462,7 @@ export function TerminalScreen() {
   const maximizedPane = selected.maximizedPaneId ? selected.panes[selected.maximizedPaneId] : null;
   return (
     <div className="term-screen">
-      <TabBar tabs={tabs} selected={selected} />
+      <TabBar tabs={visibleTabs} selected={selected} />
       <div className="term-screen-body">
         {maximizedPane ? <PaneView tab={selected} pane={maximizedPane} /> : <LayoutView tab={selected} node={selected.layout} />}
       </div>

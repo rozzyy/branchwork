@@ -117,6 +117,19 @@ const idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
  * output re-notifies every few seconds forever.
  */
 const notifiedWaiting = new Set<string>();
+/** Record ids whose waiting state was declared by an agent hook (trusted). */
+const hookWaiting = new Set<string>();
+/** Record ids with a proven hook connection: hooks are the primary signal,
+ * so the idle heuristic (always fighty with redrawing TUIs) stays off. */
+const hookActive = new Set<string>();
+/**
+ * Rolling [timestamp, bytes] of recent PTY chunks while waiting. Terminal
+ * UIs keep redrawing (cursor blink, spinner frames), so tiny chunks must
+ * not fake the agent being back at work.
+ */
+const outputVolume = new Map<string, Array<[number, number]>>();
+const PULSE_WINDOW_MS = 1500;
+const PULSE_BYTES = 1024;
 
 function clearSessionWatch(id: string) {
   const timer = idleTimers.get(id);
@@ -127,6 +140,9 @@ function clearSessionWatch(id: string) {
   overlaps.delete(id);
   lineBuffers.delete(id);
   notifiedWaiting.delete(id);
+  hookWaiting.delete(id);
+  hookActive.delete(id);
+  outputVolume.delete(id);
 }
 
 /**
@@ -190,7 +206,9 @@ interface SessionsStore {
    * worktree and resuming the conversation. Confirms when running unless
    * `skipConfirm` (limit-driven switches already carry user consent via the
    * toast/banner/auto-switch setting); refuses dock-shared sessions. Returns
-   * the session id, or null when refused.
+   * the session id, or null when refused. A refused switch never stops the
+   * running session: the target profile is prepared (login gate, env) before
+   * the old terminal is stopped.
    */
   switchProfile(id: string, profile: ProfileRef, skipConfirm?: boolean): Promise<string | null>;
   /** Switch to the next profile of the same CLI (cycle); toasts when alone. */
@@ -218,17 +236,29 @@ export const useSessions = create<SessionsStore>((set, get) => {
   const updateSession = (id: string, patch: Partial<AgentSession>) =>
     set({ sessions: get().sessions.map((session) => (session.id === id ? { ...session, ...patch } : session)) });
 
-  /** Mark a live session waiting; the toast + OS ping fire once per session. */
-  const setWaiting = (id: string) => {
+  const reportDone = (session: AgentSession) => {
+    const title = t("agents.doneTitle", { name: CLI_REGISTRY[session.cliId].name });
+    toast({ title, icon: createElement(CliIcon, { id: session.cliId }) });
+    void notifyWhenUnfocused(title).catch(() => undefined);
+  };
+
+  /**
+   * Mark a live session waiting. The status dot and sidebar badge already
+   * tell the story in-app, so there is no toast; the OS ping fires once per
+   * session and only when the app is unfocused. `hook` marks the signal as
+   * coming from the agent hook (trusted), which the output gate treats
+   * stricter than heuristic waiting.
+   */
+  const setWaiting = (id: string, hook = false) => {
     const session = findSession(id);
     if (!session || session.status !== "running" || !session.sessionId) return;
     if (exitedSessions.has(session.sessionId)) return;
     updateSession(id, { status: "waiting" });
     save();
+    if (hook) hookWaiting.add(id);
     if (notifiedWaiting.has(id)) return;
     notifiedWaiting.add(id);
     const title = t("agents.waitingTitle", { name: CLI_REGISTRY[session.cliId].name });
-    toast({ title, icon: "⏳" });
     void notifyWhenUnfocused(title).catch(() => undefined);
   };
 
@@ -260,11 +290,24 @@ export const useSessions = create<SessionsStore>((set, get) => {
     const window = tail + text;
     overlaps.set(session.id, window.slice(-OVERLAP_CAP));
     if (session.status === "waiting") {
-      // Fresh output means the agent (or the user) acted: back to running.
-      updateSession(session.id, { status: "running" });
-      save();
+      // Fresh output means the agent (or the user) acted: back to running —
+      // but only when the output is substantial. Cursor blink and spinner
+      // redraws are small bursts and must not fake "running".
+      const now = Date.now();
+      const pulses = (outputVolume.get(session.id) ?? []).filter(([at]) => now - at <= PULSE_WINDOW_MS);
+      pulses.push([now, text.length]);
+      outputVolume.set(session.id, pulses);
+      if (pulses.reduce((sum, [, size]) => sum + size, 0) >= PULSE_BYTES) {
+        hookWaiting.delete(session.id);
+        outputVolume.delete(session.id);
+        updateSession(session.id, { status: "running" });
+        save();
+      }
     }
-    scheduleIdle(session.id);
+    // Hooks are the primary signal (spec §6.6.3): once they are proven
+    // alive for a session, the idle heuristic stays off — redrawing TUIs
+    // would flip running↔waiting forever.
+    if (!hookActive.has(session.id)) scheduleIdle(session.id);
     const def = CLI_REGISTRY[session.cliId];
     if (freshMatch(def.waitingPatterns, tail.length, window)) setWaiting(session.id);
     if (freshMatch(def.limitPatterns, tail.length, window)) onLimitHit(session.id);
@@ -292,15 +335,16 @@ export const useSessions = create<SessionsStore>((set, get) => {
     });
   };
 
-  /** Spawn the shell and write the argv; returns the PTY session or an error. */
-  const spawnAgentShell = async (
+  /**
+   * Everything a launch needs except the PTY itself: profile dir, login
+   * gate, and env. Prepared before any terminal is stopped, so a failed
+   * profile switch cannot take the running session down with it.
+   */
+  const prepareAgentShell = async (
     agentId: string,
     cliId: CliId,
     profile: ProfileRef,
-    worktreePath: string,
-    argv: string[],
-    prefix: string[] = [],
-  ): Promise<{ sessionId: string } | { error: string; loginRequired?: boolean }> => {
+  ): Promise<{ env: Record<string, string> } | { error: string; loginRequired?: boolean }> => {
     let profileDir: string;
     try {
       profileDir = await ensureProfileDir(profile.cliId, profile.slug);
@@ -345,10 +389,25 @@ export const useSessions = create<SessionsStore>((set, get) => {
     // Hook setup is best-effort: a missing sidecar or unsupported CLI only
     // loses the primary signal; the output heuristics still apply.
     void ensureAgentHooks(cliId, profileDir).catch(() => false);
-    const env = {
-      ...resolveCli(CLI_REGISTRY[cliId]).envFor(profileDir),
-      ...(await hookEnv(agentId).catch(() => ({}))),
-    };
+    let env: Record<string, string>;
+    try {
+      env = {
+        ...resolveCli(CLI_REGISTRY[cliId]).envFor(profileDir),
+        ...(await hookEnv(agentId).catch(() => ({}))),
+      };
+    } catch (error) {
+      return { error: errorMessage(error) };
+    }
+    return { env };
+  };
+
+  /** Spawn the shell and write one raw command line over a prepared env. */
+  const spawnPreparedShell = async (
+    worktreePath: string,
+    env: Record<string, string>,
+    command: string,
+    prefix: string[] = [],
+  ): Promise<{ sessionId: string } | { error: string }> => {
     let sessionId: string;
     try {
       const spawned = await spawnTerminal(worktreePath, 80, 24, env);
@@ -360,11 +419,25 @@ export const useSessions = create<SessionsStore>((set, get) => {
       for (const line of prefix) {
         await writeTerminal(sessionId, new TextEncoder().encode(`${line}\n`));
       }
-      await writeTerminal(sessionId, new TextEncoder().encode(`${argv.map(quoteArg).join(" ")}\n`));
+      await writeTerminal(sessionId, new TextEncoder().encode(`${command}\n`));
       return { sessionId };
     } catch (error) {
       return { error: errorMessage(error) };
     }
+  };
+
+  /** Spawn the shell and write the argv; returns the PTY session or an error. */
+  const spawnAgentShell = async (
+    agentId: string,
+    cliId: CliId,
+    profile: ProfileRef,
+    worktreePath: string,
+    argv: string[],
+    prefix: string[] = [],
+  ): Promise<{ sessionId: string } | { error: string; loginRequired?: boolean }> => {
+    const ready = await prepareAgentShell(agentId, cliId, profile);
+    if (!("env" in ready)) return ready;
+    return spawnPreparedShell(worktreePath, ready.env, argv.map(quoteArg).join(" "), prefix);
   };
 
   return {
@@ -413,13 +486,16 @@ export const useSessions = create<SessionsStore>((set, get) => {
       );
       if (!session) return;
       if (event === "done") {
+        const firstDone = session.status !== "done";
         exitedSessions.add(sessionId);
         clearSessionWatch(session.id);
         updateSession(session.id, { status: "done" });
         save();
+        if (firstDone) reportDone(session);
         return;
       }
-      setWaiting(session.id);
+      hookActive.add(session.id);
+      setWaiting(session.id, true);
     },
 
     async checkBinaries() {
@@ -578,13 +654,25 @@ export const useSessions = create<SessionsStore>((set, get) => {
                 toast({ title: t("agents.profileRequired", { name: def.name }), icon: "⚠" });
                 return;
               }
-              const result = await spawnAgentShell(
-                removed.id,
-                removed.cliId,
-                removed.profile,
-                removed.worktreePath,
-                resolveCli(def).resume,
-              );
+              let command: string;
+              try {
+                const resolved = resolveCli(def);
+                command = resolved.resumeLine ?? resolved.resume.map(quoteArg).join(" ");
+              } catch (error) {
+                toast({ title: errorMessage(error), icon: "⚠" });
+                return;
+              }
+              const ready = await prepareAgentShell(removed.id, removed.cliId, removed.profile);
+              if (!("env" in ready)) {
+                if (!ready.loginRequired) {
+                  toast({
+                    title: t("agents.spawnError", { name: def.name, message: ready.error }),
+                    icon: "⚠",
+                  });
+                }
+                return;
+              }
+              const result = await spawnPreparedShell(removed.worktreePath, ready.env, command);
               if (!("sessionId" in result)) {
                 toast({
                   title: t("agents.spawnError", { name: def.name, message: result.error }),
@@ -642,6 +730,26 @@ export const useSessions = create<SessionsStore>((set, get) => {
         });
         if (confirmed !== true) return null;
       }
+      // Prepare everything first: a resume error or a not-logged-in target
+      // must refuse the switch while the old session keeps running. The raw
+      // resume line (with its fresh-launch fallback) is preferred so a
+      // profile without history does not strand the pane at a shell.
+      let command: string;
+      try {
+        const resolved = resolveCli(def);
+        command = resolved.resumeLine ?? resolved.resume.map(quoteArg).join(" ");
+      } catch (error) {
+        toast({ title: errorMessage(error), icon: "⚠" });
+        return null;
+      }
+      const ready = await prepareAgentShell(id, session.cliId, profile);
+      if (!("env" in ready)) {
+        // The login gate already toasted; anything else needs its own toast.
+        if (!ready.loginRequired) {
+          toast({ title: t("agents.spawnError", { name: def.name, message: ready.error }), icon: "⚠" });
+        }
+        return null;
+      }
       if (session.sessionId) {
         try {
           await stopTerminal(session.sessionId, STOP_GRACE_MS);
@@ -657,22 +765,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
         }
       }
       clearSessionWatch(id);
-      let resume: string[];
-      try {
-        resume = resolveCli(def).resume;
-      } catch (error) {
-        toast({ title: errorMessage(error), icon: "⚠" });
-        return null;
-      }
-      const dimmed = `\x1b[2m${t("agents.switchLine", { from: currentName, to: target.name })}\x1b[0m`;
-      const result = await spawnAgentShell(
-        id,
-        session.cliId,
-        profile,
-        session.worktreePath,
-        resume,
-        [dimmed],
-      );
+      const result = await spawnPreparedShell(session.worktreePath, ready.env, command);
       if (!("sessionId" in result)) {
         updateSession(id, { error: result.error, status: "idle" });
         toast({ title: t("agents.spawnError", { name: def.name, message: result.error }), icon: "⚠" });
@@ -756,14 +849,11 @@ export const useSessions = create<SessionsStore>((set, get) => {
           exitedSessions.add(event.sessionId);
           const session = get().sessions.find((item) => item.sessionId === event.sessionId);
           if (session) {
+            const firstDone = session.status !== "done";
             clearSessionWatch(session.id);
             updateSession(session.id, { status: "done" });
             save();
-            if (event.exitCode !== 0 || event.signal) {
-              void notifyWhenUnfocused(
-                t("agents.doneTitle", { name: CLI_REGISTRY[session.cliId].name }),
-              ).catch(() => undefined);
-            }
+            if (firstDone && (event.exitCode !== 0 || event.signal)) reportDone(session);
           }
           // A clean agent exit closes its pane immediately (the Undo toast
           // offers relaunch). Abnormal exits keep the pane so the error stays

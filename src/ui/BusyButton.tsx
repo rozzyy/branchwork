@@ -21,15 +21,17 @@ export function BusyButton({ onExecute, children, disabled, ...rest }: BusyButto
       live.current = false;
     };
   }, []);
-  const click = () => {
+  const click = async () => {
     if (busy) return;
     setBusy(true);
-    void Promise.resolve()
-      .then(onExecute)
-      .catch(() => {})
-      .finally(() => {
-        if (live.current) setBusy(false);
-      });
+    try {
+      await onExecute();
+    } catch {
+      // Keep the UI responsive even when the async action rejects; the caller
+      // can surface a toast/error outside the button itself.
+    } finally {
+      if (live.current) setBusy(false);
+    }
   };
   return (
     <Button disabled={disabled || busy} aria-busy={busy} onClick={click} {...rest}>

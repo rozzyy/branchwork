@@ -18,6 +18,7 @@ import { Segmented } from "../../ui/controls";
 import { FileIcon } from "../../ui/fileIcon";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { ask } from "../../ui/dialog";
+import { ScreenLoader } from "../../ui/ScreenLoader";
 import "./changes.css";
 
 const def = screenById("changes");
@@ -303,6 +304,7 @@ function FileRow({
 
 export function ChangesView() {
   const activePath = useWorktrees((s) => s.activePath);
+  const worktreesLoading = useWorktrees((s) => s.loading);
   const activeWorktree = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath) ?? null);
   const entries = useChanges((s) => s.entries);
   const stashes = useChanges((s) => s.stashes);
@@ -456,6 +458,10 @@ export function ChangesView() {
   };
 
   useEffect(() => {
+    void useChanges.getState().load();
+  }, []);
+
+  useEffect(() => {
     if (activePath) void refresh(activePath);
   }, [activePath, refresh]);
 
@@ -480,6 +486,10 @@ export function ChangesView() {
       if (unlisten) void unlisten();
     };
   }, [activePath, handleGitChanged]);
+
+  if (!activePath && worktreesLoading) {
+    return <ScreenLoader>{t("changes.loading")}</ScreenLoader>;
+  }
 
   if (!activePath) {
     return (
@@ -621,7 +631,11 @@ export function ChangesView() {
         </div>
       </div>
       <div className="changes-diff-pane">
-        {empty ? (
+        {loading ? (
+          <div className="changes-empty" role="status">
+            <span className="spin" aria-hidden="true" /> {t("changes.loading")}
+          </div>
+        ) : empty ? (
           <div className="changes-empty">{t("changes.empty")}</div>
         ) : diff && selection ? (
           <DiffRenderer

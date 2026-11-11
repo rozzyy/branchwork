@@ -97,6 +97,72 @@ export const commands = {
 	/**  Confirm and remove a complete Branchwork account profile and its credentials. */
 	cliRemoveProfile: (cliId: string, slug: string) => __TAURI_INVOKE<boolean>("cli_remove_profile", { cliId, slug }),
 	/**
+	 *  Store a user-supplied GitHub token under an account name in the platform
+	 *  credential store. Never synthesized: the caller passes the token the
+	 *  user provided.
+	 */
+	ghAuthSetToken: (token: string, account: string) => __TAURI_INVOKE<null>("gh_auth_set_token", { token, account }),
+	/**
+	 *  True when a token is stored (for the account, or any account when
+	 *  omitted). The token itself is never returned.
+	 */
+	ghAuthStatus: (account: string | null) => __TAURI_INVOKE<GhAuthStatus>("gh_auth_status", { account }),
+	/**  Delete the stored token for an account. `Ok(false)` when absent. */
+	ghAuthSignOut: (account: string) => __TAURI_INVOKE<boolean>("gh_auth_sign_out", { account }),
+	/**
+	 *  Start a device authorization. Returns the user code and verification URI;
+	 *  the device code stays backend-side under the returned request id.
+	 */
+	ghAuthStart: () => __TAURI_INVOKE<DeviceStart>("gh_auth_start"),
+	/**  Poll one in-flight device authorization once (interval-enforced). */
+	ghAuthPoll: (requestId: string) => __TAURI_INVOKE<DevicePoll_Serialize>("gh_auth_poll", { requestId }),
+	/**  Verify a user-supplied PAT, store it under its username, return the name. */
+	ghAuthPat: (token: string) => __TAURI_INVOKE<PatResult>("gh_auth_pat", { token }),
+	/**
+	 *  Open the device-flow verification page in the system browser.
+	 *  Strict allowlist enforced in the backend: only the GitHub device-login
+	 *  page may be opened, never an arbitrary URL.
+	 */
+	ghOpenUrl: (url: string) => __TAURI_INVOKE<null>("gh_open_url", { url }),
+	/**  Resolve the `origin` remote of the active worktree to owner/repo/URL. */
+	ghRepoRemote: (worktreePath: string) => __TAURI_INVOKE<GhRemote>("gh_repo_remote", { worktreePath }),
+	/**  Repository overview for the repo screen as one stored account. */
+	ghRepoMeta: (owner: string, repo: string, account: string) => __TAURI_INVOKE<GhRepoMeta_Serialize>("gh_repo_meta", { owner, repo, account }),
+	/**  Top contributors for the repo screen sidebar as one stored account. */
+	ghRepoContributors: (owner: string, repo: string, account: string) => __TAURI_INVOKE<GhContributor[]>("gh_repo_contributors", { owner, repo, account }),
+	/**  Star or unstar a repo. Returns the new starred state. */
+	ghRepoSetStarred: (owner: string, repo: string, account: string, starred: boolean) => __TAURI_INVOKE<boolean>("gh_repo_set_starred", { owner, repo, account, starred }),
+	/**  Subscribe or unsubscribe a repo. Returns the new subscription state. */
+	ghRepoSetWatched: (owner: string, repo: string, account: string, watch: boolean) => __TAURI_INVOKE<string>("gh_repo_set_watched", { owner, repo, account, watch }),
+	/**  Fork a repo into the viewer's account. Returns the fork URL. */
+	ghRepoFork: (owner: string, repo: string, account: string) => __TAURI_INVOKE<string>("gh_repo_fork", { owner, repo, account }),
+	/**  Issue list for the repo screen Issues tab as one stored account. */
+	ghRepoIssues: (owner: string, repo: string, account: string, state: string) => __TAURI_INVOKE<GhIssueList_Serialize>("gh_repo_issues", { owner, repo, account, state }),
+	/**  Pull request list for the repo screen Pulls tab as one stored account. */
+	ghRepoPulls: (owner: string, repo: string, account: string, state: string) => __TAURI_INVOKE<GhPullList_Serialize>("gh_repo_pulls", { owner, repo, account, state }),
+	/**
+	 *  Open a GitHub repository page in the system browser. The URL is built
+	 *  server-side from validated names, never from caller-supplied URLs.
+	 */
+	ghOpenRepo: (owner: string, repo: string) => __TAURI_INVOKE<null>("gh_open_repo", { owner, repo }),
+	/**
+	 *  Open a fixed GitHub repository section or pull request in the system
+	 *  browser. The backend allowlists the route and builds the URL.
+	 */
+	ghOpenRepoPage: (owner: string, repo: string, page: string, pullNumber: number | null) => __TAURI_INVOKE<null>("gh_open_repo_page", { owner, repo, page, pullNumber }),
+	/**  Latest Actions runs for the repo screen Actions tab as one stored account. */
+	ghRepoRuns: (owner: string, repo: string, account: string) => __TAURI_INVOKE<GhRun_Serialize[]>("gh_repo_runs", { owner, repo, account }),
+	/**  Re-run the failed jobs of one Actions run as one stored account. */
+	ghRepoRerun: (owner: string, repo: string, account: string, runId: number) => __TAURI_INVOKE<null>("gh_repo_rerun", { owner, repo, account, runId }),
+	/**  Branch selector data for the repo screen Code tab. */
+	gitRepoBranches: (worktreePath: string) => __TAURI_INVOKE<GitBranches_Serialize>("git_repo_branches", { worktreePath }),
+	/**  Latest commit on a ref for the repo screen latest-commit bar. */
+	gitRepoLatestCommit: (worktreePath: string, gitref: string) => __TAURI_INVOKE<GitCommit>("git_repo_latest_commit", { worktreePath, gitref }),
+	/**  File table of a ref and subdir with per-file history. */
+	gitRepoTree: (worktreePath: string, gitref: string, subdir: string) => __TAURI_INVOKE<GitTreeEntry[]>("git_repo_tree", { worktreePath, gitref, subdir }),
+	/**  Read a committed file from a ref for the Repository screen README preview. */
+	gitRepoReadFile: (worktreePath: string, gitref: string, path: string) => __TAURI_INVOKE<number[]>("git_repo_read_file", { worktreePath, gitref, path }),
+	/**
 	 *  Merge agent hook entries into the isolated profile dir for CLIs with
 	 *  documented hook support (currently Claude Code only). Best-effort: a
 	 *  missing sidecar or an unsupported CLI reports false and the caller keeps
@@ -170,6 +236,35 @@ export type CommitOptions = {
 	amend: boolean,
 	stageAll: boolean,
 };
+
+/**  `gh_auth_poll` shape. */
+export type DevicePoll = DevicePoll_Serialize | DevicePoll_Deserialize;
+
+/**  `gh_auth_poll` shape. */
+export type DevicePoll_Deserialize = {
+	state: DeviceState,
+	username?: string | null,
+	interval: number,
+};
+
+/**  `gh_auth_poll` shape. */
+export type DevicePoll_Serialize = {
+	state: DeviceState,
+	username: string | null,
+	interval: number,
+};
+
+/**  `gh_auth_start` shape. The `device_code` stays backend-side. */
+export type DeviceStart = {
+	request_id: string,
+	user_code: string,
+	verification_uri: string,
+	expires_in: number,
+	interval: number,
+};
+
+/**  Device-flow terminal state. */
+export type DeviceState = "pending" | "authorized" | "expired" | "denied";
 
 export type DiffArea = "staged" | "unstaged" | 
 /**  Working tree vs HEAD, combining staged and unstaged changes for the file into one diff. */
@@ -272,6 +367,291 @@ export type FsTree_Deserialize = {
 
 export type FsTree_Serialize = {
 	entries: FsEntry_Serialize[],
+};
+
+/**  `gh_auth_status` shape: linked accounts only, never tokens. */
+export type GhAuthStatus = {
+	linked: boolean,
+};
+
+/**  One contributor row. */
+export type GhContributor = {
+	login: string,
+	contributions: number,
+	avatar_url: string,
+};
+
+/**  One issue row. Tokens never appear here. */
+export type GhIssue = GhIssue_Serialize | GhIssue_Deserialize;
+
+/**  One issue label. */
+export type GhIssueLabel = {
+	name: string,
+	color: string,
+};
+
+/**
+ *  Issue list with its total count for the repo screen Issues tab.
+ *  Tokens never appear here.
+ */
+export type GhIssueList = GhIssueList_Serialize | GhIssueList_Deserialize;
+
+/**
+ *  Issue list with its total count for the repo screen Issues tab.
+ *  Tokens never appear here.
+ */
+export type GhIssueList_Deserialize = {
+	total: number,
+	issues: GhIssue_Deserialize[],
+};
+
+/**
+ *  Issue list with its total count for the repo screen Issues tab.
+ *  Tokens never appear here.
+ */
+export type GhIssueList_Serialize = {
+	total: number,
+	issues: GhIssue_Serialize[],
+};
+
+/**  One issue row. Tokens never appear here. */
+export type GhIssue_Deserialize = {
+	number: number,
+	title: string,
+	author: string,
+	url: string,
+	updated_at?: string | null,
+	comments: number,
+	labels: GhIssueLabel[],
+};
+
+/**  One issue row. Tokens never appear here. */
+export type GhIssue_Serialize = {
+	number: number,
+	title: string,
+	author: string,
+	url: string,
+	updated_at: string | null,
+	comments: number,
+	labels: GhIssueLabel[],
+};
+
+/**  One language slice of the sidebar bar. */
+export type GhLanguage = GhLanguage_Serialize | GhLanguage_Deserialize;
+
+/**  One language slice of the sidebar bar. */
+export type GhLanguage_Deserialize = {
+	name: string,
+	color?: string | null,
+	size: number,
+};
+
+/**  One language slice of the sidebar bar. */
+export type GhLanguage_Serialize = {
+	name: string,
+	color: string | null,
+	size: number,
+};
+
+/**  One pull request row. Tokens never appear here. */
+export type GhPull = GhPull_Serialize | GhPull_Deserialize;
+
+/**
+ *  Pull request list with its total count for the repo screen Pulls tab.
+ *  Tokens never appear here.
+ */
+export type GhPullList = GhPullList_Serialize | GhPullList_Deserialize;
+
+/**
+ *  Pull request list with its total count for the repo screen Pulls tab.
+ *  Tokens never appear here.
+ */
+export type GhPullList_Deserialize = {
+	total: number,
+	pulls: GhPull_Deserialize[],
+};
+
+/**
+ *  Pull request list with its total count for the repo screen Pulls tab.
+ *  Tokens never appear here.
+ */
+export type GhPullList_Serialize = {
+	total: number,
+	pulls: GhPull_Serialize[],
+};
+
+/**  One pull request row. Tokens never appear here. */
+export type GhPull_Deserialize = {
+	number: number,
+	title: string,
+	author: string,
+	url: string,
+	updated_at?: string | null,
+	comments: number,
+	head_branch: string,
+	base_branch: string,
+	merged: boolean,
+	state: string,
+};
+
+/**  One pull request row. Tokens never appear here. */
+export type GhPull_Serialize = {
+	number: number,
+	title: string,
+	author: string,
+	url: string,
+	updated_at: string | null,
+	comments: number,
+	head_branch: string,
+	base_branch: string,
+	merged: boolean,
+	state: string,
+};
+
+/**  One release row. Tokens never appear here. */
+export type GhRelease = GhRelease_Serialize | GhRelease_Deserialize;
+
+/**  One release row. Tokens never appear here. */
+export type GhRelease_Deserialize = {
+	name?: string | null,
+	tag: string,
+	published_at?: string | null,
+	draft: boolean,
+	is_latest: boolean,
+	url: string,
+};
+
+/**  One release row. Tokens never appear here. */
+export type GhRelease_Serialize = {
+	name: string | null,
+	tag: string,
+	published_at: string | null,
+	draft: boolean,
+	is_latest: boolean,
+	url: string,
+};
+
+/**  Remote of the active worktree, resolved in the backend from `origin`. */
+export type GhRemote = {
+	owner: string,
+	repo: string,
+	url: string,
+};
+
+/**  Repository overview for the repo screen. Tokens never appear here. */
+export type GhRepoMeta = GhRepoMeta_Serialize | GhRepoMeta_Deserialize;
+
+/**  Repository overview for the repo screen. Tokens never appear here. */
+export type GhRepoMeta_Deserialize = {
+	id: string,
+	is_private: boolean,
+	description?: string | null,
+	homepage_url?: string | null,
+	topics: string[],
+	license?: string | null,
+	stars: number,
+	forks: number,
+	watchers: number,
+	viewer_starred: boolean,
+	viewer_subscription: string,
+	default_branch: string,
+	releases: GhRelease_Deserialize[],
+	languages: GhLanguage_Deserialize[],
+};
+
+/**  Repository overview for the repo screen. Tokens never appear here. */
+export type GhRepoMeta_Serialize = {
+	id: string,
+	is_private: boolean,
+	description: string | null,
+	homepage_url: string | null,
+	topics: string[],
+	license: string | null,
+	stars: number,
+	forks: number,
+	watchers: number,
+	viewer_starred: boolean,
+	viewer_subscription: string,
+	default_branch: string,
+	releases: GhRelease_Serialize[],
+	languages: GhLanguage_Serialize[],
+};
+
+/**  One Actions workflow run. Tokens never appear here. */
+export type GhRun = GhRun_Serialize | GhRun_Deserialize;
+
+/**  One Actions workflow run. Tokens never appear here. */
+export type GhRun_Deserialize = {
+	id: number,
+	name: string,
+	branch: string,
+	sha: string,
+	message: string,
+	actor: string,
+	actor_avatar?: string | null,
+	status: string,
+	conclusion?: string | null,
+	created_at?: string | null,
+	updated_at?: string | null,
+	url: string,
+};
+
+/**  One Actions workflow run. Tokens never appear here. */
+export type GhRun_Serialize = {
+	id: number,
+	name: string,
+	branch: string,
+	sha: string,
+	message: string,
+	actor: string,
+	actor_avatar: string | null,
+	status: string,
+	conclusion: string | null,
+	created_at: string | null,
+	updated_at: string | null,
+	url: string,
+};
+
+/**
+ *  Branch selector data: current branch (None when detached), all local
+ *  branch names sorted, and the tag count.
+ */
+export type GitBranches = GitBranches_Serialize | GitBranches_Deserialize;
+
+/**
+ *  Branch selector data: current branch (None when detached), all local
+ *  branch names sorted, and the tag count.
+ */
+export type GitBranches_Deserialize = {
+	current?: string | null,
+	branches: string[],
+	tag_count: number,
+};
+
+/**
+ *  Branch selector data: current branch (None when detached), all local
+ *  branch names sorted, and the tag count.
+ */
+export type GitBranches_Serialize = {
+	current: string | null,
+	branches: string[],
+	tag_count: number,
+};
+
+/**  Latest commit on a ref for the latest-commit bar. */
+export type GitCommit = {
+	hash: string,
+	message: string,
+	author: string,
+	epoch: number,
+};
+
+/**  One file-table row: name, dir-vs-file, and its last commit. */
+export type GitTreeEntry = {
+	name: string,
+	kind: string,
+	message: string,
+	epoch: number,
 };
 
 export type GraphCommit = GraphCommit_Serialize | GraphCommit_Deserialize;
@@ -401,6 +781,11 @@ export type IntraSpan = {
 
 export type OpDone = {
 	undoable: boolean,
+};
+
+/**  `gh_auth_pat` shape. */
+export type PatResult = {
+	username: string,
 };
 
 export type Project = Project_Serialize | Project_Deserialize;

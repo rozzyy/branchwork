@@ -19,6 +19,7 @@ import { useWorktrees } from "../../state/worktrees";
 import { useStage } from "../../state/stage";
 import { ask } from "../../ui/dialog";
 import { Menu, type MenuItem } from "../../ui/Menu";
+import { ScreenLoader } from "../../ui/ScreenLoader";
 import { toast } from "../../ui/toast";
 import { useGraphUi, type GraphFilter } from "./graphState";
 import { GraphEditorTabs } from "./GraphEditorTabs";
@@ -334,6 +335,7 @@ export function GraphView() {
   const project = useRepos((state) => state.projects.find((item) => item.id === state.activeProjectId) ?? null);
   const activePath = useWorktrees((state) => state.activePath);
   const worktreesProjectId = useWorktrees((state) => state.projectId);
+  const worktreesLoading = useWorktrees((state) => state.loading);
   const activeWorktreeHead = useWorktrees(
     (state) => state.worktrees.find((worktree) => worktree.path === state.activePath)?.head ?? null,
   );
@@ -498,9 +500,11 @@ export function GraphView() {
   }, [activePath, hasMore, loading, projectId]);
 
   useEffect(() => {
-    if (selection.kind !== "commit" || selectedCommit || !hasMore || loading || error) return;
+    if (selection.kind !== "commit") return;
+    const selectedInView = commits.some((commit) => commit.sha === selection.sha);
+    if (selectedInView || !hasMore || loading || error) return;
     void loadNextPage();
-  }, [commits, error, hasMore, loadNextPage, loading, selectedCommit, selection]);
+  }, [commits, error, hasMore, loadNextPage, loading, selection]);
 
   useEffect(() => {
     if (selection.kind !== "commit" || !selectedCommit) return;
@@ -510,13 +514,14 @@ export function GraphView() {
     if (index < 0) return;
     const rowTop = (index + 1) * ROW_HEIGHT;
     const rowBottom = rowTop + ROW_HEIGHT;
-    const visibleBottom = list.scrollTop + list.clientHeight;
+    const visibleHeight = Math.max(list.clientHeight || viewportHeight, ROW_HEIGHT);
+    const visibleBottom = list.scrollTop + visibleHeight;
     if (rowTop < list.scrollTop || rowBottom > visibleBottom) {
       const nextScrollTop = Math.max(0, rowTop - ROW_HEIGHT);
       list.scrollTop = nextScrollTop;
       setScrollTop(nextScrollTop);
     }
-  }, [commits, selectedCommit, selection]);
+  }, [commits, selectedCommit, selection, viewportHeight]);
 
   const scrollToTop = useCallback(() => {
     if (listRef.current) listRef.current.scrollTop = 0;
@@ -617,8 +622,11 @@ export function GraphView() {
   if (!projectId) {
     return <div className="graph-state"><p>{t("graph.noProject")}</p></div>;
   }
-  if (worktreesProjectId !== projectId || !activePath) {
-    return <div className="graph-state"><p>{t("graph.waitingForWorktree")}</p></div>;
+  if (worktreesProjectId !== projectId || worktreesLoading) {
+    return <ScreenLoader>{t("graph.waitingForWorktree")}</ScreenLoader>;
+  }
+  if (!activePath) {
+    return <div className="graph-state" role="status"><p>{t("graph.noWorktree")}</p></div>;
   }
 
   return (

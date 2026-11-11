@@ -1,6 +1,6 @@
 {
-  "milestone": "M3 Terminal and agents",
-  "plan": "docs/superpowers/plans/2026-11-08-m3-terminal-agents.md",
+  "milestone": "M4 GitHub",
+  "plan": "docs/superpowers/plans/2026-11-10-m4-github.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -833,7 +833,7 @@
         "m3-stage-2-review"
       ],
       "status": "done",
-      "evidence": "CLI registry (7 CLIs incl. Copilot + Muse per user order; flags verified against installed --help; gemini honestly unverified), overrides merge, cli_resolve + cli_profile_dir backend commands with Rust tests, typed IPC wrappers, regenerated bindings. Spec review PASS (.agent/reviews/m3-task-06-spec.md). Typecheck clean; registry tests 8/8. No commit (Stage 3 rule)."
+      "evidence": "CLI registry (7 CLIs incl. Copilot + Muse per user order; flags verified against installed --help; gemini honestly unverified), overrides merge, cli_resolve + cli_profile_dir backend commands with Rust tests, typed IPC wrappers, regenerated bindings. Spec review PASS (.agent/reviews/m3-task-06-spec.md). Typecheck clean; registry tests 8/8. Agent audit note: Custom remains in the registry and Settings account list but is hidden from New Agent and Handover pickers until its launch override can be configured. No commit (Stage 3 rule)."
     },
     {
       "id": "m3-task-07-profiles",
@@ -844,7 +844,7 @@
         "m3-task-06-cli-registry"
       ],
       "status": "done",
-      "evidence": "Profiles store (CRUD, defaults, resolution order, confirmed logout deleting only declared credential files, login terminal with profile env); pty_spawn optional env with validation; regenerated bindings. Spec review PASS (.agent/reviews/m3-task-07-spec.md). ./init.sh green: 48 Vitest files/395 tests; Rust cli 7/7 + pty 13/13; typecheck+Clippy clean. No credential handling anywhere (tested). No commit (Stage 3 rule)."
+      "evidence": "Profiles store (CRUD, defaults, resolution order, confirmed logout deleting only declared credential files, login terminal with profile env); pty_spawn optional env with validation; regenerated bindings. Spec review PASS (.agent/reviews/m3-task-07-spec.md). ./init.sh green: 48 Vitest files/395 tests; Rust cli 7/7 + pty 13/13; typecheck+Clippy clean. No credential handling anywhere (tested). Audit follow-up: persisted profiles/default refs are now rebuilt from an allowlist on load, rejecting invalid IDs/slugs and removing unknown credential-shaped fields from memory and persisted settings; regression test covers token/password/apiKey extras. No commit (Stage 3 rule)."
     },
     {
       "id": "m3-task-08-agent-sessions",
@@ -867,7 +867,7 @@
         "m3-task-08-agent-sessions"
       ],
       "status": "done",
-      "evidence": "status field + hook/socker path (branchwork-notify sidecar verified live), claude hooks merge, heuristics (fresh-output only + 4s idle), badge/outline/toast + unfocused macOS notification. Spec PASS. init.sh 51 files/423 tests green; e2e 76/76."
+      "evidence": "status field + hook/socket path (branchwork-notify sidecar verified live), claude hooks merge, heuristics (fresh-output only + 4s idle), badge/outline/toast + unfocused macOS notification. Spec PASS. init.sh 51 files/423 tests green; e2e 76/76. Audit follow-up: done hook events and abnormal PTY exits now show one toast and an unfocused notification; duplicate done events do not repeat the toast."
     },
     {
       "id": "m3-task-10-agent-lifecycle",
@@ -978,6 +978,196 @@
       ],
       "status": "done",
       "evidence": "Implemented the approved docs/design/prototype.html rail; code/spec review PASS. ./init.sh passed (56 Vitest files/511 tests; Rust 171 passed/3 ignored; typecheck and Clippy clean). Playwright passed 74/74, including 21 project/sidebar flows. Manual M3-S6 checkpoint is pending user verification; branch m3-stage-6, uncommitted."
+    },
+    {
+      "id": "m4-task-01",
+      "stage": 19,
+      "name": "Keychain token store + IPC",
+      "description": ".agent/tasks/m4-task-01.md",
+      "dependencies": [
+        "m3-task-16-right-project-sidebar"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS (.agent/reviews/m4-task-01-spec.md, all 5 ACs); ./init.sh green (57 files/521 tests; Rust 177 passed/3 ignored; typecheck + Clippy clean); no UI, device flow stays Task 02."
+    },
+    {
+      "id": "m4-task-02",
+      "stage": 19,
+      "name": "Device flow + PAT",
+      "description": "Device flow + PAT, multi-account: backend-held device_code, interval-enforcing poll, PAT verify, per-account store, remote-owner resolution",
+      "dependencies": [
+        "m4-task-01"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS (.agent/reviews/m4-task-02-spec.md, all 7 ACs after one fix cycle on the account-index store); ./init.sh green (59 files/532 tests; Rust 180 passed/3 ignored; typecheck + Clippy clean). Manual device-flow/PAT test still pending (needs browser + network)."
+    },
+    {
+      "id": "m4-task-03",
+      "stage": 19,
+      "name": "Auth UI in Settings",
+      "description": "Auth UI in Settings: multi-account sign in (device flow + PAT), per-account status, sign out with confirmation",
+      "dependencies": [
+        "m4-task-02"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS (.agent/reviews/m4-task-03-spec.md, all 6 ACs; advisories addressed: cancel comment, dead branch removed, +5 tests); ./init.sh green (60 files/544 tests; Rust 180 passed/3 ignored; typecheck clean). Manual device-flow/PAT UI test still pending (browser + network)."
+    },
+    {
+      "id": "m4-stage-1-review",
+      "stage": 19,
+      "name": "Stage 1 batch review + manual E2E spec + checkpoint",
+      "description": "Auth review: token store, device flow, Settings UI, manual E2E spec, then stop at Checkpoint M4.1",
+      "dependencies": [
+        "m4-task-03"
+      ],
+      "status": "done",
+      "evidence": "code + security review PASS (.agent/reviews/m4-stage-1-code-review.md, m4-stage-1-security.md); review findings fixed same session; manual E2E spec M4-S1-01/02 in docs/testing/m0-manual-e2e.md; ./init.sh green (60 files/544 tests; Rust 182 passed). Manual M4.1 checkpoint open (needs browser + network)."
+    },
+    {
+      "id": "m4-task-04",
+      "stage": 20,
+      "name": "PR list",
+      "description": ".agent/tasks/m4-task-04.md",
+      "dependencies": [
+        "m4-stage-1-review"
+      ],
+      "status": "done",
+      "evidence": "spec-reviewer PASS (.agent/reviews/m4-task-04-spec.md, all 6 ACs; dot-segment hardening applied post-review); ./init.sh green (61 files/551 tests; Rust 188 passed/3 ignored; typecheck + Clippy clean). REMOVED from product per user order 2026-11-10: PR menu deleted (PrsScreen, registry/views wiring, nav.prs + prs.* i18n, ipc/github PR fns, gh.rs PR slice incl. SSH-alias resolver, lib.rs commands, bindings regen, per-owner account memory); spec/code/security reviews kept as history."
+    },
+    {
+      "id": "m4-task-05",
+      "stage": 20,
+      "name": "PR detail",
+      "description": ".agent/tasks/m4-task-05.md",
+      "dependencies": [
+        "m4-task-04"
+      ],
+      "status": "done",
+      "evidence": "Cancelled per user order 2026-11-10: PR menu removed, detail has no host UI."
+    },
+    {
+      "id": "m4-task-06",
+      "stage": 20,
+      "name": "Reviews + merge",
+      "description": ".agent/tasks/m4-task-06.md",
+      "dependencies": [
+        "m4-task-05"
+      ],
+      "status": "done",
+      "evidence": "Cancelled per user order 2026-11-10: PR menu removed, reviews/merge have no host UI."
+    },
+    {
+      "id": "m4-stage-2-review",
+      "stage": 20,
+      "name": "Stage 2 batch review + manual E2E spec + checkpoint",
+      "description": "PR review: list, detail, reviews/merge, manual E2E spec, then stop at Checkpoint M4.2",
+      "dependencies": [
+        "m4-task-06"
+      ],
+      "status": "done",
+      "evidence": "Cancelled per user order 2026-11-10: PR menu removed, nothing left to review. Next: m4-task-07 Repository screen."
+    },
+    {
+      "id": "m4-task-07",
+      "stage": 21,
+      "name": "Repository screen",
+      "description": ".agent/tasks/m4-task-07.md",
+      "dependencies": [
+        "m4-stage-2-review"
+      ],
+      "status": "done",
+      "evidence": "Implemented 2026-11-10: backend gh_repo_remote (SSH-alias aware) + gh_repo_meta/contributors/star/watch/fork + local-git repogit (branches/latest/tree) with Rust fixture + temp-repo tests; RepoScreen (header/Code/sidebar/README/Go-to-file) + ipc/repo + 6 component tests; pnpm typecheck clean; ./init.sh green (62 files/547 tests; Rust 193 passed/3 ignored; Clippy clean); git diff --check clean. Follow-up 2026-11-11 (user report: org name shown lowercase): remote owner/repo now keep original casing (host match case-insensitive, .git stripped case-insensitively); header renders owner/repo spans + Private pill; per-owner memory keys stay lowercased by design."
+    },
+    {
+      "id": "m4-task-08",
+      "stage": 21,
+      "name": "Issues + Start to worktree",
+      "description": ".agent/tasks/m4-task-08.md",
+      "dependencies": [
+        "m4-task-07"
+      ],
+      "status": "done",
+      "evidence": "Implemented 2026-11-10: backend gh_repo_issues (GraphQL open/closed + parse tests); RepoScreen Issues tab (Open/Closed, label filter, comment counts, agent badge from linked worktree + live session); Start creates fix/issue-<n> worktree + terminal tab, reuses existing one, toasts Closes #n; 5 new component tests; pnpm typecheck clean; ./init.sh green (62 files/552 tests; Rust 195 passed/3 ignored; Clippy clean); git diff --check clean. Follow-up 2026-11-11: issues IPC now returns {total, issues}; Issues filter buttons + tab show the server total."
+    },
+    {
+      "id": "m4-task-09",
+      "stage": 21,
+      "name": "Actions",
+      "description": ".agent/tasks/m4-task-09.md",
+      "dependencies": [
+        "m4-task-07"
+      ],
+      "status": "done",
+      "evidence": "Implemented 2026-11-10: backend gh_repo_runs (REST, capped 30, parse tests) + gh_repo_rerun (rerun-failed-jobs, zero-id guard); RepoScreen Actions tab (status chips, Re-run with confirm on failed runs); 3 component tests + IPC routing tests; pnpm typecheck clean; ./init.sh green (62 files/555 tests; Rust 197 passed/3 ignored; Clippy clean); git diff --check clean. Follow-up 2026-11-11: GhRepoMeta gains is_private, GhRelease gains is_latest (Latest pill), GhRun gains actor_avatar; counts render compact (12.4k); contributor/run initials get per-login colors; bindings regenerated."
+    },
+    {
+      "id": "m4-task-09b-repository-navigation",
+      "stage": 21,
+      "name": "Repository navigation and account controls",
+      "description": ".agent/tasks/m4-task-09b-repository-navigation.md",
+      "dependencies": [
+        "m4-task-08",
+        "m4-task-09"
+      ],
+      "status": "done",
+      "evidence": "Spec review PASS (.agent/reviews/m4-task-09b-spec.md). Implemented Code, Issues, Pull requests, and Actions navigation, in-app PR list/routes, account switcher/header polish, read-at-ref README IPC, stale-refresh guard, verified HTTP 201 reruns, and neutral unknown Actions statuses. Later user request removed Projects through Settings menu entries; covered by a RepoScreen regression test. Follow-up: API calls prefer a matching `gh auth token --user` credential after `/user` identity verification, keep the CLI token memory-only, and fall back to the Branchwork Keychain token. Authorization headers and device-flow fields now go to curl over stdin rather than argv; security re-review confirmed the reported exposure fixed and no remaining findings. Focused Repository screen/IPC tests: 21 passed; GitHub Rust tests: 32 passed. UI loading follow-up: added immediate accessible loaders for Repository and confirmed blank first-load states in Changes, Files, Graph, Blame, Agents, and Terminal; moved Changes diff-mode preference loading from App into the screen consumers. Repository now has a lazy navigation boundary that paints its loading shell before starting its screen-specific request. Terminal tabs/panes are filtered to the active project without closing hidden sessions, and default new tabs use the active project path. Focused follow-up tests: 2 files / 7 tests passed; `pnpm typecheck` and `git diff --check` clean. `./init.sh`: `=== Verification Complete ===`; 63 Vitest files / 570 tests; Rust 210 passed / 3 ignored; TypeScript and Clippy clean. No commit per stage no-commit rule."
+    },
+    {
+      "id": "m4-stage-3-review",
+      "stage": 21,
+      "name": "Stage 3 batch review + manual E2E spec + checkpoint",
+      "description": "Repo/Issues/Actions review, manual E2E spec, then stop at Checkpoint M4.3",
+      "dependencies": [
+        "m4-task-08",
+        "m4-task-09",
+        "m4-task-09b-repository-navigation"
+      ],
+      "status": "done",
+      "evidence": "Stage review complete: code review PASS (.agent/reviews/m4-stage-3-code-review.md), security review found no exploitable vulnerabilities (.agent/reviews/m4-stage-3-security.md), and Playwright 74/74 passed (.agent/reviews/m4-stage-3-e2e.md). Follow-up auth security re-review confirmed the curl argv exposure fixed with no remaining findings. Manual E2E spec M4-S3-01..03 is in docs/testing/m0-manual-e2e.md. User follow-up: Repository navigation regression proves heading/loading shell paints before its remote request starts and remains visible while pending; Terminal project-switch coverage proves foreign sessions are hidden, retained, and not closed, and new tabs target the active project. Focused tests: 2 files / 7 passed; typecheck and diff check clean; `./init.sh` green (63 Vitest files / 570 tests; Rust 210 passed / 3 ignored; TypeScript and Clippy clean). User live-tested Checkpoint M4.3 on 2026-11-11/12 and reported glitches that were fixed and verified in-app (switch hardening, status-blink gate, resume fallback, radius policy, empty agent pane = `.agent-pane-body` row-flex layout bug, now column). User approved the checkpoint and ordered the Stage 3 commit and push on 2026-11-12."
+    },
+    {
+      "id": "m4-task-10",
+      "stage": 22,
+      "name": "Poller + cache + rate limit",
+      "description": ".agent/tasks/m4-task-10.md",
+      "dependencies": [
+        "m4-stage-3-review"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m4-task-11",
+      "stage": 22,
+      "name": "Inbox",
+      "description": ".agent/tasks/m4-task-11.md",
+      "dependencies": [
+        "m4-task-10"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m4-task-12",
+      "stage": 22,
+      "name": "Launchpad",
+      "description": ".agent/tasks/m4-task-12.md",
+      "dependencies": [
+        "m4-task-11"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "m4-stage-4-review",
+      "stage": 22,
+      "name": "Stage 4 batch review + final manual E2E spec + checkpoint (M4 done)",
+      "description": "Inbox/Launchpad/poller review, final manual E2E spec, then stop at Checkpoint M4.4 (M4 done)",
+      "dependencies": [
+        "m4-task-12"
+      ],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

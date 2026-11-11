@@ -1,6 +1,7 @@
-import type { FC } from "react";
+import { lazy, Suspense, useEffect, useState, type FC } from "react";
 import { SCREENS, screenById, type ScreenId } from "./registry";
 import { t } from "../i18n/t";
+import { ScreenLoader } from "../ui/ScreenLoader";
 import { SettingsToolbar, SettingsView } from "./settings/SettingsScreen";
 import { GraphToolbar, GraphView } from "./graph/GraphScreen";
 import { ChangesToolbar, ChangesView } from "./changes/ChangesScreen";
@@ -12,6 +13,28 @@ import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
 export interface ScreenView {
   Toolbar: FC;
   View: FC;
+}
+
+const RepoView = lazy(() => import("./repo/RepoScreen").then((module) => ({ default: module.RepoView })));
+
+function RepoToolbar() {
+  return <h1 className="pane-title">{t("nav.repo")}</h1>;
+}
+
+function RepoViewBoundary() {
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setStarted(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!started) return <ScreenLoader>{t("repo.loading")}</ScreenLoader>;
+  return (
+    <Suspense fallback={<ScreenLoader>{t("repo.loading")}</ScreenLoader>}>
+      <RepoView />
+    </Suspense>
+  );
 }
 
 function placeholder(id: ScreenId): ScreenView {
@@ -37,3 +60,4 @@ VIEWS.files = { Toolbar: FilesToolbar, View: FilesView };
 VIEWS.blame = { Toolbar: BlameToolbar, View: BlameView };
 VIEWS.terminal = { Toolbar: TerminalToolbar, View: TerminalScreen };
 VIEWS.agents = { Toolbar: AgentsToolbar, View: AgentsView };
+VIEWS.repo = { Toolbar: RepoToolbar, View: RepoViewBoundary };

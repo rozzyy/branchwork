@@ -1,7 +1,7 @@
 import type { MsgKey } from "../i18n/en";
 
 export type ScreenId =
-  | "launchpad" | "graph" | "files" | "changes" | "agents" | "terminal" | "prs" | "repo" | "inbox"
+  | "launchpad" | "graph" | "files" | "changes" | "agents" | "terminal" | "repo" | "inbox"
   | "conflicts" | "rebase" | "blame" | "compare" | "settings";
 
 /** Sidebar categories above the worktree list, in display order (header key + member screens). */
@@ -28,7 +28,6 @@ export const SCREENS: ScreenDef[] = [
   { id: "changes", icon: "±", label: "nav.changes", section: "code" },
   { id: "agents", icon: "✦", label: "nav.agents", section: "ai" },
   { id: "terminal", icon: "❯_", label: "nav.terminal", section: "ai" },
-  { id: "prs", icon: "⇄", label: "nav.prs", section: "github" },
   { id: "repo", icon: "◫", label: "nav.repo", section: "github" },
   { id: "conflicts", icon: "⚠", label: "tools.conflicts", section: "tools" },
   { id: "rebase", icon: "↕", label: "tools.rebase", section: "tools" },
@@ -42,4 +41,4 @@ export const SCREEN_IDS = SCREENS.map((s) => s.id);
 export const screenById = (id: ScreenId): ScreenDef => SCREENS.find((s) => s.id === id)!;
 
 /** Screens reachable with the number keys 1–9 (spec §6.1.6). */
-export const NUMBER_KEYS: ScreenId[] = ["launchpad", "graph", "files", "changes", "agents", "terminal", "prs", "repo", "inbox"];
+export const NUMBER_KEYS: ScreenId[] = ["launchpad", "graph", "files", "changes", "agents", "terminal", "repo", "inbox"];

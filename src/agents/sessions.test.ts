@@ -345,44 +345,59 @@ describe("session status", () => {
     expect(id).toBeTruthy();
   });
 
-  it("marks waiting on a hook event with a toast", async () => {
+  it("marks waiting on a hook event without a toast", async () => {
     const profile = await seedProfile();
     await useSessions.getState().startSession({ cliId: "codex", profile });
     useSessions.getState().notifySessionEvent("pty-1", "waiting");
     expect(useSessions.getState().sessions[0].status).toBe("waiting");
     const titles = useToasts.getState().toasts.map((item) => item.title);
-    expect(titles.some((title) => title.includes("needs input"))).toBe(true);
+    expect(titles.some((title) => title.includes("needs input"))).toBe(false);
   });
 
-  it("marks waiting on a permission pattern and recovers on new output", async () => {
+  it("marks waiting on a permission pattern and recovers on sustained output", async () => {
     const profile = await seedProfile();
     await useSessions.getState().startSession({ cliId: "codex", profile });
     emitOutput("pty-1", "working on it\n");
     expect(useSessions.getState().sessions[0].status).toBe("running");
     emitOutput("pty-1", "Do you want to proceed? (y/n)\n");
     expect(useSessions.getState().sessions[0].status).toBe("waiting");
+    // A small confirmation echo alone must not fake "running".
     emitOutput("pty-1", "proceeding\n");
+    expect(useSessions.getState().sessions[0].status).toBe("waiting");
+    emitOutput("pty-1", "proceeding with the plan\n".repeat(120));
     expect(useSessions.getState().sessions[0].status).toBe("running");
   });
 
-  it("raises the waiting toast only once no matter how often the loop cycles", async () => {
+  it("keeps waiting through tiny redraw bursts and flips running on real output", async () => {
+    const profile = await seedProfile();
+    await useSessions.getState().startSession({ cliId: "codex", profile });
+    useSessions.getState().notifySessionEvent("pty-1", "waiting");
+    expect(useSessions.getState().sessions[0].status).toBe("waiting");
+    // Cursor blink / spinner redraws are tiny and must not fake "running".
+    emitOutput("pty-1", "\x1b[6n\x1b[?25l\x1b[?25h");
+    expect(useSessions.getState().sessions[0].status).toBe("waiting");
+    // Real streamed output clears the wait.
+    emitOutput("pty-1", "x".repeat(1100));
+    expect(useSessions.getState().sessions[0].status).toBe("running");
+  });
+
+  it("never raises a waiting toast no matter how often the loop cycles", async () => {
     const profile = await seedProfile();
     await useSessions.getState().startSession({ cliId: "codex", profile });
     const waitingToasts = () =>
       useToasts.getState().toasts.filter((item) => item.title.includes("needs input"));
     emitOutput("pty-1", "Do you want to proceed? (y/n)\n");
     expect(useSessions.getState().sessions[0].status).toBe("waiting");
-    expect(waitingToasts()).toHaveLength(1);
-    // Agent chatter flips back to running, then the heuristic fires again —
-    // status still cycles, but the user is not re-pinged.
-    emitOutput("pty-1", "thinking…\n");
+    expect(waitingToasts()).toHaveLength(0);
+    // Real streamed output flips back to running; no toast ever appears.
+    emitOutput("pty-1", "thinking…\n".repeat(120));
     expect(useSessions.getState().sessions[0].status).toBe("running");
     emitOutput("pty-1", "Do you want to proceed? (y/n)\n");
     expect(useSessions.getState().sessions[0].status).toBe("waiting");
-    expect(waitingToasts()).toHaveLength(1);
+    expect(waitingToasts()).toHaveLength(0);
     // A repeated hook event does not re-ping either.
     useSessions.getState().notifySessionEvent("pty-1", "waiting");
-    expect(waitingToasts()).toHaveLength(1);
+    expect(waitingToasts()).toHaveLength(0);
   });
 
   it("matches a pattern split across two chunks", async () => {
@@ -413,6 +428,7 @@ describe("session status", () => {
     exitHandler?.({ sessionId: "pty-1", exitCode: 1, signal: null });
     expect(useSessions.getState().sessions[0].status).toBe("done");
     expect(useSessions.getState().sessions).toHaveLength(1);
+    expect(useToasts.getState().toasts.map((item) => item.title)).toContain("Codex stopped");
   });
 
   it("marks waiting on a socket event addressed by record id", async () => {
@@ -421,6 +437,18 @@ describe("session status", () => {
     const id = useSessions.getState().sessions[0].id;
     statusHandler?.({ sessionId: id, event: "waiting" });
     expect(useSessions.getState().sessions[0].status).toBe("waiting");
+  });
+
+  it("reports a done hook event once", async () => {
+    const profile = await seedProfile();
+    await useSessions.getState().startSession({ cliId: "codex", profile });
+    const id = useSessions.getState().sessions[0].id;
+    statusHandler?.({ sessionId: id, event: "done" });
+    statusHandler?.({ sessionId: id, event: "done" });
+
+    expect(useSessions.getState().sessions[0].status).toBe("done");
+    expect(useToasts.getState().toasts.map((item) => item.title)).toContain("Codex stopped");
+    expect(useToasts.getState().toasts.filter((item) => item.title === "Codex stopped")).toHaveLength(1);
   });
 });
 
@@ -442,10 +470,29 @@ describe("profile switching", () => {
     expect(ensureProfileDir).toHaveBeenCalledWith("codex", "home");
     expect(spawnTerminal).toHaveBeenCalledTimes(2);
     const writes = vi.mocked(writeTerminal).mock.calls.map(([, data]) => new TextDecoder().decode(data));
-    expect(writes.some((text) => text.includes("↻ Account Work → Home"))).toBe(true);
-    expect(writes.some((text) => text.includes("'resume' '--last'"))).toBe(true);
+    // Raw resume line with the fresh-launch fallback; no decorative line is
+    // typed into the shell.
+    expect(writes.some((text) => text.includes("codex resume --last || codex"))).toBe(true);
+    expect(writes.every((text) => !text.includes("↻"))).toBe(true);
     const session = useSessions.getState().sessions[0];
     expect(session).toMatchObject({ profile: home, sessionId: "pty-2", status: "running", limitHit: false });
+  });
+
+  it("refuses a switch to a logged-out profile without killing the running session", async () => {
+    const { work, home } = await twoProfiles();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
+    vi.mocked(profileHasCredentials).mockResolvedValue(false);
+    expect(await useSessions.getState().switchProfile(id!, home)).toBeNull();
+    // The login gate fires before the old terminal is touched: a refused
+    // switch must leave the running session untouched.
+    expect(stopTerminal).not.toHaveBeenCalled();
+    expect(closeTerminal).not.toHaveBeenCalled();
+    expect(spawnTerminal).toHaveBeenCalledTimes(1);
+    expect(useSessions.getState().sessions[0]).toMatchObject({
+      profile: work,
+      sessionId: "pty-1",
+      status: "running",
+    });
   });
 
   it("skips confirmation when the session is not running", async () => {

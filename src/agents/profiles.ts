@@ -44,26 +44,40 @@ interface PersistedProfiles {
   cliDefaults?: unknown;
 }
 
-function isAgentProfile(value: unknown): value is AgentProfile {
-  if (typeof value !== "object" || value === null) return false;
-  const entry = value as Record<string, unknown>;
-  return (
-    typeof entry.cliId === "string" &&
-    entry.cliId in CLI_REGISTRY &&
-    typeof entry.slug === "string" &&
-    typeof entry.name === "string" &&
-    typeof entry.createdAt === "number"
-  );
+function isCliId(value: unknown): value is CliId {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(CLI_REGISTRY, value);
 }
 
-function isProfileRef(value: unknown): value is ProfileRef {
-  if (typeof value !== "object" || value === null) return false;
+function isProfileSlug(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+
+function parseAgentProfile(value: unknown): AgentProfile | null {
+  if (typeof value !== "object" || value === null) return null;
+  const entry = value as Record<string, unknown>;
+  if (
+    isCliId(entry.cliId) &&
+    isProfileSlug(entry.slug) &&
+    typeof entry.name === "string" &&
+    entry.name.trim().length > 0 &&
+    typeof entry.createdAt === "number" &&
+    Number.isFinite(entry.createdAt)
+  ) {
+    return {
+      cliId: entry.cliId,
+      slug: entry.slug,
+      name: entry.name,
+      createdAt: entry.createdAt,
+    };
+  }
+  return null;
+}
+
+function parseProfileRef(value: unknown): ProfileRef | null {
+  if (typeof value !== "object" || value === null) return null;
   const ref = value as Record<string, unknown>;
-  return (
-    typeof ref.cliId === "string" &&
-    ref.cliId in CLI_REGISTRY &&
-    typeof ref.slug === "string"
-  );
+  if (!isCliId(ref.cliId) || !isProfileSlug(ref.slug)) return null;
+  return { cliId: ref.cliId, slug: ref.slug };
 }
 
 const PROFILES_KEY = "agentProfiles";
@@ -575,25 +589,32 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
         const profiles: AgentProfile[] = [];
         if (Array.isArray(saved?.profiles)) {
           for (const entry of saved.profiles) {
-            if (!isAgentProfile(entry)) continue;
-            profiles.push(entry);
+            const profile = parseAgentProfile(entry);
+            if (profile) profiles.push(profile);
           }
         }
+        const hasProfile = (ref: ProfileRef | null): ref is ProfileRef =>
+          !!ref && profiles.some((profile) => profile.cliId === ref.cliId && profile.slug === ref.slug);
         const cliDefaults: Partial<Record<CliId, ProfileRef>> = {};
         if (typeof saved?.cliDefaults === "object" && saved.cliDefaults !== null) {
-          for (const [cliId, ref] of Object.entries(saved.cliDefaults)) {
-            if (cliId in CLI_REGISTRY && isProfileRef(ref)) {
-              cliDefaults[cliId as CliId] = ref;
+          for (const [rawCliId, value] of Object.entries(saved.cliDefaults)) {
+            const ref = parseProfileRef(value);
+            if (isCliId(rawCliId) && ref?.cliId === rawCliId && hasProfile(ref)) {
+              cliDefaults[rawCliId] = ref;
             }
           }
         }
+        const parsedGlobalDefault = parseProfileRef(saved?.globalDefault);
+        const globalDefault = hasProfile(parsedGlobalDefault) ? parsedGlobalDefault : null;
+        const normalized: PersistedProfiles = { profiles, globalDefault, cliDefaults };
         set({
           profiles,
-          globalDefault: isProfileRef(saved?.globalDefault) ? saved.globalDefault : null,
+          globalDefault,
           cliDefaults,
           loaded: true,
           loadError: null,
         });
+        if (saved && JSON.stringify(saved) !== JSON.stringify(normalized)) persistSoon(normalized);
       } catch (error) {
         set({ loadError: errorMessage(error) });
         throw error;
