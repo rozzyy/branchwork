@@ -8,8 +8,8 @@
 .placeholder-icon { font-size: 34px; color: var(--acc); }
 .placeholder h2 { margin: 0; color: var(--fg); font-size: 18px; }
 .placeholder p { margin: 0; }
-.stage.split-h { grid-template-columns: minmax(0, calc((100% - 8px) * var(--r))) 8px minmax(0, 1fr); }
-.stage.split-v { grid-template-rows: minmax(0, calc((100% - 8px) * var(--r))) 8px minmax(0, 1fr); }
+.stage.split-h { grid-template-columns: minmax(0, calc((100% - var(--section-gap, 4px)) * var(--r))) var(--section-gap, 4px) minmax(0, 1fr); }
+.stage.split-v { grid-template-rows: minmax(0, calc((100% - var(--section-gap, 4px)) * var(--r))) var(--section-gap, 4px) minmax(0, 1fr); }
 .pane.focus { box-shadow: var(--spec), 0 0 0 1.5px color-mix(in oklch, var(--acc) 70%, transparent), 0 10px 40px -20px var(--acc); }
 .pane-ctl { display: flex; gap: 2px; margin-left: auto; padding-left: 8px; }
 /* When the toolbar already has its own right-aligned action group (prototype's `.acts`), that

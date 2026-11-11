@@ -16,6 +16,7 @@ import {
   type PtyOutput,
 } from "../ipc/pty";
 import { errorMessage } from "../ipc/errors";
+import { markTerminalAttached } from "./attachReady";
 import "./terminal.css";
 import "@xterm/xterm/css/xterm.css";
 
@@ -181,6 +182,7 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
         return;
       }
       attached = true;
+      markTerminalAttached(sessionId);
       scheduleResize();
     };
 

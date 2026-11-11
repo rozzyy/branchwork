@@ -57,6 +57,11 @@ vi.mock("../terminal/dock", () => ({
   },
 }));
 
+// Store tests do not render CliPane; model its successful attach handshake.
+vi.mock("../terminal/attachReady", () => ({
+  waitForTerminalAttach: vi.fn().mockResolvedValue(undefined),
+}));
+
 type ExitEvent = { sessionId: string; exitCode: number | null; signal: string | null };
 type OutputEvent = { sessionId: string; data: number[] };
 type StatusEvent = { sessionId: string; event: "waiting" | "done" };

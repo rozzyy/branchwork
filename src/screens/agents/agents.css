@@ -354,6 +354,13 @@ textarea.input {
 .agent-pane-body .cli-pane {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+}
+
+/* Agent panes can get short after splitting. Keep the bottom terminal row
+ * available for the CLI's input prompt instead of reserving extra padding. */
+.agent-pane-body .cli-pane-screen {
+  padding: 0 8px;
 }
 
 .agent-pane-error {

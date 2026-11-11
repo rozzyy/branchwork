@@ -27,6 +27,7 @@ import { t } from "../i18n/t";
 import { toast } from "../ui/toast";
 import { ask } from "../ui/dialog";
 import { useDock } from "../terminal/dock";
+import { waitForTerminalAttach } from "../terminal/attachReady";
 import { useProfiles, type ProfileRef } from "./profiles";
 import { useSettings } from "../state/settings";
 import { useWorktrees } from "../state/worktrees";
@@ -407,6 +408,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
     env: Record<string, string>,
     command: string,
     prefix: string[] = [],
+    beforeWrite?: (sessionId: string) => Promise<void>,
   ): Promise<{ sessionId: string } | { error: string }> => {
     let sessionId: string;
     try {
@@ -416,6 +418,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
       return { error: errorMessage(error) };
     }
     try {
+      await beforeWrite?.(sessionId);
       for (const line of prefix) {
         await writeTerminal(sessionId, new TextEncoder().encode(`${line}\n`));
       }
@@ -434,10 +437,11 @@ export const useSessions = create<SessionsStore>((set, get) => {
     worktreePath: string,
     argv: string[],
     prefix: string[] = [],
+    beforeWrite?: (sessionId: string) => Promise<void>,
   ): Promise<{ sessionId: string } | { error: string; loginRequired?: boolean }> => {
     const ready = await prepareAgentShell(agentId, cliId, profile);
     if (!("env" in ready)) return ready;
-    return spawnPreparedShell(worktreePath, ready.env, argv.map(quoteArg).join(" "), prefix);
+    return spawnPreparedShell(worktreePath, ready.env, argv.map(quoteArg).join(" "), prefix, beforeWrite);
   };
 
   return {
@@ -569,6 +573,11 @@ export const useSessions = create<SessionsStore>((set, get) => {
         worktreePath,
         launch,
         request.prompt ? [request.prompt] : [],
+        async (sessionId) => {
+          const attachReady = waitForTerminalAttach(sessionId);
+          updateSession(session.id, { sessionId });
+          await attachReady;
+        },
       );
       const live = findSession(session.id);
       if (!live) {

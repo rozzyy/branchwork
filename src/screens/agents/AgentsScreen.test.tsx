@@ -11,12 +11,14 @@ import { listPins, type Project } from "../../ipc/catalog";
 import { ensureProfileDir, probeCli, profileHasCredentials, resolveCliBinary } from "../../ipc/cli";
 import { spawnTerminal, writeTerminal } from "../../ipc/pty";
 import { ask } from "../../ui/dialog";
+import { markTerminalAttached } from "../../terminal/attachReady";
 import type { Worktree } from "../../ipc/worktrees";
 
 export const cliPaneProps: Array<{ sessionId: string; interceptInput?: (data: string) => boolean }> = [];
 vi.mock("../../terminal/CliPane", () => ({
   CliPane: (props: { sessionId: string; interceptInput?: (data: string) => boolean }) => {
     cliPaneProps.push(props);
+    markTerminalAttached(props.sessionId);
     return <div data-testid={`agent-${props.sessionId}`} />;
   },
 }));
