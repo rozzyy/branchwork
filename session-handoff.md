@@ -1,16 +1,16 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-12
-- **Latest follow-up:** GitHub issues #1 and #3 were requested closed, but the authenticated account lacks `CloseIssue` permission; both remain open for a maintainer. Issue #2 fix sets `TERM=xterm-256color` on PTY shell spawn, with explicit per-session overrides preserved. Focused PTY regression test and Clippy pass; packaged-app verification remains.
-- **Current Objective:** M4.4 manual checkpoint was approved by the user on 2026-11-12 (M4-S4-01..04 all passed). Await explicit authorization for the stage commit, merge, and release tag. Issue #2's packaged-app verification remains pending.
+- **Latest follow-up:** Issues #1, #2, and #3 are closed on GitHub as `rozzyy`. M4 Stage 4 commit `be814ca` was pushed to `origin/m4-stage-4`, fast-forwarded into `main`, and released locally as `v0.4.0` with synchronized package/Cargo/Tauri versions.
+- **Current Objective:** M4.4 is complete. `main` and tag `v0.4.0` are not pushed. Issue #2's packaged-app verification remains a separate follow-up.
 
 - **Milestone / stage:** M1–M3 released. M4 Stage 3 checkpoint approved. M4-10, M4-11, and M4-12 are done; Stage 4 automated code/security/E2E reviews are recorded. M4-04..06 and Stage 2 were removed/cancelled per user order.
-- **Branch:** `m4-stage-4` at `a9f8e59`, same as `origin/main`; issue #1 fix is included. M4 changes remain uncommitted. Follow CLAUDE.md checkpoint and user authorization rules before commit, merge, or tag.
+- **Branch:** release commit is on local `main` after fast-forwarding `m4-stage-4` at `be814ca`; local tag `v0.4.0` points to the release commit. `origin/main` remains at its earlier commit; the stage branch is pushed. Do not delete branches or push without authorization.
 - **Verification:** issue #2 focused test `pty::tests::applied_env_reaches_the_child` passed 1/1; `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` and `git diff --check` passed. The issue-fix baseline `./init.sh` hit an unrelated GraphScreen test timeout. `cargo fmt --check` also reports pre-existing formatting drift in `src-tauri/src/fs.rs`. Earlier final Stage 4 `./init.sh` passed typecheck, Vitest 68 files / 593 tests, and Clippy; parallel Rust had macOS FSEvent startup failures while serial Rust passed 216 / 3 ignored. User confirmed M4-S4-01..04 passed on 2026-11-12.
 
 ## Recommended Next Step
 
-M4-S4-01..04 passed per user report and are recorded in `docs/testing/m0-manual-e2e.md`. Stage 4 reports: `.agent/reviews/m4-stage-4-code-review.md`, `.agent/reviews/m4-stage-4-security-review.md`, and `.agent/reviews/m4-stage-4-e2e.md`. Await explicit commit/merge/tag authorization. Issue #2 packaged-app retest is a separate pending follow-up.
+M4-S4-01..04 passed per user report and are recorded in `docs/testing/m0-manual-e2e.md`. Stage 4 reports: `.agent/reviews/m4-stage-4-code-review.md`, `.agent/reviews/m4-stage-4-security-review.md`, and `.agent/reviews/m4-stage-4-e2e.md`. Issue #2 packaged-app retest is a separate pending follow-up.
 
 ## M2 structure
 

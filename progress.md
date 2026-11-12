@@ -2,6 +2,13 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-12: M4 release v0.4.0 merged and tagged
+
+- User approved M4.4 after manual verification of M4-S4-01..04. Fast-forwarded `main` to stage commit `be814ca`; applied the synchronized `0.4.0` version bump and created annotated tag `v0.4.0` per the release workflow.
+- **Verification:** `cargo metadata --manifest-path src-tauri/Cargo.toml --no-deps --locked --format-version 1` passed; version fields in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json` match; `git diff --check` passed.
+- **Publishing:** M4 stage branch is pushed. `main` and tag `v0.4.0` are local; they have not been pushed.
+- **Next:** publish `main` and `v0.4.0` if requested; issue #2 packaged-app retest remains a separate follow-up.
+
 ## 2026-11-12: M4.4 manual checkpoint approved
 
 - User confirmed M4-S4-01..04 manual verification is OK. Recorded all four as passed in `docs/testing/m0-manual-e2e.md`; updated the M4 plan and Stage 4 review evidence.
