@@ -66,6 +66,14 @@ export function closeTerminal(sessionId: string): Promise<void> {
  * Stop a session gracefully: SIGINT, wait up to `graceMs`, then force-close.
  * Resolves true when the process exited on its own in time.
  */
+/** Resolves once the shell printed its prompt and went quiet (false on timeout/exit). */
+export function waitTerminalReady(sessionId: string, quietMs = 300, timeoutMs = 5000): Promise<boolean> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Waiting for a terminal requires the desktop app"));
+  }
+  return commands.ptyWaitReady(sessionId, quietMs, timeoutMs);
+}
+
 export function stopTerminal(sessionId: string, graceMs: number): Promise<boolean> {
   if (!inTauri()) {
     return Promise.reject(new Error("Stopping a terminal requires the desktop app"));

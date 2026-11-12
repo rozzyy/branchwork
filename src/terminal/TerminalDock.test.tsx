@@ -7,6 +7,7 @@ import { loadSetting, saveSetting } from "../ipc/settings";
 import { TerminalDock } from "./TerminalDock";
 
 vi.mock("../ipc/pty", () => ({
+  waitTerminalReady: vi.fn(async () => true),
   spawnTerminal: vi.fn(),
   closeTerminal: vi.fn(),
 }));

@@ -17,7 +17,7 @@ import {
   type PaneNode,
   type SplitDir,
 } from "./layout";
-import { closeTerminal, onTerminalExit, spawnTerminal, writeTerminal } from "../ipc/pty";
+import { closeTerminal, onTerminalExit, spawnTerminal, waitTerminalReady, writeTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { errorMessage } from "../ipc/errors";
 import { t } from "../i18n/t";
@@ -235,6 +235,8 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
         });
         if (live.cwd !== live.worktreePath) {
           try {
+            // Issue #3: wait for the prompt so a typeahead-discarding shell startup keeps the cd.
+            await waitTerminalReady(result.sessionId).catch(() => false);
             await writeTerminal(result.sessionId, new TextEncoder().encode(`cd ${shellQuote(live.cwd)}\n`));
           } catch (error) {
             const refreshed = tabById(tabId);

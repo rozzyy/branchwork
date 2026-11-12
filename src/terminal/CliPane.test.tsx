@@ -77,6 +77,7 @@ vi.mock("@xterm/addon-webgl", () => ({
 }));
 
 vi.mock("../ipc/pty", () => ({
+  waitTerminalReady: vi.fn(async () => true),
   closeTerminal: vi.fn(),
   attachTerminal: vi.fn((sessionId: string, _attachmentId: number) => {
     mocks.setupOrder.push("attach");

@@ -9,6 +9,7 @@ import { useRepos } from "../state/repos";
 import { useFiles } from "../state/files";
 
 vi.mock("../ipc/pty", () => ({
+  waitTerminalReady: vi.fn(async () => true),
   spawnTerminal: vi.fn(),
   closeTerminal: vi.fn(),
   writeTerminal: vi.fn(),

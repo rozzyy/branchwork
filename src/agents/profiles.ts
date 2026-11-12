@@ -16,7 +16,7 @@ import {
   seedClaudeOnboarding,
 } from "../ipc/cli";
 import { parseClaudeAuth, parseMuseUsage } from "./probe";
-import { writeTerminal } from "../ipc/pty";
+import { waitTerminalReady, writeTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { errorMessage } from "../ipc/errors";
 import { t } from "../i18n/t";
@@ -145,6 +145,8 @@ async function openLoginTab(def: CliDef, profileDir: string): Promise<boolean> {
   const sessionId = paneId ? tab?.panes[paneId]?.sessionId : null;
   if (!sessionId) return false;
   try {
+    // Issue #3: don't type into a shell whose startup may still discard typeahead.
+    await waitTerminalReady(sessionId).catch(() => false);
     await writeTerminal(sessionId, new TextEncoder().encode(`${startCmd}\n`));
   } catch (error) {
     toast({ title: errorMessage(error), icon: "⚠" });

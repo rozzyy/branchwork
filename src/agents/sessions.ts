@@ -19,6 +19,7 @@ import {
   onTerminalOutput,
   spawnTerminal,
   stopTerminal,
+  waitTerminalReady,
   writeTerminal,
 } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
@@ -466,6 +467,10 @@ export const useSessions = create<SessionsStore>((set, get) => {
     }
     try {
       await beforeWrite?.(sessionId);
+      // Issue #3: the attach above only means the view is listening. Shell wrappers (e.g. Kiro
+      // CLI re-launching bash in its own PTY when `Q_TERM` is unset, as in a Finder-launched
+      // app) discard typeahead until the prompt is up. On timeout we still write.
+      await waitTerminalReady(sessionId).catch(() => false);
       for (const line of prefix) {
         await writeTerminal(sessionId, new TextEncoder().encode(`${line}\n`));
       }

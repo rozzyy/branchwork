@@ -5,6 +5,7 @@ import { useToasts } from "../ui/toast";
 import { useWorktrees } from "../state/worktrees";
 
 vi.mock("../ipc/pty", () => ({
+  waitTerminalReady: vi.fn(async () => true),
   spawnTerminal: vi.fn(),
   closeTerminal: vi.fn(),
   onTerminalExit: vi.fn(),

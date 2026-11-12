@@ -805,6 +805,19 @@ fn pty_stop(
     manager.stop(&session_id, grace_ms)
 }
 
+/// Wait until a new shell has printed its prompt and gone quiet before a first command is typed
+/// (issue #3). Returns false on timeout or exit; bounded to 10 s.
+#[tauri::command(async)]
+#[specta::specta]
+fn pty_wait_ready(
+    manager: State<'_, PtyManager>,
+    session_id: String,
+    quiet_ms: u64,
+    timeout_ms: u64,
+) -> Result<bool, AppError> {
+    manager.wait_ready(&session_id, quiet_ms, timeout_ms)
+}
+
 /// Run a read-only vendor status probe (fixed non-interactive argv only)
 /// and return its stdout. The caller picks a CLI id, never a command.
 #[tauri::command(async)]
@@ -1288,6 +1301,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             pty_detach,
             pty_close,
             pty_stop,
+            pty_wait_ready,
             cli_resolve,
             cli_profile_dir,
             cli_probe,

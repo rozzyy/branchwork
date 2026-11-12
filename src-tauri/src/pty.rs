@@ -74,6 +74,8 @@ struct BufferedEvents {
     history: VecDeque<PtyEvent>,
     output_bytes: usize,
     history_truncated: bool,
+    /// When the child last produced output; `wait_ready` uses it to detect a settled prompt.
+    last_output: Option<std::time::Instant>,
 }
 
 impl PtySessionState {
@@ -94,6 +96,7 @@ impl PtySessionState {
 
         if let PtyEvent::Output(output) = &event {
             events.output_bytes += output.data.len();
+            events.last_output = Some(std::time::Instant::now());
         }
         events.history.push_back(event.clone());
         while events.output_bytes > MAX_PENDING_OUTPUT_BYTES {
@@ -403,6 +406,7 @@ impl PtyManager {
                 history: VecDeque::new(),
                 output_bytes: 0,
                 history_truncated: false,
+                last_output: None,
             }),
         });
         match self.inner.sessions.lock() {
@@ -502,6 +506,46 @@ impl PtyManager {
         writer
             .write_all(data)
             .map_err(|error| pty_error("Could not write to terminal", error))
+    }
+
+    /// Waits until the shell has printed something (its prompt) and then been quiet for
+    /// `quiet_ms`, so a first command is not typed into a startup that discards typeahead
+    /// (issue #3: shell wrappers such as Kiro CLI re-launch the shell inside their own PTY).
+    /// Returns false on timeout; the caller may still write. Polls every 25 ms, bounded by
+    /// `timeout_ms` (≤ 10 s), O(1) memory.
+    pub fn wait_ready(
+        &self,
+        session_id: &str,
+        quiet_ms: u64,
+        timeout_ms: u64,
+    ) -> Result<bool, AppError> {
+        validate_session_id(session_id)?;
+        if quiet_ms > 2_000 || timeout_ms > 10_000 {
+            return Err(AppError::validation(
+                "Terminal readiness wait must be at most 2 s quiet and 10 s total",
+            ));
+        }
+        let session = self.session(session_id)?;
+        let quiet = std::time::Duration::from_millis(quiet_ms);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        loop {
+            {
+                let events = session
+                    .events
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if events.completed {
+                    return Ok(false);
+                }
+                if events.last_output.is_some_and(|at| at.elapsed() >= quiet) {
+                    return Ok(true);
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                return Ok(false);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
     }
 
     pub fn resize(&self, session_id: &str, columns: u16, rows: u16) -> Result<(), AppError> {
@@ -1040,6 +1084,55 @@ mod tests {
             ErrorKind::NotFound
         );
         let _ = receiver;
+    }
+
+    // Issue #3 regression: shell wrappers (e.g. Kiro CLI re-launching bash inside
+    // `kiro-cli-term` when `Q_TERM` is unset, as in a Finder-launched app) discard typeahead
+    // written before the shell is ready. The first command must wait for the prompt.
+    #[cfg(unix)]
+    #[test]
+    fn wait_ready_lets_the_first_command_survive_a_typeahead_discarding_startup() {
+        use std::{ffi::OsStr, sync::mpsc, time::Duration};
+
+        let run = |wait: bool| -> bool {
+            let manager = PtyManager::default();
+            let (sender, receiver) = mpsc::channel();
+            let sink = Arc::new(move |event| {
+                let _ = sender.send(event);
+            });
+            let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
+            // Startup that throws away pending input, then prints a prompt and reads commands.
+            command.args([
+                "-c",
+                "sleep 0.4; stty -icanon min 0 time 0; dd bs=4096 count=1 of=/dev/null 2>/dev/null; \
+                 stty sane; printf 'READY> '; exec /bin/sh",
+            ]);
+            let session = manager.spawn_command(command, 80, 24, sink).unwrap();
+            manager.attach(&session.session_id, 1).unwrap();
+            if wait {
+                assert!(manager.wait_ready(&session.session_id, 300, 5_000).unwrap());
+            }
+            manager
+                .write(&session.session_id, b"echo MARK_$((6*7))\n")
+                .unwrap();
+            let deadline = std::time::Instant::now() + Duration::from_secs(4);
+            let mut seen = String::new();
+            while std::time::Instant::now() < deadline && !seen.contains("MARK_42") {
+                if let Ok(PtyEvent::Output(output)) =
+                    receiver.recv_timeout(Duration::from_millis(100))
+                {
+                    seen.push_str(&String::from_utf8_lossy(&output.data));
+                }
+            }
+            let _ = manager.close(&session.session_id);
+            seen.contains("MARK_42")
+        };
+
+        assert!(
+            !run(false),
+            "the simulated startup should discard an early write"
+        );
+        assert!(run(true), "the command written after wait_ready must run");
     }
 
     #[cfg(unix)]

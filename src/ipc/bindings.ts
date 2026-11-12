@@ -67,6 +67,11 @@ export const commands = {
 	 */
 	ptyStop: (sessionId: string, graceMs: number) => __TAURI_INVOKE<boolean>("pty_stop", { sessionId, graceMs }),
 	/**
+	 *  Wait until a new shell has printed its prompt and gone quiet before a first command is typed
+	 *  (issue #3). Returns false on timeout or exit; bounded to 10 s.
+	 */
+	ptyWaitReady: (sessionId: string, quietMs: number, timeoutMs: number) => __TAURI_INVOKE<boolean>("pty_wait_ready", { sessionId, quietMs, timeoutMs }),
+	/**
 	 *  Resolve a CLI binary through the login shell's PATH (spec §6.6.1).
 	 *  The name is strictly validated; only a single resolved absolute path or a
 	 *  missing-binary error ever crosses this boundary.

@@ -25,6 +25,7 @@ vi.mock("../ipc/cli", () => ({
 }));
 
 vi.mock("../ipc/pty", () => ({
+  waitTerminalReady: vi.fn(async () => true),
   writeTerminal: vi.fn(),
 }));
 

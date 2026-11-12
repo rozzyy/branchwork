@@ -8,6 +8,7 @@ import {
   onTerminalOutput,
   spawnTerminal,
   stopTerminal,
+  waitTerminalReady,
   writeTerminal,
 } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
@@ -27,6 +28,7 @@ vi.mock("../ipc/cli", () => ({
 }));
 
 vi.mock("../ipc/pty", () => ({
+  waitTerminalReady: vi.fn(async () => true),
   spawnTerminal: vi.fn(),
   writeTerminal: vi.fn(),
   stopTerminal: vi.fn(),
@@ -153,6 +155,22 @@ describe("startSession", () => {
     expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("'codex'\n"));
     const session = useSessions.getState().sessions[0];
     expect(session).toMatchObject({ cliId: "codex", worktreePath: "/wt/a", sessionId: "pty-1", slot: "auto" });
+  });
+
+  // Issue #3: in a Finder-launched app, shell wrappers (Kiro CLI without `Q_TERM`) discard
+  // typeahead until the prompt is up, so the launch line must wait for shell readiness.
+  it("writes the launch line only after the shell reports ready", async () => {
+    const profile = await seedProfile();
+    let ready: (value: boolean) => void = () => {};
+    vi.mocked(waitTerminalReady).mockImplementationOnce(() => new Promise((resolve) => { ready = resolve; }));
+
+    const started = useSessions.getState().startSession({ cliId: "codex", profile, worktreePath: "/wt/a" });
+    await vi.waitFor(() => expect(waitTerminalReady).toHaveBeenCalledWith("pty-1"));
+    expect(writeTerminal).not.toHaveBeenCalled();
+
+    ready(true);
+    await started;
+    expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("'codex'\n"));
   });
 
   it("refuses to start on a profile that never completed login", async () => {
