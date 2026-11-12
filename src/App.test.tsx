@@ -14,7 +14,7 @@ beforeEach(() => {
 
 it("navigates from Launchpad to Changes using the sidebar", async () => {
   render(<App />);
-  expect(screen.getByRole("heading", { level: 1, name: "Launchpad" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: /^Launchpad/ })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: /Changes/ }));
   expect(screen.getByRole("heading", { level: 2, name: "Changes" })).toBeInTheDocument();
 });

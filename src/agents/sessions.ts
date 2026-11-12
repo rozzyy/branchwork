@@ -844,7 +844,19 @@ export const useSessions = create<SessionsStore>((set, get) => {
         }
       }
       clearSessionWatch(id);
-      const result = await spawnPreparedShell(session.worktreePath, ready.env, command);
+      const result = await spawnPreparedShell(
+        session.worktreePath,
+        ready.env,
+        command,
+        [],
+        async (sessionId) => {
+          // Switching replaces the mounted PTY just like an initial launch.
+          // Publish its ID so CliPane can attach before the resume command is sent.
+          const attachReady = waitForTerminalAttach(sessionId);
+          updateSession(id, { sessionId });
+          await attachReady;
+        },
+      );
       if (!("sessionId" in result)) {
         updateSession(id, { error: result.error, status: "idle" });
         toast({ title: t("agents.spawnError", { name: def.name, message: result.error }), icon: "⚠" });
@@ -973,6 +985,17 @@ export const useSessions = create<SessionsStore>((set, get) => {
         subscribed.catch(() => {
           if (statusSubscription === subscribed) statusSubscription = null;
         });
+      }
+      // Launchpad and Inbox can request session loading as soon as they mount,
+      // before App's staged startup has hydrated agent profiles. Restoring
+      // against an empty profile list would leave saved sessions in an error
+      // state and App's later load call would return because this store is now
+      // marked loaded.
+      try {
+        if (!useProfiles.getState().loaded) await useProfiles.getState().load();
+      } catch (error) {
+        sessionsLoading = false;
+        throw error;
       }
       let saved: PersistedAgentState | null;
       try {

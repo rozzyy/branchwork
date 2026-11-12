@@ -1,16 +1,16 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-12
-- **Latest follow-up:** Issues #1, #2, and #3 are closed on GitHub as `rozzyy`. M4 Stage 4 commit `be814ca` was pushed to `origin/m4-stage-4`, fast-forwarded into `main`, and released locally as `v0.4.0` with synchronized package/Cargo/Tauri versions.
-- **Current Objective:** M4.4 is complete. `main` and tag `v0.4.0` are not pushed. Issue #2's packaged-app verification remains a separate follow-up.
+- **Latest follow-up:** User confirmed the M5-01 desktop/narrow-stage manual flow is OK; M5-01 is now `done` in `feature_list.json`. Implementation, automated coverage, code review, and manual checkpoint are complete. Full Vitest 606/606 and focused Launchpad/Inbox 17/17 pass; typecheck/Clippy pass. Rust tests retain 10 macOS FSEvent failures. Issue #3 switch attach fix is also in the working tree; its in-app retest remains pending.
+- **Current Objective:** No M5-01 work remains. Do not commit or merge without an explicit order. Separate follow-ups remain: native Finder file drop, packaged-app `clear` retest, and the issue #3 profile-switch in-app retest.
 
 - **Milestone / stage:** M1–M3 released. M4 Stage 3 checkpoint approved. M4-10, M4-11, and M4-12 are done; Stage 4 automated code/security/E2E reviews are recorded. M4-04..06 and Stage 2 were removed/cancelled per user order.
-- **Branch:** release commit is on local `main` after fast-forwarding `m4-stage-4` at `be814ca`; local tag `v0.4.0` points to the release commit. `origin/main` remains at its earlier commit; the stage branch is pushed. Do not delete branches or push without authorization.
-- **Verification:** issue #2 focused test `pty::tests::applied_env_reaches_the_child` passed 1/1; `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` and `git diff --check` passed. The issue-fix baseline `./init.sh` hit an unrelated GraphScreen test timeout. `cargo fmt --check` also reports pre-existing formatting drift in `src-tauri/src/fs.rs`. Earlier final Stage 4 `./init.sh` passed typecheck, Vitest 68 files / 593 tests, and Clippy; parallel Rust had macOS FSEvent startup failures while serial Rust passed 216 / 3 ignored. User confirmed M4-S4-01..04 passed on 2026-11-12.
+- **Branch:** `m5-stage-1` is based on local `main` at release commit `d15157f`/tag `v0.4.0`. M4 stage branch remains pushed. The M5 spec and planning/state updates are uncommitted; do not commit or push without authorization.
+- **Verification:** M5 post-review: `pnpm test` passed (68 files / 606 tests); focused Launchpad/Inbox tests passed 17/17; `pnpm typecheck`, Clippy, `git diff --check`, and `jq empty feature_list.json` passed. User confirmed the visual/manual checkpoint. `./init.sh` Rust phase and serial retry each had 10 macOS FSEvent startup failures (206 passed / 10 failed / 3 ignored). Issue #3 profile-switch regression `src/agents/sessions.test.ts` passed 39/39; its in-app retest is pending. Issue #2 focused Rust test passed 1/1. User confirmed M4-S4-01..04 on 2026-11-12.
 
 ## Recommended Next Step
 
-M4-S4-01..04 passed per user report and are recorded in `docs/testing/m0-manual-e2e.md`. Stage 4 reports: `.agent/reviews/m4-stage-4-code-review.md`, `.agent/reviews/m4-stage-4-security-review.md`, and `.agent/reviews/m4-stage-4-e2e.md`. Issue #2 packaged-app retest is a separate pending follow-up.
+M5-01 is done after the user's manual confirmation. No commit or merge has been requested. Continue only with a newly authorized task; the issue #3 profile-switch attach fix and the native file-drop/packaged-app `clear` checks remain separate follow-ups. The M4 checkpoint and `v0.4.0` release are complete locally.
 
 ## M2 structure
 

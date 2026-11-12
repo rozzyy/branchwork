@@ -16,6 +16,7 @@ import { useToasts } from "../ui/toast";
 import { useProfiles } from "./profiles";
 import { useSettings } from "../state/settings";
 import { useWorktrees } from "../state/worktrees";
+import { waitForTerminalAttach } from "../terminal/attachReady";
 
 vi.mock("../ipc/cli", () => ({
   ensureProfileDir: vi.fn(),
@@ -235,6 +236,77 @@ describe("startSession", () => {
     const session = useSessions.getState().sessions[0];
     expect(session.sessionId).toBeNull();
     expect(session.error).toBe("denied");
+  });
+});
+
+describe("session restore", () => {
+  it("waits for saved profiles when a screen requests restore before app bootstrap", async () => {
+    resetSessions();
+    useProfiles.setState({ loaded: false, profiles: [], globalDefault: null, cliDefaults: {} });
+    vi.mocked(loadSetting).mockImplementation(async (key) => {
+      if (key === "agentProfiles") {
+        return {
+          profiles: [{ cliId: "codex", slug: "work", name: "Work", createdAt: 1 }],
+          globalDefault: { cliId: "codex", slug: "work" },
+          cliDefaults: {},
+        };
+      }
+      if (key === "agentSessions") {
+        return {
+          sessions: [{
+            id: "agent-startup-race",
+            cliId: "codex",
+            profile: { cliId: "codex", slug: "work" },
+            worktreePath: "/wt/a",
+            slot: "right",
+          }],
+        };
+      }
+      return null;
+    });
+
+    await useSessions.getState().load();
+
+    expect(useProfiles.getState().loaded).toBe(true);
+    expect(useSessions.getState().sessions).toHaveLength(1);
+    expect(useSessions.getState().sessions[0]).toMatchObject({
+      id: "agent-startup-race",
+      profile: { cliId: "codex", slug: "work" },
+      sessionId: "pty-1",
+      status: "running",
+      error: null,
+    });
+    expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("codex resume --last || codex\n"));
+  });
+
+  it("recreates saved agent panes and resumes their conversations on app startup", async () => {
+    const profile = await seedProfile();
+    vi.mocked(loadSetting).mockResolvedValueOnce({
+      sessions: [{
+        id: "agent-saved-1",
+        cliId: "codex",
+        profile,
+        worktreePath: "/wt/a",
+        slot: "right",
+      }],
+      layoutMode: "full",
+    });
+    resetSessions();
+
+    await useSessions.getState().load();
+
+    expect(useSessions.getState()).toMatchObject({ loaded: true, layoutMode: "full" });
+    expect(useSessions.getState().sessions).toHaveLength(1);
+    expect(useSessions.getState().sessions[0]).toMatchObject({
+      id: "agent-saved-1",
+      cliId: "codex",
+      profile,
+      worktreePath: "/wt/a",
+      slot: "right",
+      sessionId: "pty-1",
+      status: "running",
+    });
+    expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("codex resume --last || codex\n"));
   });
 });
 
@@ -481,6 +553,27 @@ describe("profile switching", () => {
     expect(writes.every((text) => !text.includes("↻"))).toBe(true);
     const session = useSessions.getState().sessions[0];
     expect(session).toMatchObject({ profile: home, sessionId: "pty-2", status: "running", limitHit: false });
+  });
+
+  it("waits for the replacement pane to attach before writing the resume command", async () => {
+    const { work, home } = await twoProfiles();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
+    let releaseAttach!: () => void;
+    vi.mocked(waitForTerminalAttach).mockImplementationOnce(() =>
+      new Promise<void>((resolve) => { releaseAttach = resolve; }),
+    );
+
+    const switching = useSessions.getState().switchProfile(id!, home);
+    await vi.waitFor(() => expect(waitForTerminalAttach).toHaveBeenCalledWith("pty-2"));
+    expect(useSessions.getState().sessions[0].sessionId).toBe("pty-2");
+    expect(writeTerminal).toHaveBeenCalledTimes(1); // initial launch only
+
+    releaseAttach();
+    expect(await switching).toBe(id);
+    expect(writeTerminal).toHaveBeenCalledTimes(2);
+    expect(new TextDecoder().decode(vi.mocked(writeTerminal).mock.calls[1][1])).toContain(
+      "codex resume --last || codex",
+    );
   });
 
   it("refuses a switch to a logged-out profile without killing the running session", async () => {

@@ -24,7 +24,7 @@ import {
 } from "./inboxState";
 import "./inbox.css";
 
-type InboxFilter = "all" | "github" | "agents" | "unread";
+type InboxFilter = "all" | "review" | "mention" | "ci" | "agents";
 type AgentEvent = { kind: "agent"; key: string; session: AgentSession; event: "waiting" | "done"; updatedAt: number };
 type GithubEvent = { kind: "github"; key: string; notification: GithubNotification; updatedAt: number };
 type InboxItem = AgentEvent | GithubEvent;
@@ -47,8 +47,19 @@ function updatedEpoch(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function relativeTime(value: string | null | undefined): string {
+  const epoch = updatedEpoch(value);
+  if (!epoch) return "";
+  const minutes = Math.floor(Math.max(0, Date.now() - epoch) / 60_000);
+  if (minutes < 1) return t("inbox.relativeNow");
+  if (minutes < 60) return t("inbox.relativeMinutes", { count: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t("inbox.relativeHours", { count: hours });
+  return t("inbox.relativeDays", { count: Math.floor(hours / 24) });
+}
+
 export function InboxToolbar() {
-  return <h1 className="pane-title">{t("inbox.title")}</h1>;
+  return <h1 className="pane-title">{t("inbox.title")}<span className="inbox-toolbar-subtitle">GitHub + agents</span></h1>;
 }
 
 export function InboxView() {
@@ -65,7 +76,8 @@ export function InboxView() {
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [state, setState] = useState<InboxState>(EMPTY_INBOX_STATE);
   const [stateLoaded, setStateLoaded] = useState(false);
-  const [snoozeHours, setSnoozeHours] = useState<Record<string, number>>({});
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [detailOnNarrow, setDetailOnNarrow] = useState(false);
   const [snoozeClock, setSnoozeClock] = useState(0);
   const refreshGeneration = useRef(0);
 
@@ -171,12 +183,19 @@ export function InboxView() {
     .sort((left, right) => right.updatedAt - left.updatedAt),
   [agentEvents, batch.notifications, dismissedKeys, snoozeClock, state.snoozedUntil]);
 
-  const visibleItems = allItems.filter((item) => {
-    if (filter === "github") return item.kind === "github";
+  const visibleItems = useMemo(() => allItems.filter((item) => {
     if (filter === "agents") return item.kind === "agent";
-    if (filter === "unread") return item.kind === "agent" ? item.event === "waiting" : item.notification.unread;
+    if (item.kind !== "github") return filter === "all";
+    if (filter === "review") return item.notification.reason === "review_requested";
+    if (filter === "mention") return item.notification.reason === "mention" || item.notification.reason === "team_mention";
+    if (filter === "ci") return item.notification.reason === "ci_activity";
     return true;
-  });
+  }), [allItems, filter]);
+  const selectedItem = useMemo(
+    () => visibleItems.find((item) => item.key === selectedKey) ?? visibleItems[0] ?? null,
+    [visibleItems, selectedKey],
+  );
+  useEffect(() => { if (selectedItem && selectedItem.key !== selectedKey) setSelectedKey(selectedItem.key); }, [selectedItem, selectedKey]);
 
   const markDone = async (item: InboxItem) => {
     if (item.kind === "agent") {
@@ -207,7 +226,7 @@ export function InboxView() {
       ...current,
       notifications: current.notifications.map((row) => successful.has(row.account) ? { ...row, unread: false } : row),
     }));
-    const agentKeys = visibleItems.filter((item): item is AgentEvent => item.kind === "agent").map((event) => event.key);
+    const agentKeys = agentEvents.map((event) => event.key);
     setState((current) => ({ ...current, dismissed: [...new Set([...current.dismissed, ...agentKeys])].slice(-500) }));
     if (results.some((result) => result.status === "rejected")) {
       toast({ title: t("inbox.partialReadError"), icon: "⚠" });
@@ -215,10 +234,9 @@ export function InboxView() {
   };
 
   const snooze = (item: InboxItem) => {
-    const hours = snoozeHours[item.key] ?? 1;
     setState((current) => ({
       ...current,
-      snoozedUntil: { ...current.snoozedUntil, [item.key]: Date.now() + hours * 60 * 60 * 1000 },
+      snoozedUntil: { ...current.snoozedUntil, [item.key]: Date.now() + 24 * 60 * 60 * 1000 },
     }));
   };
 
@@ -243,67 +261,44 @@ export function InboxView() {
 
   return (
     <section className="inbox-screen" aria-label={t("inbox.title")}>
-      <header className="inbox-header">
-        <div>
-          <p className="inbox-summary">{t("inbox.summary", { count: visibleItems.length })}</p>
-        </div>
+      <header className="inbox-header"><p className="inbox-summary">{t("inbox.summary", { count: visibleItems.length })}</p>
         <div className="inbox-actions">
-          <Button size="sm" variant="ghost" onClick={() => void markAllRead()} disabled={refreshing || (!batch.notifications.some((row) => row.unread) && !visibleItems.some((item) => item.kind === "agent"))}>
-            {t("inbox.readAll")}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => void refresh()} disabled={refreshing}>
-            {refreshing ? t("inbox.refreshing") : t("inbox.refresh")}
-          </Button>
+          <Button size="sm" variant="ghost" onClick={() => void markAllRead()} disabled={refreshing || (!batch.notifications.some((row) => row.unread) && !agentEvents.length)}>{t("inbox.readAll")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => void refresh()} disabled={refreshing}>{refreshing ? t("inbox.refreshing") : t("inbox.refresh")}</Button>
         </div>
       </header>
       <nav className="inbox-filters" aria-label={t("inbox.filters")}>
-        {(["all", "github", "agents", "unread"] as const).map((value) => (
-          <button key={value} type="button" className={filter === value ? "inbox-filter on" : "inbox-filter"} aria-pressed={filter === value} onClick={() => setFilter(value)}>
-            {t(`inbox.filter.${value}`)}
-          </button>
-        ))}
+        {(["all", "review", "mention", "ci", "agents"] as const).map((value) => <button key={value} type="button" className={filter === value ? "inbox-filter on" : "inbox-filter"} aria-pressed={filter === value} onClick={() => { setFilter(value); setDetailOnNarrow(false); }}>{t(`inbox.filter.${value}`)}</button>)}
       </nav>
-      {retryLabel && <p className="inbox-status" role="status">{retryLabel}</p>}
-      {error && <p className="inbox-error" role="alert">{error}</p>}
-      {batch.failures.map((failure) => <p className="inbox-error" role="alert" key={failure.account}>{t("inbox.accountError", { account: failure.account, message: failure.message })}</p>)}
-      {refreshing && allItems.length === 0 ? (
-        <p className="inbox-empty" role="status">{t("inbox.loading")}</p>
-      ) : visibleItems.length === 0 ? (
-        <div className="inbox-empty"><span aria-hidden="true">◉</span><p>{t("inbox.empty")}</p></div>
-      ) : (
-        <div className="inbox-list">
-          {visibleItems.map((item) => {
+      <div className={`inbox-split${detailOnNarrow ? " detail-on-narrow" : ""}`}>
+        <div className="inbox-list" aria-label={t("inbox.title")}>
+          {retryLabel && <p className="inbox-status" role="status">{retryLabel}</p>}
+          {error && <p className="inbox-error" role="alert">{error}</p>}
+          {batch.failures.map((failure) => <p className="inbox-error" role="alert" key={failure.account}>{t("inbox.accountError", { account: failure.account, message: failure.message })}</p>)}
+          {refreshing && allItems.length === 0 ? <p className="inbox-empty" role="status">{t("inbox.loading")}</p> : visibleItems.length === 0 ? <div className="inbox-empty"><span aria-hidden="true">◉</span><p>{t("inbox.empty")}</p></div> : visibleItems.map((item) => {
             const title = item.kind === "github" ? item.notification.title : t(item.event === "waiting" ? "inbox.agentWaiting" : "inbox.agentDone", { agent: CLI_REGISTRY[item.session.cliId].name });
-            const subtitle = item.kind === "github"
-              ? `${item.notification.owner}/${item.notification.repo} · ${item.notification.reason.replaceAll("_", " ")}`
-              : `${item.session.profile.slug} · ${item.session.worktreePath.split("/").filter(Boolean).pop() ?? item.session.worktreePath}`;
+            const subtitle = item.kind === "github" ? `${item.notification.owner}/${item.notification.repo} · ${item.notification.reason.replaceAll("_", " ")}` : `${item.session.profile.slug} · ${item.session.worktreePath.split("/").filter(Boolean).pop() ?? item.session.worktreePath}`;
             const unread = item.kind === "agent" ? item.event === "waiting" : item.notification.unread;
-            return (
-              <article className={"inbox-item" + (unread ? " unread" : "")} key={item.key}>
-                <span className={"inbox-item-icon " + (item.kind === "agent" ? "agent" : "github")} aria-hidden="true">{item.kind === "agent" ? "✦" : "◉"}</span>
-                <div className="inbox-item-copy">
-                  <strong>{title}</strong>
-                  <span>{subtitle}</span>
-                  <small>{item.kind === "github" ? (item.notification.updatedAt ?? "") : t("inbox.agentSource")}</small>
-                </div>
-                <div className="inbox-item-actions">
-                  <Button size="sm" onClick={() => openItem(item)}>{item.kind === "github" ? t("inbox.openGithub") : t("inbox.openAgent")}</Button>
-                  {(unread || item.kind === "agent") && <Button size="sm" variant="ghost" onClick={() => void markDone(item)}>{t("inbox.markDone")}</Button>}
-                  <label className="inbox-snooze-select">
-                    <span className="sr-only">{t("inbox.snoozeDuration")}</span>
-                    <select aria-label={t("inbox.snoozeDuration")} value={snoozeHours[item.key] ?? 1} onChange={(event) => setSnoozeHours((current) => Object.fromEntries([...Object.entries(current).slice(-499), [item.key, Number(event.target.value)]]))}>
-                      <option value={1}>{t("inbox.oneHour")}</option>
-                      <option value={24}>{t("inbox.oneDay")}</option>
-                      <option value={168}>{t("inbox.oneWeek")}</option>
-                    </select>
-                  </label>
-                  <Button size="sm" variant="ghost" onClick={() => snooze(item)}>{t("inbox.snooze")}</Button>
-                </div>
-              </article>
-            );
+            const age = item.kind === "github" ? relativeTime(item.notification.updatedAt) : t("inbox.agentSource");
+            return <article className={`inbox-item${unread ? " unread" : ""}${selectedItem?.key === item.key ? " selected" : ""}`} key={item.key}>
+              <button type="button" className="inbox-item-select" aria-label={title} aria-current={selectedItem?.key === item.key ? "true" : undefined} onClick={() => { setSelectedKey(item.key); setDetailOnNarrow(true); }}>
+                <span className={`inbox-item-icon ${item.kind}`} aria-hidden="true">{item.kind === "agent" ? "✦" : item.notification.page === "actions" ? "↻" : "◉"}</span><span className="inbox-item-copy"><strong>{title}</strong><span>{subtitle}</span><small>{age}</small></span>{unread && <i className="inbox-unread-dot" aria-label="Unread" />}
+              </button>
+              <div className="inbox-item-actions"><Button size="sm" variant="ghost" aria-label={t("inbox.markDone")} title={t("inbox.markDone")} onClick={() => void markDone(item)}>✓</Button><Button size="sm" variant="ghost" aria-label={t("inbox.snooze")} title={t("inbox.snooze")} onClick={() => snooze(item)}>◷</Button></div>
+            </article>;
           })}
         </div>
-      )}
+        <article className="inbox-detail">
+          {selectedItem ? <>
+            <Button className="inbox-back" size="sm" variant="ghost" onClick={() => setDetailOnNarrow(false)}>← {t("inbox.backToList")}</Button>
+            <span className={`inbox-detail-icon ${selectedItem.kind}`} aria-hidden="true">{selectedItem.kind === "agent" ? "✦" : selectedItem.notification.page === "actions" ? "↻" : "◉"}</span>
+            <h2>{selectedItem.kind === "github" ? selectedItem.notification.title : t(selectedItem.event === "waiting" ? "inbox.agentWaiting" : "inbox.agentDone", { agent: CLI_REGISTRY[selectedItem.session.cliId].name })}</h2>
+            <p>{selectedItem.kind === "github" ? `${selectedItem.notification.owner}/${selectedItem.notification.repo} · ${selectedItem.notification.reason.replaceAll("_", " ")}` : `${selectedItem.session.profile.slug} · ${selectedItem.session.worktreePath}`}</p>
+            <small>{selectedItem.kind === "github" ? relativeTime(selectedItem.notification.updatedAt) : t("inbox.agentSource")}</small>
+            <div className="inbox-detail-actions"><Button size="sm" onClick={() => openItem(selectedItem)}>{selectedItem.kind === "agent" ? t("inbox.replyAgent") : selectedItem.notification.page === "pull" || selectedItem.notification.page === "pulls" ? t("inbox.reviewNow") : selectedItem.notification.page === "actions" ? t("inbox.viewWorkflow") : t("inbox.openThread")}</Button>{(selectedItem.kind === "agent" || selectedItem.notification.unread) && <Button size="sm" variant="ghost" onClick={() => void markDone(selectedItem)}>{t("inbox.markDone")}</Button>}</div>
+          </> : <div className="inbox-empty"><span aria-hidden="true">◉</span><p>{t("inbox.empty")}</p></div>}
+        </article>
+      </div>
     </section>
   );
 }

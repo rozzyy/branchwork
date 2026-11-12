@@ -18,11 +18,11 @@ it("opens a split from the ⊞ menu and closes it from the pane", async () => {
   render(<Stage />);
   await userEvent.click(screen.getByRole("button", { name: /Split with/ }));
   await userEvent.click(screen.getByRole("menuitem", { name: /Changes/ }));
-  expect(screen.getByRole("heading", { level: 1, name: "Launchpad" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: /^Launchpad/ })).toBeInTheDocument();
   expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([expect.stringMatching(/Good (morning|afternoon|evening)/), "Changes"]);
   expect(screen.getByRole("separator")).toBeInTheDocument();
   await userEvent.click(screen.getAllByRole("button", { name: "Close pane" })[1]);
-  expect(screen.getByRole("heading", { level: 1, name: "Launchpad" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: /^Launchpad/ })).toBeInTheDocument();
   expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([expect.stringMatching(/Good (morning|afternoon|evening)/)]);
 });
 

@@ -1,6 +1,6 @@
 {
-  "milestone": "M4 GitHub",
-  "plan": "docs/superpowers/plans/2026-11-10-m4-github.md",
+  "milestone": "M5 Launchpad and Inbox UI parity",
+  "plan": "docs/superpowers/plans/2026-11-12-m5-ui-parity.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -1167,7 +1167,7 @@
         "m4-task-12"
       ],
       "status": "done",
-      "evidence": "Code, security, and automated E2E reviews recorded in .agent/reviews/m4-stage-4-code-review.md, m4-stage-4-security-review.md, and m4-stage-4-e2e.md. Automated UI suite passed 68 files / 593 tests; serial Rust suite passed 216 / 3 ignored; ./init.sh parallel Rust encountered macOS FSEvent startup failures. User confirmed M4-S4-01..04 manual verification passed on 2026-11-12; outcomes recorded in docs/testing/m0-manual-e2e.md. Checkpoint M4.4 approved. Stage commit/merge/tag awaits explicit authorization."
+      "evidence": "Code, security, and automated E2E reviews recorded in .agent/reviews/m4-stage-4-code-review.md, m4-stage-4-security-review.md, and m4-stage-4-e2e.md. Automated UI suite passed 68 files / 593 tests; serial Rust suite passed 216 / 3 ignored; ./init.sh parallel Rust encountered macOS FSEvent startup failures. User confirmed M4-S4-01..04 manual verification passed on 2026-11-12; outcomes recorded in docs/testing/m0-manual-e2e.md. Checkpoint M4.4 approved; stage fast-forwarded and M4 released as v0.4.0."
     },
     {
       "id": "followup-terminal-file-drop",
@@ -1185,7 +1185,27 @@
       "description": "GitHub issue #2: ensure packaged interactive shells have a TERM value so clear works.",
       "dependencies": [],
       "status": "review",
-      "evidence": "PTY spawn now defaults TERM to xterm-256color before applying caller overrides. Focused Rust regression test passed (1/1); cargo clippy -D warnings, rustfmt --check on pty.rs, JSON validation, and git diff --check passed. Full ./init.sh baseline hit an unrelated GraphScreen timeout; cargo fmt --check reports pre-existing drift in fs.rs. Packaged-app manual verification pending. Issues #1 and #3 close attempts were rejected by GitHub due to missing CloseIssue permission."
+      "evidence": "PTY spawn now defaults TERM to xterm-256color before applying caller overrides. Focused Rust regression test passed (1/1); cargo clippy -D warnings, rustfmt --check on pty.rs, JSON validation, and git diff --check passed. Full ./init.sh baseline hit an unrelated GraphScreen timeout; cargo fmt --check reports pre-existing drift in fs.rs. GitHub issue #2 is closed using the verified rozzyy Keychain token; packaged-app verification remains pending. Issues #1 and #3 are also closed."
+    },
+    {
+      "id": "followup-issue-3-agent-restore-race",
+      "stage": 25,
+      "name": "Restore agent sessions after app startup",
+      "description": "User-reported recurrence of GitHub issue #3 and missing agent panes after reopening the app; prevent early screen loads from racing profile hydration.",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "Found startup race: Launchpad/Inbox may call sessions.load before App finishes profiles.load, so restore rejects saved session profile refs and marks the session store loaded. sessions.load now awaits profile hydration itself. Regression test reproduces early screen load and verifies saved Codex session resumes; restore tests 2/2 and terminal/agent focused suite 77/77 passed; user confirmed in app on 2026-11-12. Follow-up check found switchProfile also wrote its resume command before the replacement terminal pane attached. It now publishes the new PTY ID and waits for attach; regression test gates the write on attach (sessions.test.ts 39/39), pnpm typecheck and git diff --check pass. GUI retest pending because Cua Driver daemon is unavailable. GitHub issue #3 remains closed."
+    },
+    {
+      "id": "m5-task-01-launchpad-inbox-redesign",
+      "stage": 25,
+      "name": "Launchpad and Inbox prototype parity",
+      "description": "docs/superpowers/specs/2026-11-12-m5-launchpad-inbox-ui-parity.md",
+      "dependencies": [
+        "m4-stage-4-review"
+      ],
+      "status": "done",
+      "evidence": "Implementation and automated coverage complete on 2026-11-12. Added Inbox loading/empty, quota retry, CI/Agent filter, and unknown-reason tests. Launchpad view data is memoized by project data; worktree paths are indexed for session matching; Inbox visible rows are memoized by data/filter. User confirmed the M5 desktop/narrow-stage manual flow is OK on 2026-11-12. pnpm test passed 68 files / 606 tests; focused Launchpad/Inbox passed 17/17; pnpm typecheck, Clippy, git diff --check, and JSON validation passed. ./init.sh and serial Rust each had 10 macOS FSEvent startup failures (206 passed / 10 failed / 3 ignored); recorded as an environment verification gap, unrelated to M5 UI changes. Code and automated E2E review reports are in .agent/reviews/m5-stage-1-code-review.md and m5-stage-1-e2e.md."
     }
   ]
 }

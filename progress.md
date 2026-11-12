@@ -2,6 +2,37 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-12: M5-01 manual checkpoint approved
+
+- User confirmed the Launchpad and Inbox manual flows at desktop and narrow widths are OK. Marked M5-01 `done` in `feature_list.json`; automated review and acceptance coverage were already complete.
+- **Verification on record:** `pnpm test` 68 files / 606 tests passed; focused Launchpad/Inbox tests 17/17; typecheck, Clippy, `git diff --check`, and feature JSON validation passed. `./init.sh` Rust phase and serial retry each had 10 macOS FSEvent watcher failures (206 passed / 10 failed / 3 ignored); retained as an environment gap, unrelated to this UI task.
+- **Next:** no M5 work remains. Do not commit or merge until explicitly ordered. Separate Finder file-drop and packaged-app `clear` retests remain follow-ups.
+
+## 2026-11-12: M5-01 implementation and coverage review
+
+- Completed the remaining acceptance-test coverage for Inbox loading/empty feedback, low-quota retry, CI/Agent filtering, and unknown GitHub reasons. Memoized Launchpad view data by project payload, indexed worktree paths for agent matching, and memoized Inbox filtered rows by data/filter so session-only updates do not redo CI sorting and KPI derivation.
+- **Verification:** full Vitest 68 files / 606 tests passed; Launchpad + Inbox tests 2 files / 17 tests passed; `pnpm typecheck`, `git diff --check`, and feature JSON validation passed. `./init.sh` passed typecheck, full Vitest, and Clippy, but Rust tests had 10 macOS FSEvent watcher failures (206 passed / 10 failed / 3 ignored); a serial retry had the same failures.
+- M5 implementation and automated review are ready for the manual checkpoint. Desktop/narrow-stage visual checks and manual actions remain unchecked: neither Superset browser nor the Cua Driver daemon is available in this session. **Next:** user verifies `docs/testing/m5-manual-e2e.md` and approves the M5 checkpoint. No commit or push.
+
+## 2026-11-12: Issue #3 profile-switch recurrence
+
+- Checked the initial-command attach race specifically during agent profile switching. `startSession` waited for `CliPane` to attach before writing the command, but `switchProfile` spawned a replacement PTY and wrote its resume command immediately. That could lose the first command if pane attachment had not completed.
+- `switchProfile` now publishes the replacement PTY ID, waits on the same attach handshake, then writes the resume/fresh-launch command. Added a regression test that holds attachment open and confirms the write happens only after release. No new IPC or external-input boundary; the extra handshake is constant work per switch, with existing profile lookup and PTY operations unchanged.
+- **Verification:** `pnpm exec vitest run src/agents/sessions.test.ts` passed (39 tests); `pnpm typecheck` and `git diff --check` passed. Post-fix `./init.sh` passed typecheck, all 68 Vitest files / 603 tests, and Clippy; its parallel Rust test phase hit 10 macOS FSEvent startup failures (206 passed / 10 failed / 3 ignored). GUI retest is unavailable because the Cua Driver daemon is not running.
+- **Next:** manually switch profiles in the running app when GUI control is available. No commit or push.
+
+## 2026-11-12: M5 spec — Launchpad and Inbox prototype parity
+
+- Continued M5-01 implementation after reviewing the task spec. Launchpad now has toolbar scope/refresh/New Worktree actions, hero KPIs with passed/total CI, a three-column card layout, and the existing confirmed CI rerun route. Inbox now has All/Review/Mention/CI/Agent filters, selected-item detail, relative GitHub age, 24-hour snooze, and responsive list/detail behavior.
+- Plan audit: M5 Stage 1 contains only M5-01. The separately tracked Finder file-drop and packaged-app `clear` checks remain pending manual verification.
+- **Verification:** `git diff --check` passed before the latest UI/state-doc edits. No tests or app visual checks have been run. Typecheck and manual desktop/narrow-stage review remain.
+- **Next:** finish static review, then run only verification authorized by the task workflow; record remaining gaps before the M5 manual checkpoint.
+
+- Created `docs/superpowers/specs/2026-11-12-m5-launchpad-inbox-ui-parity.md` and `docs/superpowers/plans/2026-11-12-m5-ui-parity.md` on `m5-stage-1`, based on the released local `main`/`v0.4.0`.
+- The spec maps Launchpad to the prototype's 3-column hero/KPI/card grid and Inbox to its 400px list plus detail pane. It preserves existing bounded data, safe routes, and actions, keeps UI copy English, and specifies visual checks at desktop and narrow stage widths.
+- **Verification:** JSON validation and `git diff --check` passed. No implementation or application tests were run; this request was spec-only.
+- **Next:** review the M5 task spec before implementation.
+
 ## 2026-11-12: M4 release v0.4.0 merged and tagged
 
 - User approved M4.4 after manual verification of M4-S4-01..04. Fast-forwarded `main` to stage commit `be814ca`; applied the synchronized `0.4.0` version bump and created annotated tag `v0.4.0` per the release workflow.
@@ -1096,3 +1127,15 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Two confirmed non-bugs recorded for the manual report: (1) `agentSessions` is persisted write-only (`saveSetting` in `sessions.ts`, never loaded), so a webview reload (dev HMR) drops the session list while the Rust PTYs keep running. Spec §3.4 only requires the terminal dock to restore (fresh shells), so this is a dev-only artifact, not a stage defect. (2) `Could not detach terminal after pane unmount … notFound` console noise when a pane unmounts after its PTY already exited; harmless.
 - Radius refinement per user: modal `.dlg` 22 px (`.dlg-ic` 13 px, `.dlg-meta` 10 px), toast 14 px (`.toast-ic` 8 px), icon tiles 7 px / `.file-icon` 3 px stay rounded; card sections and the terminal (including `.term-dock-newtab`, `.term-screen-tab`, `.term-screen-tab-close`) stay square. Verified in the switch confirm dialog screenshot.
 - Gate: `pnpm typecheck` clean; `git diff --check` clean; `src/screens/agents/AgentsScreen.test.tsx` 27/27. M4.3 manual checkpoint remains pending; no commit or push.
+
+## 2026-11-12: Issue #3 recurrence and agent restore startup race
+
+- Rechecked GitHub issue #3: it remains closed. The initial-command code still waits for terminal attach before writing the vendor command, and focused agent/terminal tests pass. Native GUI reproduction was unavailable because the Cua Driver daemon is not running.
+- Found why agents could disappear after reopening: Launchpad/Inbox can request `sessions.load()` before App finishes hydrating saved agent profiles. Restore then sees an empty profile list, records an error, and marks sessions loaded; App's later call is ignored.
+- `sessions.load()` now hydrates profiles before reading/restoring agent sessions. Added a startup-race regression test and a general saved-session resume test.
+- Verification: `pnpm exec vitest run src/agents/sessions.test.ts src/screens/agents/AgentsScreen.test.tsx src/terminal/CliPane.test.tsx` passed 3 files / 77 tests; `git diff --check` passed. `./init.sh` and `pnpm typecheck` fail on the same existing M5 Launchpad errors at `LaunchpadScreen.tsx:385,389,395`; this follow-up introduced no reported TypeScript errors. Session restore still traverses N persisted session records serially (O(N) time, O(N) retained state); profile hydration adds one existing settings read, with no per-session I/O fan-out. Persisted profile/session inputs remain validated by existing allowlists and parsers.
+- No commit or push. App relaunch/manual GUI verification remains pending.
+
+## 2026-11-12: User confirmed issue #3/session restore fix
+
+- User confirmed the fix works in the app. The manual app verification gap recorded above is closed; GitHub issue #3 remains closed. No commit or push.

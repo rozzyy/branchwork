@@ -655,6 +655,11 @@ Each milestone gets its own implementation plan (`writing-plans`) and ships inde
 
 M2 and M3 can run in parallel after M1.
 
+> **Renumbering (2026-11-12, user decision):** M5 became Launchpad/Inbox UI parity
+> (`docs/superpowers/specs/2026-11-12-m5-launchpad-inbox-ui-parity.md`). Advanced Git
+> is now **M6** (`docs/superpowers/plans/2026-11-12-m6-advanced-git.md`, which also
+> covers the standalone Git write actions of §3.3/§6.2) and AI assists is now **M7**.
+
 ---
 
 ## 12. Future (explicitly deferred)
