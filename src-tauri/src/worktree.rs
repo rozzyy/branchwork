@@ -704,13 +704,21 @@ pub fn validate_pin(project_path: &Path, worktree_path: &Path) -> Result<String,
 }
 
 fn git_command(repository_path: &Path) -> Command {
+    let mut command = git_command_with_user_config(repository_path);
+    command
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null");
+    command
+}
+
+/// Like [`git_command`], but keeps the user's global/system config (identity, credential
+/// helpers, signing) so user-facing writes behave as they do in a terminal (spec §2).
+fn git_command_with_user_config(repository_path: &Path) -> Command {
     let mut command = Command::new("git");
     command
         .arg("-C")
         .arg(repository_path)
         .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_COUNT", "0")
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
@@ -829,14 +837,21 @@ pub(crate) fn run_git_write_with_filters(
     }))
 }
 
-/// Like [`run_git_write_with_filters`], but keeps the user's hooks enabled and returns the raw
-/// process output even on non-zero exit so callers can classify hook/auth/conflict failures.
+/// Like [`run_git_write_with_filters`], but keeps the user's hooks and global/system config
+/// (commit/push/sync/stash need the user's identity, credential helper and signing), and returns
+/// the raw process output even on non-zero exit so callers can classify hook/auth/conflict
+/// failures. Local checkout filters stay neutralized.
 pub(crate) fn invoke_git_allowing_hooks(
     repository_path: &Path,
     args: &[&OsStr],
     filters: &HashSet<String>,
 ) -> Result<Output, AppError> {
-    invoke_git_with_filters(repository_path, args, filters, false)
+    run_with_filters(
+        git_command_with_user_config(repository_path),
+        args,
+        filters,
+        false,
+    )
 }
 
 fn invoke_git_with_filters(
@@ -845,7 +860,15 @@ fn invoke_git_with_filters(
     filters: &HashSet<String>,
     disable_hooks: bool,
 ) -> Result<Output, AppError> {
-    let mut command = git_command(repository_path);
+    run_with_filters(git_command(repository_path), args, filters, disable_hooks)
+}
+
+fn run_with_filters(
+    mut command: Command,
+    args: &[&OsStr],
+    filters: &HashSet<String>,
+    disable_hooks: bool,
+) -> Result<Output, AppError> {
     command
         .env("GIT_CONFIG_COUNT", (filters.len() * 2).to_string())
         .arg("-c")
@@ -1235,6 +1258,26 @@ mod tests {
     };
 
     static NEXT_DIR: Mutex<u64> = Mutex::new(0);
+
+    fn sets_env(command: &Command, key: &str) -> bool {
+        command
+            .get_envs()
+            .any(|(name, value)| name == key && value.is_some())
+    }
+
+    // Regression: commit/push/stash ran with the user's global config disabled, dropping their
+    // identity, credential helper and signing. Only internal writes stay isolated.
+    #[test]
+    fn user_facing_writes_keep_global_config_and_internal_writes_isolate_it() {
+        let user = git_command_with_user_config(Path::new("."));
+        assert!(!sets_env(&user, "GIT_CONFIG_GLOBAL"));
+        assert!(!sets_env(&user, "GIT_CONFIG_NOSYSTEM"));
+        assert!(sets_env(&user, "GIT_TERMINAL_PROMPT"));
+
+        let isolated = git_command(Path::new("."));
+        assert!(sets_env(&isolated, "GIT_CONFIG_GLOBAL"));
+        assert!(sets_env(&isolated, "GIT_CONFIG_NOSYSTEM"));
+    }
 
     struct TestDir(PathBuf);
 
