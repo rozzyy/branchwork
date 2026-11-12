@@ -1139,3 +1139,9 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 ## 2026-11-12: User confirmed issue #3/session restore fix
 
 - User confirmed the fix works in the app. The manual app verification gap recorded above is closed; GitHub issue #3 remains closed. No commit or push.
+
+## 2026-11-12: M5 committed and released as v0.5.0
+
+- User ordered the M5 stage commit and release. M5 stage commit `93b36bf` (Launchpad/Inbox parity, issue #3 restore race fix, M5 docs, M6 plan) was fast-forwarded into `main`; `m5-stage-1` deleted. A clean leftover worktree at `/private/tmp/branchwork-main-merge` that held `main` was removed.
+- Pre-commit gate: `pnpm typecheck` clean; Vitest 68 files / 606 tests passed; `git diff --check` clean.
+- Version bumped to `0.5.0` (package.json, Cargo.toml/Cargo.lock, tauri.conf.json) and tagged `v0.5.0`. No push.
