@@ -169,7 +169,7 @@ function BlameTree() {
   useEffect(() => {
     if (!activePath) { setTreeMap({}); return; }
     let cancelled = false;
-    void fsTree(activePath, { path: "", showIgnored: false })
+    void fsTree(activePath, { path: "", showIgnored: false, includeStatus: true })
       .then((tree) => { if (!cancelled) setTreeMap({ "": tree.entries }); })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -182,7 +182,7 @@ function BlameTree() {
       return next;
     });
     if (!activePath || treeMap[path] !== undefined) return;
-    void fsTree(activePath, { path, showIgnored: false })
+    void fsTree(activePath, { path, showIgnored: false, includeStatus: true })
       .then((tree) => setTreeMap((prev) => ({ ...prev, [path]: tree.entries })))
       .catch(() => {});
   }, [activePath, treeMap]);

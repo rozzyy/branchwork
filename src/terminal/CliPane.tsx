@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
@@ -17,6 +18,7 @@ import {
 } from "../ipc/pty";
 import { errorMessage } from "../ipc/errors";
 import { markTerminalAttached } from "./attachReady";
+import { dropPositionIsInside, formatDroppedPaths } from "./fileDrop";
 import "./terminal.css";
 import "@xterm/xterm/css/xterm.css";
 
@@ -102,6 +104,7 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
     const webglAddon = new WebglAddon();
     let resizeObserver: ResizeObserver | null = null;
     let inputSubscription: { dispose: () => void } | null = null;
+    let dragDropUnlisten: (() => void) | null = null;
 
     const showError = (reason: unknown) => {
       if (!disposed) setError(errorMessage(reason));
@@ -187,6 +190,18 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
     };
 
     try {
+      void getCurrentWebview().onDragDropEvent((event) => {
+        if (disposed || exitedRef.current || event.payload.type !== "drop") return;
+        const rect = container.getBoundingClientRect();
+        if (!dropPositionIsInside(event.payload.position.x, event.payload.position.y, rect)) return;
+        const text = formatDroppedPaths(event.payload.paths);
+        if (!text) return;
+        terminal.focus();
+        void writeTerminal(sessionId, new TextEncoder().encode(text)).catch(showError);
+      }).then((unlisten) => {
+        if (disposed) unlisten();
+        else dragDropUnlisten = unlisten;
+      }).catch(showError);
       terminal.loadAddon(fitAddon);
       terminal.open(container);
       fitAddon.fit();
@@ -211,6 +226,7 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
       window.clearTimeout(resizeTimer);
       resizeObserver?.disconnect();
       inputSubscription?.dispose();
+      dragDropUnlisten?.();
       unsubscribe();
       webglAddon.dispose();
       fitAddon.dispose();

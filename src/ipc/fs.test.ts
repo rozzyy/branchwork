@@ -37,14 +37,17 @@ it("routes fs_tree and fs_read through their generated command bindings", async 
   });
 
   await expect(
-    fsTree("/repos/repo", { path: "src", showIgnored: false }),
+    fsTree("/repos/repo", { path: "src", showIgnored: false, includeStatus: true }),
   ).resolves.toEqual(tree);
   await expect(fsRead("/repos/repo", "src/main.ts")).resolves.toEqual(readResult);
 
   expect(calls).toEqual([
     {
       command: "fs_tree",
-      payload: { worktreePath: "/repos/repo", options: { path: "src", showIgnored: false } },
+      payload: {
+        worktreePath: "/repos/repo",
+        options: { path: "src", showIgnored: false, includeStatus: true },
+      },
     },
     { command: "fs_read", payload: { worktreePath: "/repos/repo", path: "src/main.ts" } },
   ]);

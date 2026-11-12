@@ -231,7 +231,12 @@ describe("AgentsView", () => {
 
   it("shows the usage-limit banner with Switch and Dismiss", () => {
     useSessions.setState({
-      sessions: [{ ...useSessions.getState().sessions[0], limitHit: true }],
+      sessions: [{
+        ...useSessions.getState().sessions[0],
+        cliId: "claude",
+        profile: { cliId: "claude", slug: "work" },
+        limitHit: true,
+      }],
     });
     render(<AgentsView />);
     expect(screen.getByText("Usage limit reached")).toBeInTheDocument();
@@ -239,7 +244,7 @@ describe("AgentsView", () => {
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
   });
 
-  it("explains the login screen when the profile is verified logged in", () => {
+  it("does not show a login hint just because a verified Claude profile is waiting", () => {
     useProfiles.setState({
       profiles: [{ cliId: "claude", slug: "personal", name: "Personal", createdAt: 1 }],
       globalDefault: null,
@@ -267,8 +272,8 @@ describe("AgentsView", () => {
       ],
     });
     render(<AgentsView />);
-    expect(screen.getByText(/already logged in/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open login terminal" })).toBeInTheDocument();
+    expect(screen.queryByText(/already logged in/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open login terminal" })).toBeNull();
   });
 
   it("hides the login hint when the profile is not verified", () => {

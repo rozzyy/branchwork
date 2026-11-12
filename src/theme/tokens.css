@@ -59,6 +59,16 @@
 }
 
 * { box-sizing: border-box; }
+/* Keep scroll behavior while removing visible browser scrollbars throughout the app. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 /* Square inner UI (user order): section cards and terminal meet at right
  * angles. Controls keep their shape per UI best practice — buttons/chips
  * stay pill-shaped, glyphs stay round, small icon controls keep a hint of

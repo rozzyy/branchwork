@@ -536,11 +536,20 @@ describe("profile switching", () => {
 });
 
 describe("usage limits", () => {
+  it("does not infer a Codex quota limit from usage and reset status", async () => {
+    await useProfiles.getState().createProfile("codex", "Work");
+    await useSessions.getState().startSession({ cliId: "codex", profile: { cliId: "codex", slug: "work" } });
+    emitOutput("pty-1", "Usage limit · resets in 4h 12m\n");
+    expect(useSessions.getState().sessions[0]).toMatchObject({ status: "running", limitHit: false });
+    expect(useToasts.getState().toasts).toEqual([]);
+  });
+
   it("marks waiting with a banner and offers a switch toast", async () => {
     useSettings.setState({ agentAutoSwitch: false });
-    const profile = await seedProfile();
-    await useProfiles.getState().createProfile("codex", "Home");
-    await useSessions.getState().startSession({ cliId: "codex", profile });
+    await useProfiles.getState().createProfile("claude", "Work");
+    await useProfiles.getState().createProfile("claude", "Home");
+    const profile = { cliId: "claude" as const, slug: "work" };
+    await useSessions.getState().startSession({ cliId: "claude", profile });
     emitOutput("pty-1", "You've hit your weekly limit · resets Nov 12\n");
     const session = useSessions.getState().sessions[0];
     expect(session).toMatchObject({ status: "waiting", limitHit: true });
@@ -549,18 +558,19 @@ describe("usage limits", () => {
 
     action?.run();
     await vi.waitFor(() =>
-      expect(useSessions.getState().sessions[0].profile).toEqual({ cliId: "codex", slug: "home" }),
+      expect(useSessions.getState().sessions[0].profile).toEqual({ cliId: "claude", slug: "home" }),
     );
     expect(useSessions.getState().sessions[0].limitHit).toBe(false);
   });
 
   it("auto-switches without asking when enabled", async () => {
-    const profile = await seedProfile();
-    await useProfiles.getState().createProfile("codex", "Home");
-    const id = await useSessions.getState().startSession({ cliId: "codex", profile });
-    emitOutput("pty-1", "rate limit reached, try later\n");
+    await useProfiles.getState().createProfile("claude", "Work");
+    await useProfiles.getState().createProfile("claude", "Home");
+    const profile = { cliId: "claude" as const, slug: "work" };
+    const id = await useSessions.getState().startSession({ cliId: "claude", profile });
+    emitOutput("pty-1", "You've hit your weekly limit · resets Nov 12\n");
     await vi.waitFor(() =>
-      expect(useSessions.getState().sessions[0].profile).toEqual({ cliId: "codex", slug: "home" }),
+      expect(useSessions.getState().sessions[0].profile).toEqual({ cliId: "claude", slug: "home" }),
     );
     expect(ask).not.toHaveBeenCalled();
     expect(id).toBeTruthy();
@@ -568,8 +578,8 @@ describe("usage limits", () => {
 
   it("dismisses the banner without switching", async () => {
     useSettings.setState({ agentAutoSwitch: false });
-    const profile = await seedProfile();
-    await useSessions.getState().startSession({ cliId: "codex", profile });
+    await useProfiles.getState().createProfile("claude", "Work");
+    await useSessions.getState().startSession({ cliId: "claude", profile: { cliId: "claude", slug: "work" } });
     emitOutput("pty-1", "quota exceeded\n");
     expect(useSessions.getState().sessions[0].limitHit).toBe(true);
     useSessions.getState().dismissLimit(useSessions.getState().sessions[0].id);

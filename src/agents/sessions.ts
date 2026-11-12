@@ -21,7 +21,7 @@ import {
   stopTerminal,
   writeTerminal,
 } from "../ipc/pty";
-import { saveSetting } from "../ipc/settings";
+import { loadSetting, saveSetting } from "../ipc/settings";
 import { errorMessage } from "../ipc/errors";
 import { t } from "../i18n/t";
 import { toast } from "../ui/toast";
@@ -30,6 +30,7 @@ import { useDock } from "../terminal/dock";
 import { waitForTerminalAttach } from "../terminal/attachReady";
 import { useProfiles, type ProfileRef } from "./profiles";
 import { useSettings } from "../state/settings";
+import { useStage } from "../state/stage";
 import { useWorktrees } from "../state/worktrees";
 
 export type AgentSlot = "left" | "right" | "auto" | "full";
@@ -79,6 +80,7 @@ const exitedSessions = new Set<string>();
 let exitSubscription: Promise<() => void> | null = null;
 let outputSubscription: Promise<() => void> | null = null;
 let statusSubscription: Promise<() => void> | null = null;
+let sessionsLoading = false;
 
 /** Spec §6.6.3 fallback: quiet 4 s after activity suggests waiting input. */
 export const IDLE_WAIT_MS = 4000;
@@ -171,6 +173,43 @@ export interface NewAgentRequest {
   worktreePath?: string;
   /** Sent as the session's first input line after launch (race prompts). */
   prompt?: string;
+  /** Restore an existing session record, resuming its CLI conversation. */
+  sessionRecordId?: string;
+  resume?: boolean;
+  slot?: AgentSlot;
+  /** Background restores may run while the Agents screen is not mounted. */
+  waitForAttach?: boolean;
+}
+
+interface PersistedAgentSession {
+  id: string;
+  cliId: CliId;
+  profile: ProfileRef;
+  worktreePath: string;
+  slot: AgentSlot;
+}
+
+interface PersistedAgentState {
+  sessions?: unknown;
+  layoutMode?: unknown;
+}
+
+function isCliId(value: unknown): value is CliId {
+  return typeof value === "string" && CLI_IDS.includes(value as CliId);
+}
+
+function isPersistedAgentSession(value: unknown): value is PersistedAgentSession {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value as Record<string, unknown>;
+  const profile = item.profile as Record<string, unknown> | null;
+  return (
+    typeof item.id === "string" &&
+    isCliId(item.cliId) &&
+    typeof profile === "object" && profile !== null &&
+    profile.cliId === item.cliId && typeof profile.slug === "string" &&
+    typeof item.worktreePath === "string" &&
+    (item.slot === "left" || item.slot === "right" || item.slot === "auto" || item.slot === "full")
+  );
 }
 
 interface SessionsStore {
@@ -227,7 +266,13 @@ interface SessionsStore {
 export const useSessions = create<SessionsStore>((set, get) => {
   const save = () =>
     persistSoon({
-      sessions: get().sessions.map((session) => ({ ...session, sessionId: null, error: null })),
+      sessions: get().sessions.map((session) => ({
+        id: session.id,
+        cliId: session.cliId,
+        profile: session.profile,
+        worktreePath: session.worktreePath,
+        slot: session.slot,
+      })),
       layoutMode: get().layoutMode,
     });
 
@@ -438,10 +483,17 @@ export const useSessions = create<SessionsStore>((set, get) => {
     argv: string[],
     prefix: string[] = [],
     beforeWrite?: (sessionId: string) => Promise<void>,
+    commandOverride?: string,
   ): Promise<{ sessionId: string } | { error: string; loginRequired?: boolean }> => {
     const ready = await prepareAgentShell(agentId, cliId, profile);
     if (!("env" in ready)) return ready;
-    return spawnPreparedShell(worktreePath, ready.env, argv.map(quoteArg).join(" "), prefix, beforeWrite);
+    return spawnPreparedShell(
+      worktreePath,
+      ready.env,
+      commandOverride ?? argv.map(quoteArg).join(" "),
+      prefix,
+      beforeWrite,
+    );
   };
 
   return {
@@ -547,25 +599,33 @@ export const useSessions = create<SessionsStore>((set, get) => {
         return null;
       }
       let launch: string[];
+      let commandOverride: string | undefined;
       try {
-        launch = resolveCli(def).launch;
+        const resolved = resolveCli(def);
+        launch = resolved.launch;
+        if (request.resume) commandOverride = resolved.resumeLine ?? resolved.resume.map(quoteArg).join(" ");
       } catch (error) {
         toast({ title: errorMessage(error), icon: "⚠" });
         return null;
       }
       const session: AgentSession = {
-        id: nextSessionId(),
+        id: request.sessionRecordId ?? nextSessionId(),
         cliId: request.cliId,
         profile,
         worktreePath,
         sessionId: null,
-        slot: "auto",
+        slot: request.slot ?? "auto",
         error: null,
         sharedWithDock: false,
         status: "idle",
         limitHit: false,
       };
-      set({ sessions: [...get().sessions, session] });
+      const existing = findSession(session.id);
+      set({
+        sessions: existing
+          ? get().sessions.map((item) => item.id === session.id ? session : item)
+          : [...get().sessions, session],
+      });
       const result = await spawnAgentShell(
         session.id,
         request.cliId,
@@ -573,11 +633,14 @@ export const useSessions = create<SessionsStore>((set, get) => {
         worktreePath,
         launch,
         request.prompt ? [request.prompt] : [],
-        async (sessionId) => {
-          const attachReady = waitForTerminalAttach(sessionId);
-          updateSession(session.id, { sessionId });
-          await attachReady;
-        },
+        request.waitForAttach === false
+          ? undefined
+          : async (sessionId) => {
+              const attachReady = waitForTerminalAttach(sessionId);
+              updateSession(session.id, { sessionId });
+              await attachReady;
+            },
+        commandOverride,
       );
       const live = findSession(session.id);
       if (!live) {
@@ -853,6 +916,8 @@ export const useSessions = create<SessionsStore>((set, get) => {
     },
 
     async load() {
+      if (get().loaded || sessionsLoading) return;
+      sessionsLoading = true;
       if (exitSubscription === null) {
         const subscribed = onTerminalExit((event) => {
           exitedSessions.add(event.sessionId);
@@ -902,7 +967,55 @@ export const useSessions = create<SessionsStore>((set, get) => {
           if (statusSubscription === subscribed) statusSubscription = null;
         });
       }
+      let saved: PersistedAgentState | null;
+      try {
+        saved = await loadSetting<PersistedAgentState>("agentSessions");
+      } catch (error) {
+        sessionsLoading = false;
+        throw error;
+      }
+      const entries = Array.isArray(saved?.sessions)
+        ? saved.sessions.filter(isPersistedAgentSession)
+        : [];
+      const unique = [...new Map(entries.map((item) => [item.id, item])).values()];
+      const restored: AgentSession[] = unique.map((item) => ({
+        ...item,
+        sessionId: null,
+        error: null,
+        sharedWithDock: false,
+        status: "idle",
+        limitHit: false,
+      }));
+      set({
+        sessions: restored,
+        layoutMode: saved?.layoutMode === "full" ? "full" : "grid",
+        loaded: true,
+      });
+      const waitForAttach = useStage.getState().panes.includes("agents");
+      for (const session of restored) {
+        const profileExists = useProfiles.getState().profiles.some(
+          (profile) => profile.cliId === session.profile.cliId && profile.slug === session.profile.slug,
+        );
+        if (!profileExists) {
+          updateSession(session.id, { error: t("agents.profileRequired", { name: CLI_REGISTRY[session.cliId].name }) });
+          continue;
+        }
+        const id = await get().startSession({
+          cliId: session.cliId,
+          profile: session.profile,
+          worktreePath: session.worktreePath,
+          sessionRecordId: session.id,
+          resume: true,
+          slot: session.slot,
+          waitForAttach,
+        });
+        if (!id && findSession(session.id)) {
+          updateSession(session.id, { error: t("agents.restoreError", { name: CLI_REGISTRY[session.cliId].name }) });
+        }
+      }
+      save();
       set({ loaded: true });
+      sessionsLoading = false;
     },
   };
 });

@@ -31,7 +31,7 @@ const rootEntries = [
   { name: "README.md", isDir: false, status: null, size: 10, mtime: 1000 },
 ];
 const srcEntries = [
-  { name: "main.ts", isDir: false, status: "M", size: 20, mtime: 1000 },
+  { name: "main.ts", isDir: false, status: null, size: 20, mtime: 1000 },
   { name: "utils.ts", isDir: false, status: null, size: 5, mtime: 1000 },
 ];
 
@@ -40,7 +40,10 @@ async function setup(fileOverrides: Partial<ReturnType<typeof useFiles.getState>
     if (options.path === "src") return { entries: srcEntries };
     return { entries: rootEntries };
   });
-  vi.mocked(readStatus).mockResolvedValue({ staged: [], unstaged: [] });
+  vi.mocked(readStatus).mockResolvedValue({
+    staged: [],
+    unstaged: [{ path: "src/main.ts", oldPath: null, indexStatus: "", worktreeStatus: "M", bytes: 20, large: false }],
+  });
   vi.mocked(readDiff).mockResolvedValue({ hunks: [], binary: false, truncated: false, bytes: 0 });
   vi.mocked(discardPaths).mockResolvedValue(false);
   vi.mocked(fsDelete).mockResolvedValue(false);
@@ -94,12 +97,12 @@ it("renders tree rows with status letters and dirty dots", async () => {
 it("loads only the root on mount, then fetches a folder's children on first expand (I7)", async () => {
   await setup();
   expect(fsTree).toHaveBeenCalledTimes(1);
-  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "", showIgnored: false });
+  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "", showIgnored: false, includeStatus: false });
 
   await userEvent.click(screen.getByText("src"));
   await screen.findByText("main.ts");
   expect(fsTree).toHaveBeenCalledTimes(2);
-  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "src", showIgnored: false });
+  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "src", showIgnored: false, includeStatus: false });
 
   // Collapsing and re-expanding reuses the cached children — no extra fetch.
   await userEvent.click(screen.getByText("src"));
@@ -122,8 +125,8 @@ it("a git:changed event for the active worktree refetches the root plus only exp
   await act(async () => handlers[0]({ worktree: worktreePath }));
 
   await waitFor(() => expect(fsTree).toHaveBeenCalledTimes(2));
-  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "", showIgnored: false });
-  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "src", showIgnored: false });
+  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "", showIgnored: false, includeStatus: false });
+  expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "src", showIgnored: false, includeStatus: false });
 });
 
 it("drops a stale reload response that resolves after a newer one (R4)", async () => {
@@ -162,7 +165,7 @@ it("the show-ignored toggle re-fetches fs_tree with the flag set", async () => {
   await setup();
   await userEvent.click(screen.getByRole("checkbox", { name: "Show ignored files" }));
   await waitFor(() => {
-    expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "", showIgnored: true });
+    expect(fsTree).toHaveBeenCalledWith(worktreePath, { path: "", showIgnored: true, includeStatus: false });
   });
 });
 

@@ -33,16 +33,15 @@ describe("CLI registry", () => {
     expect(CLI_REGISTRY.custom.verifiedAgainst).toBeNull();
   });
 
-  it("gives every CLI lowercase waiting and limit patterns", () => {
+  it("gives each CLI lowercase waiting patterns and only configured limit patterns", () => {
     for (const id of CLI_IDS) {
-      for (const patterns of [CLI_REGISTRY[id].waitingPatterns, CLI_REGISTRY[id].limitPatterns]) {
-        expect(patterns.length).toBeGreaterThan(0);
-        for (const pattern of patterns) {
-          expect(pattern).toBe(pattern.toLowerCase());
-          expect(pattern.length).toBeLessThanOrEqual(32);
-        }
+      expect(CLI_REGISTRY[id].waitingPatterns.length).toBeGreaterThan(0);
+      for (const pattern of [...CLI_REGISTRY[id].waitingPatterns, ...CLI_REGISTRY[id].limitPatterns]) {
+        expect(pattern).toBe(pattern.toLowerCase());
+        expect(pattern.length).toBeLessThanOrEqual(32);
       }
     }
+    expect(CLI_REGISTRY.codex.limitPatterns).toEqual([]);
   });
 
   it("builds isolated profile environments per CLI", () => {

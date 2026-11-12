@@ -36,6 +36,11 @@ after the last task of the stage:
 - No over-testing: write only the tests in the task text. Add a regression test only for a bug that was actually found.
 - All UI strings are English and come from `src/i18n/en.ts`.
 - Stop at every 🛑 checkpoint. Never start the next stage without the user's go-ahead.
+- Before generating or changing code, follow the performance, security, and scalability checklist in `AGENT.md`. State time and space complexity for non-trivial data paths and consider runtime cost as input size grows.
+
+## Performance and security review
+
+For every code change, check the size and shape of its inputs, time and memory growth, repeated work, I/O and request fan-out, and whether execution can block the UI. Bound concurrency and payloads; validate untrusted IPC input; keep secrets out of logs and UI state. Measure or benchmark suspected hot paths before claiming a performance gain.
 
 ## Git workflow (trunk + stage branches + milestone tags)
 

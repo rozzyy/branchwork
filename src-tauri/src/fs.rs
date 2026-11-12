@@ -30,6 +30,7 @@ const MAX_READ_BYTES: u64 = 10 * 1024 * 1024;
 pub struct FsTreeOptions {
     pub path: String,
     pub show_ignored: bool,
+    pub include_status: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
@@ -142,8 +143,7 @@ fn mtime_millis(metadata: &fs::Metadata) -> Result<u64, AppError> {
     Ok(elapsed.as_millis() as u64)
 }
 
-/// Builds a path → single-letter status map from the Task 01 `status` read model, preferring
-/// the worktree-dirty letter over the index letter (the tree reflects what's on disk now).
+/// Builds the file-status map for callers that request status with their tree.
 fn status_map(root: &Path) -> Result<HashMap<String, String>, AppError> {
     let summary = status::read(root)?;
     let mut map = HashMap::new();
@@ -170,8 +170,11 @@ pub(crate) fn tree(worktree_path: &Path, options: &FsTreeOptions) -> Result<FsTr
         return Err(AppError::validation("fs_tree path must be a directory"));
     }
     let at_root = dir == root;
-    let status_map = status_map(&root)?;
-
+    let statuses = if options.include_status {
+        Some(status_map(&root)?)
+    } else {
+        None
+    };
     let mut entries = Vec::new();
     for item in fs::read_dir(&dir)
         .map_err(|error| AppError::io(format!("Cannot list directory: {error}")))?
@@ -205,15 +208,14 @@ pub(crate) fn tree(worktree_path: &Path, options: &FsTreeOptions) -> Result<FsTr
             .map_err(|error| AppError::io(format!("Cannot stat directory entry: {error}")))?;
         let size = if is_dir { 0 } else { item_metadata.len() };
         let mtime = mtime_millis(&item_metadata)?;
-        let status = if is_dir {
-            None
-        } else {
-            status_map.get(&relative).cloned()
-        };
         entries.push(FsEntry {
             name,
             is_dir,
-            status,
+            status: if is_dir {
+                None
+            } else {
+                statuses.as_ref().and_then(|map| map.get(&relative).cloned())
+            },
             size,
             mtime,
         });
@@ -625,6 +627,7 @@ mod tests {
         FsTreeOptions {
             path: String::new(),
             show_ignored,
+            include_status: true,
         }
     }
 
@@ -895,6 +898,7 @@ mod tests {
                 &FsTreeOptions {
                     path: "../outside".into(),
                     show_ignored: false,
+                    include_status: true,
                 }
             )
             .unwrap_err()

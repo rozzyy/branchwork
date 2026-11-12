@@ -180,6 +180,7 @@ function WorktreeSection() {
     if (!project || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    let reloadTimer: number | undefined;
     const reportError = (error: unknown) => {
       if (disposed) return;
       toast({
@@ -191,10 +192,13 @@ function WorktreeSection() {
     try {
       subscription = onGitChanged((event) => {
           const state = useWorktrees.getState();
-          if (state.projectId !== project.id || !state.worktrees.some((worktree) => worktree.path === event.worktree)) {
-            return;
-          }
-          void state.load(project);
+          if (state.projectId !== project.id || !state.worktrees.some((worktree) => worktree.path === event.worktree)) return;
+          if (reloadTimer !== undefined) window.clearTimeout(reloadTimer);
+          reloadTimer = window.setTimeout(() => {
+            reloadTimer = undefined;
+            const current = useWorktrees.getState();
+            if (current.projectId === project.id) void current.load(project);
+          }, 400);
         });
     } catch (error) {
       reportError(error);
@@ -209,6 +213,7 @@ function WorktreeSection() {
     );
     return () => {
       disposed = true;
+      if (reloadTimer !== undefined) window.clearTimeout(reloadTimer);
       if (unlisten) void unlisten();
     };
   }, [project?.id, project?.localPath]);

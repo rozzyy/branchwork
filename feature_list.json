@@ -1168,6 +1168,15 @@
       ],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "followup-terminal-file-drop",
+      "stage": 23,
+      "name": "Native file drag-and-drop for agent and terminal panes",
+      "description": "Ad-hoc user follow-up: enable native Tauri file drops and insert safe quoted paths into the targeted PTY pane.",
+      "dependencies": [],
+      "status": "review",
+      "evidence": "Implemented 2026-11-12. Targeted terminal/drop tests 15/15; typecheck clean; full Vitest 64 files / 580 tests; Clippy clean. Direct cargo test passed once (210/3 ignored), but both ./init.sh runs had 10 macOS FSEvent watcher failures, so Rust is not consistently green in this sandbox. Manual native Finder drop verification remains."
     }
   ]
 }

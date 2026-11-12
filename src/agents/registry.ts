@@ -72,29 +72,22 @@ const GENERIC_WAITING_PATTERNS = [
   "press enter to",
 ];
 
-/**
- * Generic usage-limit cues, incl. the "weekly limit" wording observed on a
- * real Claude Code run. Conservative: matched against fresh output only.
+/** Explicit exhaustion/error wording only. Status labels and reset timers
+ * are also shown while quota remains, so they must never trigger a profile
+ * switch or a usage-limit warning by themselves.
  */
 const GENERIC_LIMIT_PATTERNS = [
-  "you've hit your",
-  "you hit your",
-  "weekly limit",
-  "daily limit",
-  "monthly limit",
-  "usage limit",
-  "rate limit",
-  "limit reached",
-  "limit exceeded",
-  "over your limit",
+  "you've hit your weekly limit",
+  "you've hit your usage limit",
+  "you hit your weekly limit",
+  "you hit your usage limit",
+  "weekly limit exceeded",
+  "daily limit exceeded",
+  "monthly limit exceeded",
+  "usage limit exceeded",
   "quota exceeded",
   "out of credits",
   "credits exhausted",
-  "resets at",
-  "resets in",
-  "upgrade to increase",
-  "usage cap",
-  "billing limit",
 ];
 
 const CLAUDE: CliDef = {
@@ -136,7 +129,10 @@ const CODEX: CliDef = {
   credentialPaths: ["auth.json"],
   verifiedAgainst: "codex-cli 0.163.0",
   waitingPatterns: [...GENERIC_WAITING_PATTERNS],
-  limitPatterns: [...GENERIC_LIMIT_PATTERNS],
+  // Codex's interactive usage UI includes quota/reset status while requests
+  // may still succeed. Until we have a reliable quota signal, don't infer an
+  // exhausted profile from terminal text or trigger an automatic switch.
+  limitPatterns: [],
 };
 
 const OPENCODE: CliDef = {

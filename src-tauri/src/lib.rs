@@ -206,7 +206,7 @@ fn path_is_repository(path: String) -> Result<bool, AppError> {
     repository::is_repository(Path::new(&path))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn worktree_list(
     store: State<'_, Store>,
@@ -218,7 +218,7 @@ fn worktree_list(
     worktree::list(Path::new(&project.local_path), &watcher)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn worktree_create(
     store: State<'_, Store>,
@@ -232,7 +232,7 @@ fn worktree_create(
     worktree::create(&project, Path::new(&destination), &branch, &store, &watcher)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn worktree_create_at_commit(
     store: State<'_, Store>,
@@ -254,7 +254,7 @@ fn worktree_create_at_commit(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn worktree_remove(
     store: State<'_, Store>,
@@ -267,7 +267,7 @@ fn worktree_remove(
     worktree::remove(&project, Path::new(&path), &store, delete_branch)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn worktree_prune(store: State<'_, Store>, project_id: String) -> Result<(), AppError> {
     validate_id(&project_id, "project")?;
@@ -293,7 +293,7 @@ fn log_graph(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn graph_commit_detail(
     store: State<'_, Store>,
@@ -704,7 +704,7 @@ fn file_history(
     blame::file_history(&worktree_path, &path, options)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn pty_spawn(
     store: State<'_, Store>,
@@ -769,7 +769,7 @@ fn pty_close(manager: State<'_, PtyManager>, session_id: String) -> Result<(), A
 /// Resolve a CLI binary through the login shell's PATH (spec §6.6.1).
 /// The name is strictly validated; only a single resolved absolute path or a
 /// missing-binary error ever crosses this boundary.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn cli_resolve(binary: String) -> Result<String, AppError> {
     cli::resolve_binary(&binary)
@@ -784,7 +784,7 @@ fn cli_profile_dir(cli_id: String, slug: String) -> Result<String, AppError> {
 
 /// Stop a PTY session gracefully: SIGINT, wait up to `grace_ms`, then
 /// force-close. Returns true when the process exited on its own in time.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn pty_stop(
     manager: State<'_, PtyManager>,
@@ -841,7 +841,7 @@ fn cli_logout_profile(
 /// Store a user-supplied GitHub token under an account name in the platform
 /// credential store. Never synthesized: the caller passes the token the
 /// user provided.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_auth_set_token(token: String, account: String) -> Result<(), AppError> {
     gh::set_token(&token, &account)
@@ -849,14 +849,14 @@ fn gh_auth_set_token(token: String, account: String) -> Result<(), AppError> {
 
 /// True when a token is stored (for the account, or any account when
 /// omitted). The token itself is never returned.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_auth_status(account: Option<String>) -> Result<gh::GhAuthStatus, AppError> {
     gh::status(account.as_deref())
 }
 
 /// Delete the stored token for an account. `Ok(false)` when absent.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_auth_sign_out(account: String) -> Result<bool, AppError> {
     gh::sign_out(&account)
@@ -864,21 +864,21 @@ fn gh_auth_sign_out(account: String) -> Result<bool, AppError> {
 
 /// Start a device authorization. Returns the user code and verification URI;
 /// the device code stays backend-side under the returned request id.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_auth_start() -> Result<gh::DeviceStart, AppError> {
     gh::device_start()
 }
 
 /// Poll one in-flight device authorization once (interval-enforced).
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_auth_poll(request_id: String) -> Result<gh::DevicePoll, AppError> {
     gh::device_poll(&request_id)
 }
 
 /// Verify a user-supplied PAT, store it under its username, return the name.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_auth_pat(token: String) -> Result<gh::PatResult, AppError> {
     gh::pat_login(&token)
@@ -894,7 +894,7 @@ fn gh_open_url(url: String) -> Result<(), AppError> {
 }
 
 /// Resolve the `origin` remote of the active worktree to owner/repo/URL.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_remote(
     store: State<'_, Store>,
@@ -904,14 +904,14 @@ fn gh_repo_remote(
 }
 
 /// Repository overview for the repo screen as one stored account.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_meta(owner: String, repo: String, account: String) -> Result<gh::GhRepoMeta, AppError> {
     gh::repo_meta(&owner, &repo, &account)
 }
 
 /// Top contributors for the repo screen sidebar as one stored account.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_contributors(
     owner: String,
@@ -922,7 +922,7 @@ fn gh_repo_contributors(
 }
 
 /// Star or unstar a repo. Returns the new starred state.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_set_starred(
     owner: String,
@@ -934,7 +934,7 @@ fn gh_repo_set_starred(
 }
 
 /// Subscribe or unsubscribe a repo. Returns the new subscription state.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_set_watched(
     owner: String,
@@ -946,14 +946,14 @@ fn gh_repo_set_watched(
 }
 
 /// Fork a repo into the viewer's account. Returns the fork URL.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_fork(owner: String, repo: String, account: String) -> Result<String, AppError> {
     gh::repo_fork(&owner, &repo, &account)
 }
 
 /// Issue list for the repo screen Issues tab as one stored account.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_issues(
     owner: String,
@@ -965,7 +965,7 @@ fn gh_repo_issues(
 }
 
 /// Pull request list for the repo screen Pulls tab as one stored account.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_pulls(
     owner: String,
@@ -998,14 +998,14 @@ fn gh_open_repo_page(
 }
 
 /// Latest Actions runs for the repo screen Actions tab as one stored account.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_runs(owner: String, repo: String, account: String) -> Result<Vec<gh::GhRun>, AppError> {
     gh::repo_runs(&owner, &repo, &account)
 }
 
 /// Re-run the failed jobs of one Actions run as one stored account.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn gh_repo_rerun(
     owner: String,
@@ -1017,7 +1017,7 @@ fn gh_repo_rerun(
 }
 
 /// Branch selector data for the repo screen Code tab.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn git_repo_branches(
     store: State<'_, Store>,
@@ -1027,7 +1027,7 @@ fn git_repo_branches(
 }
 
 /// Latest commit on a ref for the repo screen latest-commit bar.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn git_repo_latest_commit(
     store: State<'_, Store>,
@@ -1038,7 +1038,7 @@ fn git_repo_latest_commit(
 }
 
 /// File table of a ref and subdir with per-file history.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn git_repo_tree(
     store: State<'_, Store>,
@@ -1050,7 +1050,7 @@ fn git_repo_tree(
 }
 
 /// Read a committed file from a ref for the Repository screen README preview.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn git_repo_read_file(
     store: State<'_, Store>,
@@ -1119,7 +1119,7 @@ fn agent_write_handover(
 }
 
 /// Capped `git diff HEAD` text of a registered worktree for handover notes.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 fn agent_handover_diff(store: State<'_, Store>, worktree_path: String) -> Result<String, AppError> {
     handover::read_diff(&store, Path::new(&worktree_path))

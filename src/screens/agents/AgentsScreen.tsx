@@ -101,17 +101,6 @@ function AgentPaneBody({ session }: { session: AgentSession }) {
     },
     [session.id, store],
   );
-  // The vendor login screen can appear while the profile is verified as
-  // logged in: Claude runs its one-time setup per profile dir, and a capped
-  // account lands on the same picker. Say so instead of leaving a bare
-  // "needs input" state that reads as a lost login.
-  const allProfiles = useProfiles((s) => s.profiles);
-  const profileProbe = useProfiles((s) => s.profileProbes)?.[usageKey(session.profile)];
-  const showLoginHint =
-    session.cliId === "claude" && session.status === "waiting" && profileProbe?.linked === true;
-  const profileName =
-    allProfiles.find((p) => p.cliId === session.profile.cliId && p.slug === session.profile.slug)?.name ??
-    session.profile.slug;
   if (!session.sessionId) {
     return (
       <div className="agent-pane-error" role="status">
@@ -124,19 +113,6 @@ function AgentPaneBody({ session }: { session: AgentSession }) {
   }
   return (
     <>
-      {showLoginHint && (
-        <div className="agent-limit" role="status">
-          <span>{t("agents.loggedInWaiting", { profile: profileName })}</span>
-          <span className="sp" />
-          <button
-            type="button"
-            className="btn sm"
-            onClick={() => void useProfiles.getState().loginProfile(session.profile)}
-          >
-            {t("agents.openLoginTerminal")}
-          </button>
-        </div>
-      )}
       {session.limitHit && (
         <div className="agent-limit" role="status">
           <span>{t("agents.limitTitle")}</span>
@@ -1081,6 +1057,15 @@ export function AgentsView() {
   const sessions = useSessions((s) => s.sessions);
   const layoutMode = useSessions((s) => s.layoutMode);
   const loaded = useSessions((s) => s.loaded);
+  useEffect(() => {
+    // Clear Codex limit flags created by the old text heuristic. Codex quota
+    // status is not reliable enough to keep showing an inferred exhausted state.
+    for (const session of sessions) {
+      if (session.cliId === "codex" && session.limitHit) {
+        useSessions.getState().dismissLimit(session.id);
+      }
+    }
+  }, [sessions]);
   // The Agents page follows the active worktree like Files/Changes/Graph do;
   // with no project open every session stays visible. Off-worktree panes stay
   // mounted but hidden, so switching projects never replays terminal output

@@ -4,7 +4,10 @@
 //! Fixed `git -C` argv, no shell; every call resolves its worktree through
 //! the catalog check so commands never escape a registered worktree.
 
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::process::{Command, Stdio};
 
 use crate::error::AppError;
 use crate::status::validate_catalog_worktree;
@@ -29,6 +32,94 @@ fn run_git(dir: &Path, args: &[&str]) -> Result<String, AppError> {
         )));
     }
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn latest_entry_history(
+    dir: &Path,
+    gitref: &str,
+    entries: &[GitTreeEntry],
+    entry_paths: &[String],
+) -> Vec<Option<(String, i64)>> {
+    let mut command = Command::new("git");
+    command
+        .arg("-C")
+        .arg(dir)
+        .args(["log", "--format=%ct%x01%s", "--name-only", "-z"])
+        .arg(gitref)
+        .arg("--")
+        .args(entry_paths.iter().map(|path| format!(":(literal){path}")))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(_) => return vec![None; entries.len()],
+    };
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return vec![None; entries.len()];
+    };
+
+    let entry_by_path: HashMap<&str, usize> = entry_paths
+        .iter()
+        .enumerate()
+        .map(|(index, path)| (path.as_str(), index))
+        .collect();
+    let mut latest = vec![None; entries.len()];
+    let mut found = 0;
+    let mut commit: Option<(String, i64)> = None;
+    let mut reader = BufReader::new(stdout);
+    let mut bytes = Vec::new();
+
+    loop {
+        bytes.clear();
+        match reader.read_until(0, &mut bytes) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        if bytes.last() == Some(&0) {
+            bytes.pop();
+        }
+        let record = String::from_utf8_lossy(&bytes);
+        let record = record.strip_prefix('\n').unwrap_or(&record);
+        if let Some((epoch, message)) = record.split_once('\x01') {
+            commit = Some((message.to_string(), epoch.parse().unwrap_or(0)));
+            continue;
+        }
+        let Some((message, epoch)) = commit.as_ref() else {
+            continue;
+        };
+        if record.is_empty() {
+            continue;
+        }
+
+        let mut matching_entry = entry_by_path.get(record).copied();
+        let mut ancestor_end = record.len();
+        while matching_entry.is_none() {
+            let Some(separator) = record[..ancestor_end].rfind('/') else {
+                break;
+            };
+            ancestor_end = separator;
+            matching_entry = entry_by_path
+                .get(&record[..ancestor_end])
+                .copied()
+                .filter(|index| entries[*index].kind == "dir");
+        }
+        if let Some(index) = matching_entry
+            && latest[index].is_none()
+        {
+            latest[index] = Some((message.clone(), *epoch));
+            found += 1;
+            if found == entries.len() {
+                let _ = child.kill();
+                break;
+            }
+        }
+    }
+    let _ = child.wait();
+    latest
 }
 
 /// Branch, tag, or commit for the Code tab selector. Slashes are allowed
@@ -188,26 +279,35 @@ pub fn tree(
             _ => "file",
         }
         .to_string();
-        let full = if subdir.is_empty() {
-            name.to_string()
-        } else {
-            format!("{subdir}/{name}")
-        };
-        let history = run_git(
-            &dir,
-            &["log", "-1", "--format=%s%x01%ct", &gitref, "--", &full],
-        )
-        .unwrap_or_default();
-        let (message, epoch) = match history.trim_end().split_once('\x01') {
-            Some((message, epoch)) => (message.to_string(), epoch.parse().unwrap_or(0)),
-            None => (String::new(), 0),
-        };
         entries.push(GitTreeEntry {
             name: name.to_string(),
             kind,
-            message,
-            epoch,
+            message: String::new(),
+            epoch: 0,
         });
+    }
+
+    // Resolve the latest commit touching any displayed entry in one Git walk.
+    // Running `git log -1` once per row made opening a large repository spawn
+    // hundreds of processes and repeatedly traverse the same history.
+    if !entries.is_empty() {
+        let entry_paths: Vec<String> = entries
+            .iter()
+            .map(|entry| {
+                if subdir.is_empty() {
+                    entry.name.clone()
+                } else {
+                    format!("{subdir}/{}", entry.name)
+                }
+            })
+            .collect();
+        let latest = latest_entry_history(&dir, &gitref, &entries, &entry_paths);
+        for (entry, history) in entries.iter_mut().zip(latest) {
+            if let Some((message, epoch)) = history {
+                entry.message = message;
+                entry.epoch = epoch;
+            }
+        }
     }
     entries.sort_by(|a, b| {
         (b.kind == "dir")

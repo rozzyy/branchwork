@@ -19,7 +19,7 @@ import {
 import { discardPaths } from "../../ipc/changes";
 import { undoLast } from "../../ipc/undo";
 import { readDiff, type DiffModel } from "../../ipc/diff";
-import { readStatus } from "../../ipc/status";
+import { readStatus, type StatusSummary } from "../../ipc/status";
 import { onGitChanged } from "../../ipc/worktrees";
 import { useDock } from "../../terminal/dock";
 import { useTerminalScreen } from "../../terminal/screen";
@@ -44,6 +44,44 @@ function statusClass(letter: string | null | undefined): string {
 }
 
 type TreeMap = Record<string, FsEntry[]>;
+const TREE_IO_CONCURRENCY = 6;
+
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (true) {
+        const index = cursor++;
+        if (index >= items.length) return;
+        results[index] = await task(items[index]);
+      }
+    }),
+  );
+  return results;
+}
+
+function statusLetters(summary: StatusSummary): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const entry of summary.unstaged) {
+    if (entry.worktreeStatus) result[entry.path] = entry.worktreeStatus;
+  }
+  for (const entry of summary.staged) {
+    if (entry.indexStatus && !result[entry.path]) result[entry.path] = entry.indexStatus;
+  }
+  return result;
+}
+
+function entriesWithStatus(path: string, entries: FsEntry[], statuses: Record<string, string>): FsEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    status: entry.isDir ? null : (statuses[path ? `${path}/${entry.name}` : entry.name] ?? null),
+  }));
+}
 
 /** Walks every directory of the worktree (the `fs_tree` IPC only lists one directory at a time).
  * The tree view itself never calls this — it loads one directory per expand — but ⌘P needs an
@@ -51,14 +89,21 @@ type TreeMap = Record<string, FsEntry[]>;
  * focused (see `ensureSearchIndex`), not on every mount/reload. */
 async function loadFullTree(worktreePath: string, showIgnored: boolean): Promise<TreeMap> {
   const map: TreeMap = {};
-  async function walk(path: string): Promise<void> {
-    const { entries } = await fsTree(worktreePath, { path, showIgnored });
-    map[path] = entries;
-    await Promise.all(
-      entries.filter((entry) => entry.isDir).map((entry) => walk(path ? `${path}/${entry.name}` : entry.name)),
-    );
+  let pending = [""];
+  while (pending.length > 0) {
+    const results = await mapConcurrent(pending, TREE_IO_CONCURRENCY, async (path) => {
+      const { entries } = await fsTree(worktreePath, { path, showIgnored, includeStatus: false });
+      return [path, entries] as const;
+    });
+    const next: string[] = [];
+    for (const [path, entries] of results) {
+      map[path] = entries;
+      for (const entry of entries) {
+        if (entry.isDir) next.push(path ? `${path}/${entry.name}` : entry.name);
+      }
+    }
+    pending = next;
   }
-  await walk("");
   return map;
 }
 
@@ -261,6 +306,7 @@ export function FilesView() {
   // Every changed path (staged or unstaged), used to mark a folder containing changes (AC3's
   // folder dot) — fs_tree's own per-entry `status` is null for directories.
   const [changedPaths, setChangedPaths] = useState<Set<string>>(new Set());
+  const statusByPathRef = useRef<Record<string, string>>({});
   // The full-tree index for ⌘P (see `loadFullTree`'s doc). `null` means "not built yet" —
   // built lazily on first search-field focus, dropped whenever the tree reloads so it can't
   // serve stale results.
@@ -291,6 +337,7 @@ export function FilesView() {
     if (!activePath) {
       setTreeMap({});
       setChangedPaths(new Set());
+      statusByPathRef.current = {};
       setLoadingFolders({});
       setTreeLoading(false);
       return;
@@ -303,24 +350,26 @@ export function FilesView() {
     const folders = [...new Set(["", ...Object.keys(treeMapRef.current), ...Object.keys(useFiles.getState().expanded)])];
     try {
       const [results, status] = await Promise.all([
-        Promise.all(
-          folders.map(async (path) => {
-            try {
-              return [path, (await fsTree(activePath, { path, showIgnored })).entries] as const;
-            } catch {
-              // The folder may have been renamed/deleted by whatever triggered this reload —
-              // drop it from the map instead of failing the whole refresh.
-              return null;
-            }
-          }),
-        ),
+        mapConcurrent(folders, TREE_IO_CONCURRENCY, async (path) => {
+          try {
+            return [path, (await fsTree(activePath, { path, showIgnored, includeStatus: false })).entries] as const;
+          } catch {
+            // The folder may have been renamed/deleted by whatever triggered this reload —
+            // drop it from the map instead of failing the whole refresh.
+            return null;
+          }
+        }),
         readStatus(activePath).catch(() => ({ staged: [], unstaged: [] })),
       ]);
       if (generationRef.current !== gen) return;
+      const statuses = statusLetters(status);
+      statusByPathRef.current = statuses;
       const map: TreeMap = {};
-      for (const result of results) if (result) map[result[0]] = result[1];
+      for (const result of results) {
+        if (result) map[result[0]] = entriesWithStatus(result[0], result[1], statuses);
+      }
       setTreeMap(map);
-      setChangedPaths(new Set([...status.staged, ...status.unstaged].map((entry) => entry.path)));
+      setChangedPaths(new Set(Object.keys(statuses)));
       setTreeError(null);
     } catch (error) {
       if (generationRef.current !== gen) return;
@@ -341,10 +390,13 @@ export function FilesView() {
       if (wasExpanded || !activePath || treeMapRef.current[path] !== undefined) return;
       const gen = generationRef.current;
       setLoadingFolders((prev) => ({ ...prev, [path]: true }));
-      void fsTree(activePath, { path, showIgnored })
+      void fsTree(activePath, { path, showIgnored, includeStatus: false })
         .then((tree) => {
           if (generationRef.current !== gen) return;
-          setTreeMap((prev) => ({ ...prev, [path]: tree.entries }));
+          setTreeMap((prev) => ({
+            ...prev,
+            [path]: entriesWithStatus(path, tree.entries, statusByPathRef.current),
+          }));
         })
         .catch((error) => {
           if (generationRef.current !== gen) return;

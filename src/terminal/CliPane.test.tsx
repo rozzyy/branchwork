@@ -20,6 +20,16 @@ const mocks = vi.hoisted(() => ({
   fitDisposals: 0,
   webglDisposals: 0,
   observerDisconnections: 0,
+  dragDrop: null as ((event: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) => void) | null,
+}));
+
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: (callback: typeof mocks.dragDrop) => {
+      mocks.dragDrop = callback;
+      return Promise.resolve(() => {});
+    },
+  }),
 }));
 
 vi.mock("@xterm/xterm", () => ({
@@ -35,6 +45,7 @@ vi.mock("@xterm/xterm", () => ({
 
     loadAddon() {}
     open() {}
+    focus() {}
     write(data: Uint8Array) {
       mocks.writes.push(Array.from(data));
     }
@@ -146,6 +157,7 @@ beforeEach(() => {
     fitDisposals: 0,
     webglDisposals: 0,
     observerDisconnections: 0,
+    dragDrop: null,
   });
   resizeCallbacks.length = 0;
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
@@ -207,6 +219,18 @@ describe("CliPane", () => {
     expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("echo\n"));
     expect(resizeTerminal).toHaveBeenCalledTimes(1);
     expect(mocks.resizeCalls).toEqual([{ sessionId: "pty-1", columns: 80, rows: 24 }]);
+  });
+
+  it("inserts dropped file paths into the pane without submitting them", async () => {
+    await renderAttached();
+    const screen = document.querySelector(".cli-pane-screen")!;
+    vi.spyOn(screen, "getBoundingClientRect").mockReturnValue({
+      left: 10, top: 10, right: 210, bottom: 110, width: 200, height: 100, x: 10, y: 10, toJSON: () => ({}),
+    });
+    act(() => mocks.dragDrop?.({
+      payload: { type: "drop", paths: ["/tmp/image.png"], position: { x: 30, y: 40 } },
+    }));
+    await waitFor(() => expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("'/tmp/image.png'")));
   });
 
   it("consumes input through interceptInput without writing to the session", async () => {

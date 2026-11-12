@@ -359,6 +359,7 @@ export type FsTree = FsTree_Serialize | FsTree_Deserialize;
 export type FsTreeOptions = {
 	path: string,
 	showIgnored: boolean,
+	includeStatus: boolean,
 };
 
 export type FsTree_Deserialize = {

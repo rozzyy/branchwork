@@ -142,6 +142,11 @@ export function RepoView() {
   const [accountMenu, setAccountMenu] = useState<{ x: number; y: number } | null>(null);
   const [issues, setIssues] = useState<{ total: number; rows: RepoIssue[] } | null>(null);
   const [issueTotals, setIssueTotals] = useState<{ open: number; closed: number } | null>(null);
+  const [issueResults, setIssueResults] = useState<{
+    key: string;
+    open: { total: number; issues: RepoIssue[] };
+    closed: { total: number; issues: RepoIssue[] };
+  } | null>(null);
   const [issueFilter, setIssueFilter] = useState<IssueState>("open");
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const [issuesError, setIssuesError] = useState<string | null>(null);
@@ -279,45 +284,24 @@ export function RepoView() {
     };
   }, [repoKey, ref, subdir, activePath, reload]);
 
-  // Open/closed totals for the Issues header, independent of the filter.
-  useEffect(() => {
-    if (!remote || remote === "missing" || !account || tab !== "issues") return;
-    let live = true;
-    setIssueTotals(null);
-    for (const state of ["open", "closed"] as const) {
-      ghRepoIssues(remote.owner, remote.repo, account, state)
-        .then((list) => {
-          if (live) {
-            setIssueTotals((current) => {
-              const next = { open: current?.open ?? 0, closed: current?.closed ?? 0 };
-              next[state] = list.total;
-              return next;
-            });
-          }
-        })
-        .catch(() => {});
-    }
-    return () => {
-      live = false;
-    };
-  }, [repoKey, account, tab, reload]);
-
-  // Issues for the Issues tab, reloaded with the tab and its filters.
+  // Fetch both states once for this repo/account. Switching the filter below
+  // reuses these results instead of repeating both GitHub requests.
   useEffect(() => {
     if (!remote || remote === "missing" || !account || tab !== "issues") return;
     let live = true;
     setIssues(null);
+    setIssueTotals(null);
+    setIssueResults(null);
     setIssuesError(null);
-    ghRepoIssues(remote.owner, remote.repo, account, issueFilter)
-      .then((loaded) => {
+    const key = `${repoKey}:${account}:${reload}`;
+    Promise.all([
+      ghRepoIssues(remote.owner, remote.repo, account, "open"),
+      ghRepoIssues(remote.owner, remote.repo, account, "closed"),
+    ])
+      .then(([open, closed]) => {
         if (live) {
-          setIssues({ total: loaded.total, rows: loaded.issues });
-          setLabelFilter((current) =>
-            current &&
-            loaded.issues.some((issue) => issue.labels.some((label) => label.name === current))
-              ? current
-              : null,
-          );
+          setIssueTotals({ open: open.total, closed: closed.total });
+          setIssueResults({ key, open, closed });
         }
       })
       .catch((failure: unknown) => {
@@ -326,7 +310,20 @@ export function RepoView() {
     return () => {
       live = false;
     };
-  }, [repoKey, account, tab, issueFilter, reload]);
+  }, [repoKey, account, tab, reload]);
+
+  const issueResultsKey = `${repoKey}:${account ?? ""}:${reload}`;
+  useEffect(() => {
+    if (!issueResults || issueResults.key !== issueResultsKey || tab !== "issues") return;
+    const loaded = issueResults[issueFilter];
+    setIssues({ total: loaded.total, rows: loaded.issues });
+    setLabelFilter((current) =>
+      current &&
+      loaded.issues.some((issue) => issue.labels.some((label) => label.name === current))
+        ? current
+        : null,
+    );
+  }, [issueResults, issueResultsKey, issueFilter, tab]);
 
   // The repository menu shows both pull-request counts and the selected list.
   useEffect(() => {

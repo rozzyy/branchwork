@@ -29,12 +29,18 @@ export default function App() {
   const dockOpen = useDock((s) => s.open);
   useEffect(() => {
     void useSettings.getState().load();
-    void useStage.getState().load();
     void useSidebar.getState().load();
     void useRepos.getState().load();
     void useDock.getState().load();
-    void useSessions.getState().load();
-    void useProfiles.getState().load().catch((error) => {
+    void (async () => {
+      await useStage.getState().load();
+      try {
+        await useProfiles.getState().load();
+      } catch (error) {
+        toast({ title: errorMessage(error), icon: "⚠" });
+      }
+      await useSessions.getState().load();
+    })().catch((error) => {
       toast({ title: errorMessage(error), icon: "⚠" });
     });
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
