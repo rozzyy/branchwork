@@ -312,23 +312,35 @@ pub struct RepoCacheEntry {
     pub fetched_at: Instant,
     pub expires_at: Instant,
     pub etag: Option<String>,
+    pub resource: String,
+    pub value: serde_json::Value,
+    pub size_bytes: usize,
+    last_accessed: Instant,
 }
 
-#[allow(dead_code)]
 static REPO_CACHE: LazyLock<Mutex<HashMap<String, RepoCacheEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+const REPO_CACHE_MAX_ENTRIES: usize = 256;
+const REPO_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const REPO_CACHE_MAX_ENTRY_BYTES: usize = 512 * 1024;
+const REPO_CACHE_TTL: Duration = Duration::from_secs(300);
+const MAX_NOTIFICATION_ACCOUNTS: usize = 8;
+const MAX_NOTIFICATIONS_PER_ACCOUNT: usize = 50;
+const MAX_NOTIFICATION_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 
-#[allow(dead_code)]
 pub fn poll_interval(active_repo: bool) -> u64 {
     if active_repo { 60 } else { 300 }
 }
 
-#[allow(dead_code)]
 pub fn repo_cache_key(owner: &str, repo: &str, account: &str) -> String {
-    format!("{account}:{owner}/{repo}")
+    format!(
+        "{}:{}/{}",
+        account.to_ascii_lowercase(),
+        owner.to_ascii_lowercase(),
+        repo.to_ascii_lowercase()
+    )
 }
 
-#[allow(dead_code)]
 pub fn cache_needs_refresh(
     entry: Option<&RepoCacheEntry>,
     active_repo: bool,
@@ -339,6 +351,89 @@ pub fn cache_needs_refresh(
     };
     now >= entry.expires_at
         || now.duration_since(entry.fetched_at) >= Duration::from_secs(poll_interval(active_repo))
+}
+
+fn repo_resource_cache_key(owner: &str, repo: &str, account: &str, resource: &str) -> String {
+    format!("{}:{resource}", repo_cache_key(owner, repo, account))
+}
+
+fn cached_repo_value(key: &str, now: Instant) -> Option<serde_json::Value> {
+    let mut cache = REPO_CACHE.lock().ok()?;
+    let entry = cache.get_mut(key)?;
+    if cache_needs_refresh(Some(entry), false, now) {
+        return None;
+    }
+    entry.last_accessed = now;
+    Some(entry.value.clone())
+}
+
+fn save_repo_value(
+    owner: &str,
+    repo: &str,
+    account: &str,
+    resource: &str,
+    etag: Option<String>,
+    value: serde_json::Value,
+    now: Instant,
+) {
+    let Ok(encoded) = serde_json::to_vec(&value) else {
+        return;
+    };
+    let size_bytes = encoded.len();
+    if size_bytes > REPO_CACHE_MAX_ENTRY_BYTES {
+        return;
+    }
+    let key = repo_resource_cache_key(owner, repo, account, resource);
+    let Ok(mut cache) = REPO_CACHE.lock() else {
+        return;
+    };
+    if let Some(previous) = cache.remove(&key) {
+        let _ = previous.size_bytes;
+    }
+    while cache.len() >= REPO_CACHE_MAX_ENTRIES
+        || cache.values().map(|entry| entry.size_bytes).sum::<usize>() + size_bytes
+            > REPO_CACHE_MAX_BYTES
+    {
+        let Some(oldest_key) = cache
+            .iter()
+            .min_by_key(|(_, entry)| entry.last_accessed)
+            .map(|(key, _)| key.clone())
+        else {
+            break;
+        };
+        cache.remove(&oldest_key);
+    }
+    cache.insert(
+        key,
+        RepoCacheEntry {
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            account: account.to_string(),
+            fetched_at: now,
+            expires_at: now + REPO_CACHE_TTL,
+            etag,
+            resource: resource.to_string(),
+            value,
+            size_bytes,
+            last_accessed: now,
+        },
+    );
+}
+
+fn invalidate_repo_cache(owner: &str, repo: &str, account: &str) {
+    let prefix = format!("{}:", repo_cache_key(owner, repo, account));
+    if let Ok(mut cache) = REPO_CACHE.lock() {
+        cache.retain(|key, _| !key.starts_with(&prefix));
+    }
+}
+
+/// Invalidate one validated repository/account after a user-requested refresh.
+pub fn repo_cache_invalidate(owner: &str, repo: &str, account: &str) -> Result<(), AppError> {
+    let owner = validate_name(owner, "owner")?;
+    let repo = validate_name(repo, "repo")?;
+    let account = validate_account(account)?;
+    invalidate_repo_cache(&owner, &repo, &account);
+    Ok(())
 }
 
 fn insert_pending(request_id: String, flow: PendingFlow) {
@@ -655,6 +750,9 @@ fn repo_page_url(
         ("insights", None) => "/pulse".to_string(),
         ("settings", None) => "/settings".to_string(),
         ("pulls", None) => "/pulls".to_string(),
+        ("issues", None) => "/issues".to_string(),
+        ("actions", None) => "/actions".to_string(),
+        ("issue", Some(number)) if number > 0 => format!("/issues/{number}"),
         ("pull", Some(number)) if number > 0 => format!("/pull/{number}"),
         _ => {
             return Err(AppError::validation(
@@ -1031,29 +1129,122 @@ fn graphql(
     api_json_with_config(&refs, Some(&config))
 }
 
+fn cached_graphql(
+    owner: &str,
+    repo: &str,
+    account: &str,
+    resource: &str,
+    token: &str,
+    query: &str,
+    variables: serde_json::Value,
+) -> Result<serde_json::Value, AppError> {
+    let key = repo_resource_cache_key(owner, repo, account, resource);
+    let now = Instant::now();
+    if let Some(value) = cached_repo_value(&key, now) {
+        return Ok(value);
+    }
+    let value = graphql(token, query, variables)?;
+    save_repo_value(
+        owner,
+        repo,
+        account,
+        resource,
+        None,
+        value.clone(),
+        Instant::now(),
+    );
+    Ok(value)
+}
+
 /// GET a REST path with the account token. Credentials are sent to curl on stdin.
-fn rest_get(token: &str, path: &str) -> Result<serde_json::Value, AppError> {
+fn repo_rest_get(
+    token: &str,
+    owner: &str,
+    repo: &str,
+    account: &str,
+    resource: &str,
+    path: &str,
+) -> Result<serde_json::Value, AppError> {
+    let key = repo_resource_cache_key(owner, repo, account, resource);
+    let now = Instant::now();
+    if let Some(value) = cached_repo_value(&key, now) {
+        return Ok(value);
+    }
+    let previous = REPO_CACHE
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(&key).cloned());
     let auth = format!("Bearer {token}");
-    let config = curl_config(
-        &[
-            ("Accept", "application/vnd.github+json"),
-            ("Authorization", &auth),
-        ],
-        &[],
-    )?;
-    let argv: Vec<String> = vec![
-        "curl".to_string(),
-        "-sS".to_string(),
-        "-D".to_string(),
-        "-".to_string(),
-        "-o".to_string(),
-        "-".to_string(),
-        "--max-time".to_string(),
-        CURL_TIMEOUT_SECS.to_string(),
-        format!("https://api.github.com{path}"),
+    let etag_header = previous
+        .as_ref()
+        .and_then(|entry| entry.etag.as_deref())
+        .map(|etag| ("If-None-Match", etag));
+    let mut headers = vec![
+        ("Accept", "application/vnd.github+json"),
+        ("Authorization", auth.as_str()),
     ];
-    let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
-    api_json_with_config(&refs, Some(&config))
+    if let Some(header) = etag_header {
+        headers.push(header);
+    }
+    let config = curl_config(&headers, &[])?;
+    let refs = [
+        "curl",
+        "-sS",
+        "-D",
+        "-",
+        "-o",
+        "-",
+        "--max-time",
+        CURL_TIMEOUT_SECS,
+        &format!("https://api.github.com{path}"),
+    ];
+    let output = curl_output_with_config(&refs, Some(&config))?;
+    let (status, header_block, body) = split_http_response(&output.stdout)?;
+    let rate_state = parse_rate_limit_headers(header_block);
+    record_rate_limit(rate_state);
+    let response_etag = header_value(header_block, "etag");
+    if status == 304 {
+        let Some(previous) = previous else {
+            return Err(AppError::io(
+                "GitHub returned 304 without a cached response",
+            ));
+        };
+        save_repo_value(
+            owner,
+            repo,
+            account,
+            resource,
+            response_etag.or(previous.etag),
+            previous.value.clone(),
+            Instant::now(),
+        );
+        return Ok(previous.value);
+    }
+    if !(200..300).contains(&status) {
+        let value =
+            serde_json::from_slice::<serde_json::Value>(body).unwrap_or(serde_json::Value::Null);
+        if let Some(failure) = api_failure(&value) {
+            return Err(failure);
+        }
+        return Err(AppError::io(format!(
+            "GitHub request failed with HTTP {status}"
+        )));
+    }
+    let value: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|error| AppError::io(format!("unexpected GitHub response: {error}")))?;
+    if let Some(failure) = api_failure(&value) {
+        return Err(failure);
+    }
+    save_repo_value(
+        owner,
+        repo,
+        account,
+        resource,
+        response_etag,
+        value.clone(),
+        Instant::now(),
+    );
+    Ok(value)
 }
 
 fn curl_output_with_config(
@@ -1121,14 +1312,7 @@ fn api_json_with_config(
 ) -> Result<serde_json::Value, AppError> {
     let output = curl_output_with_config(refs, config)?;
     let (value, rate_state) = parse_api_response(&output.stdout)?;
-    if rate_state.is_low() {
-        return Err(AppError::rate_limited(format!(
-            "GitHub rate limit reached, retrying at {}",
-            rate_state
-                .retry_text()
-                .unwrap_or_else(|| "soon".to_string())
-        )));
-    }
+    record_rate_limit(rate_state);
     if let Some(failure) = api_failure(&value) {
         return Err(failure);
     }
@@ -1138,13 +1322,44 @@ fn api_json_with_config(
 /// GitHub rate-limit metadata from the response headers. The backend stores
 /// the last state in memory so the poller can honor the remaining quota while
 /// keeping the app responsive.
-#[allow(dead_code)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, specta::Type, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RateLimitState {
     pub limit: Option<u64>,
     pub remaining: Option<u64>,
     pub reset_at: Option<u64>,
     pub retry_after: Option<u64>,
+}
+
+static LAST_RATE_LIMIT: LazyLock<Mutex<Option<(RateLimitState, SystemTime)>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+fn record_rate_limit(state: RateLimitState) {
+    if state.limit.is_none() && state.remaining.is_none() && state.reset_at.is_none() {
+        return;
+    }
+    if let Ok(mut latest) = LAST_RATE_LIMIT.lock() {
+        *latest = Some((state, SystemTime::now()));
+    }
+}
+
+/// Current low-quota state for the Repository UI. No credentials are returned.
+pub fn rate_limit_status() -> Option<RateLimitState> {
+    let (state, observed_at) = *LAST_RATE_LIMIT.lock().ok()?.as_ref()?;
+    if !state.is_low() {
+        return None;
+    }
+    match state.reset_at {
+        Some(reset)
+            if SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .is_ok_and(|now| now.as_secs() >= reset) =>
+        {
+            return None;
+        }
+        None if observed_at.elapsed().ok()? > Duration::from_secs(300) => return None,
+        _ => {}
+    }
+    Some(state)
 }
 
 #[allow(dead_code)]
@@ -1206,15 +1421,65 @@ fn parse_rate_limit_headers(headers: &str) -> RateLimitState {
 }
 
 fn parse_api_response(raw: &[u8]) -> Result<(serde_json::Value, RateLimitState), AppError> {
-    let text = String::from_utf8_lossy(raw);
-    let (header_block, body_text) = text
-        .split_once("\r\n\r\n")
-        .or_else(|| text.split_once("\n\n"))
-        .unwrap_or(("", text.as_ref()));
+    let (_, header_block, body) = split_http_response(raw)?;
     let rate_state = parse_rate_limit_headers(header_block);
-    let value: serde_json::Value = serde_json::from_str(body_text)
+    let value: serde_json::Value = serde_json::from_slice(body)
         .map_err(|error| AppError::io(format!("unexpected GitHub response: {error}")))?;
     Ok((value, rate_state))
+}
+
+fn split_http_response(raw: &[u8]) -> Result<(u16, &str, &[u8]), AppError> {
+    let mut offset = 0;
+    loop {
+        let remaining = &raw[offset..];
+        let crlf = find_bytes(remaining, b"\r\n\r\n").map(|at| (at, 4));
+        let lf = find_bytes(remaining, b"\n\n").map(|at| (at, 2));
+        let (boundary, separator_len) = match (crlf, lf) {
+            (Some(a), Some(b)) => {
+                if a.0 <= b.0 {
+                    a
+                } else {
+                    b
+                }
+            }
+            (Some(a), None) | (None, Some(a)) => a,
+            (None, None) => return Err(AppError::io("GitHub response did not include headers")),
+        };
+        let header_text = String::from_utf8_lossy(&remaining[..boundary]);
+        let status = header_text
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .and_then(|code| code.parse::<u16>().ok())
+            .ok_or_else(|| AppError::io("GitHub response did not include an HTTP status"))?;
+        let body_offset = offset + boundary + separator_len;
+        if raw[body_offset..].starts_with(b"HTTP/") {
+            offset = body_offset;
+            continue;
+        }
+        // Keep the header text alive only for the duration of the returned borrow;
+        // callers parse headers immediately, so return a view into the raw bytes.
+        let headers = std::str::from_utf8(&raw[offset..offset + boundary])
+            .map_err(|_| AppError::io("GitHub response headers were not valid UTF-8"))?;
+        return Ok((status, headers, &raw[body_offset..]));
+    }
+}
+
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+fn header_value(headers: &str, wanted: &str) -> Option<String> {
+    headers.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if !name.trim().eq_ignore_ascii_case(wanted) {
+            return None;
+        }
+        let value = value.trim();
+        (value.len() <= 1024 && !value.chars().any(char::is_control)).then(|| value.to_string())
+    })
 }
 
 /// API-level failure from a parsed GitHub response body, if any.
@@ -1229,6 +1494,11 @@ fn api_failure(value: &serde_json::Value) -> Option<AppError> {
         .and_then(|first| first.get("message"))
         .and_then(serde_json::Value::as_str)
     {
+        if message.to_ascii_lowercase().contains("rate limit") {
+            return Some(AppError::rate_limited(
+                "GitHub rate limit reached; retrying when the quota resets".to_string(),
+            ));
+        }
         return Some(AppError::io(format!("GitHub query failed: {message}")));
     }
     if value.get("data").is_none()
@@ -1237,6 +1507,11 @@ fn api_failure(value: &serde_json::Value) -> Option<AppError> {
         if message == "Bad credentials" {
             return Some(AppError::io(
                 "GitHub rejected the stored token (invalid or revoked) - link the account again in Settings".to_string(),
+            ));
+        }
+        if message.to_ascii_lowercase().contains("rate limit") {
+            return Some(AppError::rate_limited(
+                "GitHub rate limit reached; retrying when the quota resets".to_string(),
             ));
         }
         return Some(AppError::io(format!("GitHub request failed: {message}")));
@@ -1386,7 +1661,11 @@ pub fn repo_meta(owner: &str, repo: &str, account: &str) -> Result<GhRepoMeta, A
     let owner = validate_name(owner, "owner")?;
     let repo = validate_name(repo, "repo")?;
     let token = account_token(account)?;
-    let value = graphql(
+    let value = cached_graphql(
+        &owner,
+        &repo,
+        account,
+        "meta",
         &token,
         REPO_META_QUERY,
         serde_json::json!({ "owner": owner, "name": repo }),
@@ -1410,8 +1689,12 @@ pub fn repo_contributors(
     let token = default_store()
         .get(&account)?
         .ok_or_else(|| AppError::validation(format!("GitHub account '{account}' is not linked")))?;
-    let value = rest_get(
+    let value = repo_rest_get(
         &token,
+        &owner,
+        &repo,
+        &account,
+        "contributors",
         &format!("/repos/{owner}/{repo}/contributors?per_page=10"),
     )?;
     Ok(value
@@ -1440,6 +1723,7 @@ pub struct GhIssue {
 }
 
 const ISSUES_QUERY: &str = "query($owner:String!,$name:String!,$states:[IssueState!]) { repository(owner:$owner,name:$name) { issues(first:50,states:$states,orderBy:{field:UPDATED_AT,direction:DESC}) { totalCount nodes { number title author{login} url updatedAt comments{totalCount} labels(first:10){nodes{name color}} } } } }";
+const ASSIGNED_ISSUES_QUERY: &str = "query($query:String!) { search(query:$query,type:ISSUE,first:20) { issueCount nodes { ... on Issue { number title author{login} url updatedAt comments{totalCount} labels(first:10){nodes{name color}} } } } }";
 
 /// Issue list with its total count for the repo screen Issues tab.
 /// Tokens never appear here.
@@ -1511,11 +1795,258 @@ fn parse_run(node: &serde_json::Value) -> Option<GhRun> {
     })
 }
 
+/// One normalized GitHub notification. API URLs are never returned to the UI;
+/// `page` and `number` describe a fixed GitHub route for the opener command.
+#[derive(serde::Serialize, specta::Type, Clone, PartialEq, Eq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GhNotification {
+    pub id: String,
+    pub account: String,
+    pub owner: String,
+    pub repo: String,
+    pub title: String,
+    pub reason: String,
+    pub subject_type: String,
+    pub unread: bool,
+    pub updated_at: Option<String>,
+    pub page: String,
+    pub number: Option<u64>,
+}
+
+#[derive(serde::Serialize, specta::Type, Clone, PartialEq, Eq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GhNotificationFailure {
+    pub account: String,
+    pub message: String,
+}
+
+#[derive(serde::Serialize, specta::Type, Clone, PartialEq, Eq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GhNotificationBatch {
+    pub notifications: Vec<GhNotification>,
+    pub failures: Vec<GhNotificationFailure>,
+}
+
+fn notification_page(subject_type: &str, subject_url: &str) -> (String, Option<u64>) {
+    let Some(path) = subject_url.strip_prefix("https://api.github.com/repos/") else {
+        return ("issues".to_string(), None);
+    };
+    let parts: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+    match parts.as_slice() {
+        [_, _, "issues", number] if subject_type == "Issue" => number
+            .parse::<u64>()
+            .ok()
+            .filter(|number| *number > 0)
+            .map(|number| ("issue".to_string(), Some(number)))
+            .unwrap_or_else(|| ("issues".to_string(), None)),
+        [_, _, "pulls", number] if subject_type == "PullRequest" => number
+            .parse::<u64>()
+            .ok()
+            .filter(|number| *number > 0)
+            .map(|number| ("pull".to_string(), Some(number)))
+            .unwrap_or_else(|| ("pulls".to_string(), None)),
+        [_, _, "check-suites", _] | [_, _, "check-runs", _] => ("actions".to_string(), None),
+        _ => ("issues".to_string(), None),
+    }
+}
+
+fn parse_notification(node: &serde_json::Value, account: &str) -> Option<GhNotification> {
+    let id = node.get("id")?.as_str()?;
+    if id.is_empty() || id.len() > 64 || !id.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let repository = node.get("repository")?;
+    let full_name = repository.get("full_name")?.as_str()?;
+    let (owner, repo) = full_name.split_once('/')?;
+    let owner = validate_name(owner, "owner").ok()?;
+    let repo = validate_name(repo, "repo").ok()?;
+    let subject = node.get("subject")?;
+    let subject_type = subject.get("type")?.as_str()?;
+    let subject_url = subject
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let (page, number) = notification_page(subject_type, subject_url);
+    let title = subject.get("title")?.as_str()?;
+    Some(GhNotification {
+        id: id.to_string(),
+        account: account.to_string(),
+        owner,
+        repo,
+        title: title.chars().take(500).collect(),
+        reason: node
+            .get("reason")
+            .and_then(serde_json::Value::as_str)
+            .filter(|reason| {
+                reason.len() <= 64
+                    && reason
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            })
+            .unwrap_or("other")
+            .to_string(),
+        subject_type: subject_type.chars().take(40).collect(),
+        unread: node
+            .get("unread")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        updated_at: node
+            .get("updated_at")
+            .and_then(serde_json::Value::as_str)
+            .map(|value| value.chars().take(40).collect()),
+        page,
+        number,
+    })
+}
+
+fn parse_notifications(value: &serde_json::Value, account: &str) -> Vec<GhNotification> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .take(MAX_NOTIFICATIONS_PER_ACCOUNT)
+        .filter_map(|node| parse_notification(node, account))
+        .collect()
+}
+
+fn notifications_for_account(account: &str) -> Result<Vec<GhNotification>, AppError> {
+    let account = validate_account(account)?;
+    let token = account_token(&account)?;
+    let auth = format!("Bearer {token}");
+    let config = curl_config(
+        &[
+            ("Accept", "application/vnd.github+json"),
+            ("Authorization", &auth),
+        ],
+        &[],
+    )?;
+    let url =
+        format!("https://api.github.com/notifications?per_page={MAX_NOTIFICATIONS_PER_ACCOUNT}");
+    let refs = [
+        "curl",
+        "-sS",
+        "-D",
+        "-",
+        "-o",
+        "-",
+        "--max-time",
+        CURL_TIMEOUT_SECS,
+        "--max-filesize",
+        "2097152",
+        &url,
+    ];
+    let output = curl_output_with_config(&refs, Some(&config))?;
+    if output.stdout.len() as u64 > MAX_NOTIFICATION_RESPONSE_BYTES {
+        return Err(AppError::io(
+            "GitHub notifications response exceeded the 2 MiB limit",
+        ));
+    }
+    let (status, headers, body) = split_http_response(&output.stdout)?;
+    record_rate_limit(parse_rate_limit_headers(headers));
+    let value: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|error| AppError::io(format!("unexpected GitHub response: {error}")))?;
+    if !(200..300).contains(&status) {
+        return Err(api_failure(&value).unwrap_or_else(|| {
+            AppError::io(format!("GitHub notifications failed with HTTP {status}"))
+        }));
+    }
+    if let Some(failure) = api_failure(&value) {
+        return Err(failure);
+    }
+    Ok(parse_notifications(&value, &account))
+}
+
+/// Fetch at most one bounded notification page for each validated linked account.
+pub fn notifications(accounts: &[String]) -> Result<GhNotificationBatch, AppError> {
+    if accounts.len() > MAX_NOTIFICATION_ACCOUNTS {
+        return Err(AppError::validation(
+            "too many GitHub accounts for notification refresh",
+        ));
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut result = GhNotificationBatch {
+        notifications: Vec::new(),
+        failures: Vec::new(),
+    };
+    for account in accounts {
+        let clean = validate_account(account)?;
+        if !seen.insert(clean.to_ascii_lowercase()) {
+            continue;
+        }
+        match notifications_for_account(&clean) {
+            Ok(rows) => result.notifications.extend(rows),
+            Err(error) => result.failures.push(GhNotificationFailure {
+                account: clean,
+                message: error.message,
+            }),
+        }
+    }
+    Ok(result)
+}
+
+fn notification_request(account: &str, path: &str) -> Result<(), AppError> {
+    let account = validate_account(account)?;
+    let token = account_token(&account)?;
+    let auth = format!("Bearer {token}");
+    let config = curl_config(
+        &[
+            ("Accept", "application/vnd.github+json"),
+            ("Authorization", &auth),
+        ],
+        &[],
+    )?;
+    let url = format!("https://api.github.com{path}");
+    let refs = [
+        "curl",
+        "-sS",
+        "-D",
+        "-",
+        "-o",
+        "-",
+        "--max-time",
+        CURL_TIMEOUT_SECS,
+        "-X",
+        "PUT",
+        &url,
+    ];
+    let output = curl_output_with_config(&refs, Some(&config))?;
+    let (status, headers, body) = split_http_response(&output.stdout)?;
+    record_rate_limit(parse_rate_limit_headers(headers));
+    if status != 205 {
+        let value =
+            serde_json::from_slice::<serde_json::Value>(body).unwrap_or(serde_json::Value::Null);
+        return Err(api_failure(&value).unwrap_or_else(|| {
+            AppError::io(format!(
+                "GitHub notification update failed with HTTP {status}"
+            ))
+        }));
+    }
+    Ok(())
+}
+
+pub fn notification_mark_read(account: &str, thread_id: &str) -> Result<(), AppError> {
+    if thread_id.is_empty()
+        || thread_id.len() > 64
+        || !thread_id.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(AppError::validation("notification thread id is invalid"));
+    }
+    notification_request(account, &format!("/notifications/threads/{thread_id}"))
+}
+
+pub fn notifications_mark_read_all(account: &str) -> Result<(), AppError> {
+    notification_request(account, "/notifications")
+}
+
 /// Latest Actions runs for the repo screen Actions tab as one stored account.
 pub fn repo_runs(owner: &str, repo: &str, account: &str) -> Result<Vec<GhRun>, AppError> {
     let (owner, repo, token) = repo_token(owner, repo, account)?;
-    let value = rest_get(
+    let value = repo_rest_get(
         &token,
+        &owner,
+        &repo,
+        account,
+        "runs",
         &format!("/repos/{owner}/{repo}/actions/runs?per_page=30"),
     )?;
     Ok(value
@@ -1557,7 +2088,9 @@ pub fn repo_rerun(owner: &str, repo: &str, account: &str, run_id: u64) -> Result
     let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
     // The rerun endpoint answers 201 with an empty body: the HTTP status is the result.
     let output = curl_output_with_config(&refs, Some(&config))?;
-    require_http_status(&output.stdout, 201)
+    require_http_status(&output.stdout, 201)?;
+    invalidate_repo_cache(&owner, &repo, account);
+    Ok(())
 }
 
 fn parse_issue(node: &serde_json::Value) -> Option<GhIssue> {
@@ -1604,7 +2137,15 @@ pub fn repo_issues(
         }
     };
     let (owner, repo, token) = repo_token(owner, repo, account)?;
-    let value = graphql(
+    let value = cached_graphql(
+        &owner,
+        &repo,
+        account,
+        if state == "open" {
+            "issues:open"
+        } else {
+            "issues:closed"
+        },
         &token,
         ISSUES_QUERY,
         serde_json::json!({ "owner": owner, "name": repo, "states": states }),
@@ -1624,6 +2165,42 @@ pub fn repo_issues(
             .map(|nodes| nodes.iter().filter_map(parse_issue).collect())
             .unwrap_or_default(),
     })
+}
+
+/// Open issues assigned to the authenticated viewer for the Launchpad.
+pub fn repo_assigned_issues(
+    owner: &str,
+    repo: &str,
+    account: &str,
+) -> Result<GhIssueList, AppError> {
+    let owner = validate_name(owner, "owner")?;
+    let repo = validate_name(repo, "repo")?;
+    let token = account_token(account)?;
+    let value = cached_graphql(
+        &owner,
+        &repo,
+        account,
+        "issues:assigned-viewer",
+        &token,
+        ASSIGNED_ISSUES_QUERY,
+        serde_json::json!({ "query": format!("repo:{owner}/{repo} is:issue is:open assignee:@me") }),
+    )?;
+    Ok(parse_assigned_issues(&value))
+}
+
+fn parse_assigned_issues(value: &serde_json::Value) -> GhIssueList {
+    let connection = value.get("data").and_then(|data| data.get("search"));
+    GhIssueList {
+        total: connection
+            .and_then(|search| search.get("issueCount"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0),
+        issues: connection
+            .and_then(|search| search.get("nodes"))
+            .and_then(serde_json::Value::as_array)
+            .map(|nodes| nodes.iter().filter_map(parse_issue).collect())
+            .unwrap_or_default(),
+    }
 }
 
 /// One pull request row. Tokens never appear here.
@@ -1696,7 +2273,15 @@ pub fn repo_pulls(
         }
     };
     let (owner, repo, token) = repo_token(owner, repo, account)?;
-    let value = graphql(
+    let value = cached_graphql(
+        &owner,
+        &repo,
+        account,
+        if state == "open" {
+            "pulls:open"
+        } else {
+            "pulls:closed"
+        },
         &token,
         PULLS_QUERY,
         serde_json::json!({ "owner": owner, "name": repo, "states": states }),
@@ -1758,13 +2343,15 @@ pub fn repo_set_starred(
         serde_json::json!({ "id": id, "star": starred }),
     )?;
     let key = if starred { "star" } else { "unstar" };
-    Ok(value
+    let result = value
         .get("data")
         .and_then(|data| data.get(key))
         .and_then(|result| result.get("starrable"))
         .and_then(|starrable| starrable.get("viewerHasStarred"))
         .and_then(serde_json::Value::as_bool)
-        .unwrap_or(starred))
+        .unwrap_or(starred);
+    invalidate_repo_cache(&owner, &repo, account);
+    Ok(result)
 }
 
 /// Subscribe or unsubscribe a repo as one stored account. Returns the new state.
@@ -1782,7 +2369,7 @@ pub fn repo_set_watched(
         serde_json::json!({ "id": id, "watch": watch }),
     )?;
     let key = if watch { "subscribe" } else { "unsubscribe" };
-    Ok(value
+    let result = value
         .get("data")
         .and_then(|data| data.get(key))
         .and_then(|result| result.get("subscribable"))
@@ -1795,7 +2382,9 @@ pub fn repo_set_watched(
             } else {
                 "IGNORED".to_string()
             }
-        }))
+        });
+    invalidate_repo_cache(&owner, &repo, account);
+    Ok(result)
 }
 
 /// Fork a repo into the viewer's account. Returns the fork URL.
@@ -1803,14 +2392,16 @@ pub fn repo_fork(owner: &str, repo: &str, account: &str) -> Result<String, AppEr
     let (owner, repo, token) = repo_token(owner, repo, account)?;
     let id = repo_node_id(&token, &owner, &repo)?;
     let value = graphql(&token, FORK_MUTATION, serde_json::json!({ "id": id }))?;
-    value
+    let url = value
         .get("data")
         .and_then(|data| data.get("createFork"))
         .and_then(|fork| fork.get("repository"))
         .and_then(|repository| repository.get("url"))
         .and_then(serde_json::Value::as_str)
         .map(str::to_string)
-        .ok_or_else(|| AppError::io("GitHub fork did not return a repository URL".to_string()))
+        .ok_or_else(|| AppError::io("GitHub fork did not return a repository URL".to_string()))?;
+    invalidate_repo_cache(&owner, &repo, account);
+    Ok(url)
 }
 
 /// Validated owner/repo plus the selected account's API token.
@@ -1935,6 +2526,10 @@ mod tests {
             fetched_at: now - Duration::from_secs(30),
             expires_at: now + Duration::from_secs(30),
             etag: None,
+            resource: "meta".to_string(),
+            value: serde_json::json!({}),
+            size_bytes: 2,
+            last_accessed: now,
         };
         assert!(!cache_needs_refresh(Some(&active), true, now));
         let quiet = RepoCacheEntry {
@@ -1944,6 +2539,10 @@ mod tests {
             fetched_at: now - Duration::from_secs(299),
             expires_at: now + Duration::from_secs(30),
             etag: None,
+            resource: "meta".to_string(),
+            value: serde_json::json!({}),
+            size_bytes: 2,
+            last_accessed: now,
         };
         assert!(!cache_needs_refresh(Some(&quiet), false, now));
         let stale = RepoCacheEntry {
@@ -1953,11 +2552,95 @@ mod tests {
             fetched_at: now - Duration::from_secs(2),
             expires_at: now - Duration::from_secs(1),
             etag: None,
+            resource: "meta".to_string(),
+            value: serde_json::json!({}),
+            size_bytes: 2,
+            last_accessed: now,
         };
         assert!(cache_needs_refresh(Some(&stale), true, now));
+        assert!(cache_needs_refresh(
+            Some(&RepoCacheEntry {
+                fetched_at: now - Duration::from_secs(61),
+                expires_at: now + Duration::from_secs(100),
+                ..active.clone()
+            }),
+            true,
+            now
+        ));
         assert_eq!(
             repo_cache_key("octo", "hello", "octocat"),
             "octocat:octo/hello"
+        );
+        assert_ne!(
+            repo_resource_cache_key("octo", "hello", "personal", "runs"),
+            repo_resource_cache_key("octo", "hello", "work", "runs")
+        );
+        assert_eq!(
+            repo_resource_cache_key("OCTO", "Hello", "Octocat", "runs"),
+            repo_resource_cache_key("octo", "hello", "octocat", "runs")
+        );
+    }
+
+    #[test]
+    fn response_cache_is_bounded_and_rejects_oversized_entries() {
+        let Ok(mut cache) = REPO_CACHE.lock() else {
+            panic!("cache lock must be available");
+        };
+        cache.clear();
+        drop(cache);
+
+        for index in 0..=REPO_CACHE_MAX_ENTRIES {
+            save_repo_value(
+                "octo",
+                &format!("repo-{index}"),
+                "octocat",
+                "runs",
+                Some(format!("etag-{index}")),
+                serde_json::json!({ "index": index }),
+                Instant::now() + Duration::from_millis(index as u64),
+            );
+        }
+        let cache = REPO_CACHE.lock().expect("cache lock must be available");
+        assert_eq!(cache.len(), REPO_CACHE_MAX_ENTRIES);
+        assert!(!cache.contains_key(&repo_resource_cache_key(
+            "octo", "repo-0", "octocat", "runs"
+        )));
+        drop(cache);
+
+        save_repo_value(
+            "octo",
+            "large",
+            "octocat",
+            "runs",
+            None,
+            serde_json::json!({ "payload": "x".repeat(REPO_CACHE_MAX_ENTRY_BYTES) }),
+            Instant::now(),
+        );
+        assert!(
+            !REPO_CACHE
+                .lock()
+                .expect("cache lock must be available")
+                .contains_key(&repo_resource_cache_key("octo", "large", "octocat", "runs"))
+        );
+    }
+
+    #[test]
+    fn response_parser_uses_final_http_headers_and_supports_304() {
+        let response = b"HTTP/2 200\r\nETag: old\r\n\r\nHTTP/2 304\r\nETag: \"v2\"\r\nX-RateLimit-Limit: 5000\r\nX-RateLimit-Remaining: 42\r\n\r\n";
+        let (status, headers, body) = split_http_response(response).expect("HTTP response parses");
+        assert_eq!(status, 304);
+        assert_eq!(header_value(headers, "etag").as_deref(), Some("\"v2\""));
+        assert!(body.is_empty());
+        let state = parse_rate_limit_headers(headers);
+        assert_eq!(state.remaining, Some(42));
+
+        let ok = b"HTTP/2 200\r\nETag: \"one\"\r\n\r\n{\"ok\":true}";
+        let (status, headers, body) = split_http_response(ok).expect("HTTP response parses");
+        assert_eq!(status, 200);
+        assert_eq!(header_value(headers, "etag").as_deref(), Some("\"one\""));
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(body).unwrap()["ok"],
+            true
         );
     }
 
@@ -2127,6 +2810,14 @@ mod tests {
             repo_page_url("octo", "repo", "pull", Some(42)).unwrap(),
             "https://github.com/octo/repo/pull/42"
         );
+        assert_eq!(
+            repo_page_url("octo", "repo", "issue", Some(7)).unwrap(),
+            "https://github.com/octo/repo/issues/7"
+        );
+        assert_eq!(
+            repo_page_url("octo", "repo", "actions", None).unwrap(),
+            "https://github.com/octo/repo/actions"
+        );
         for (page, number) in [
             ("https://evil.example", None),
             ("projects/../../evil", None),
@@ -2139,6 +2830,73 @@ mod tests {
             );
         }
         assert!(repo_page_url("../evil", "repo", "wiki", None).is_err());
+    }
+
+    #[test]
+    fn github_notifications_are_normalized_and_only_keep_safe_routes() {
+        let account = "octocat";
+        let value = serde_json::json!([
+            {
+                "id": "123456789",
+                "unread": true,
+                "reason": "review_requested",
+                "updated_at": "2026-11-12T12:00:00Z",
+                "repository": { "full_name": "Shopfoodie/web_app" },
+                "subject": {
+                    "title": "Please review",
+                    "type": "PullRequest",
+                    "url": "https://api.github.com/repos/Shopfoodie/web_app/pulls/42"
+                }
+            },
+            {
+                "id": "42",
+                "unread": true,
+                "reason": "mention",
+                "repository": { "full_name": "octo/repo" },
+                "subject": {
+                    "title": "Issue mention",
+                    "type": "Issue",
+                    "url": "https://api.github.com/repos/octo/repo/issues/7"
+                }
+            },
+            {
+                "id": "8",
+                "unread": true,
+                "reason": "ci_activity",
+                "repository": { "full_name": "octo/repo" },
+                "subject": {
+                    "title": "Checks failed",
+                    "type": "CheckSuite",
+                    "url": "https://api.github.com/repos/octo/repo/check-suites/23"
+                }
+            },
+            {
+                "id": "bad/id",
+                "repository": { "full_name": "octo/repo" },
+                "subject": { "title": "Unsafe", "type": "Issue" }
+            }
+        ]);
+
+        let rows = parse_notifications(&value, account);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].account, account);
+        assert_eq!(
+            (rows[0].owner.as_str(), rows[0].repo.as_str()),
+            ("Shopfoodie", "web_app")
+        );
+        assert_eq!((rows[0].page.as_str(), rows[0].number), ("pull", Some(42)));
+        assert_eq!((rows[1].page.as_str(), rows[1].number), ("issue", Some(7)));
+        assert_eq!((rows[2].page.as_str(), rows[2].number), ("actions", None));
+    }
+
+    #[test]
+    fn notification_account_and_thread_inputs_are_bounded_before_io() {
+        let accounts = vec!["octocat".to_string(); MAX_NOTIFICATION_ACCOUNTS + 1];
+        assert!(notifications(&accounts).is_err());
+        for invalid in ["", "abc/def", "thread-1", &"9".repeat(65)] {
+            assert!(notification_mark_read("octocat", invalid).is_err());
+        }
+        assert!(repo_page_url("octo", "repo", "issue", Some(0)).is_err());
     }
 
     #[test]
@@ -2423,6 +3181,23 @@ mod tests {
         assert_eq!(parsed[0].comments, 3);
         assert_eq!(parsed[1].author, "ghost");
         assert_eq!(parsed[1].updated_at, None);
+    }
+
+    #[test]
+    fn assigned_issue_search_parses_count_and_only_issue_nodes() {
+        let value = serde_json::json!({
+            "data": { "search": { "issueCount": 1, "nodes": [
+                { "number": 21, "title": "Assigned", "url": "https://github.com/o/r/issues/21",
+                  "author": { "login": "octocat" }, "comments": { "totalCount": 2 },
+                  "labels": { "nodes": [] } },
+                { "number": null, "title": "Invalid" }
+            ] } }
+        });
+        let parsed = parse_assigned_issues(&value);
+        assert_eq!(parsed.total, 1);
+        assert_eq!(parsed.issues.len(), 1);
+        assert_eq!(parsed.issues[0].number, 21);
+        assert_eq!(parsed.issues[0].title, "Assigned");
     }
 
     #[test]

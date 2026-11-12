@@ -43,6 +43,13 @@ pub struct WorktreeChanged {
     pub worktree: String,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeSummary {
+    pub total: usize,
+    pub worktrees: Vec<Worktree>,
+}
+
 struct PendingChange {
     deadline: Instant,
     index_lock: PathBuf,
@@ -487,6 +494,54 @@ pub fn list(path: &Path, watcher: &WorktreeWatcher) -> Result<Vec<Worktree>, App
             Ok(metadata)
         })
         .collect()
+}
+
+/// Bounded Launchpad view: count every registered worktree but read metadata for at most `limit`.
+pub fn summary(path: &Path, limit: usize) -> Result<WorktreeSummary, AppError> {
+    let repository = Repository::open(path).map_err(|error| {
+        AppError::not_a_repo(format!(
+            "Invalid Git repository at {}: {error}",
+            path.display()
+        ))
+    })?;
+    let main_path = if repository.is_worktree() {
+        repository
+            .commondir()
+            .parent()
+            .ok_or_else(|| AppError::internal("Cannot resolve main worktree path"))?
+    } else {
+        repository
+            .workdir()
+            .ok_or_else(|| AppError::not_a_repo("Bare repositories do not have worktrees"))?
+    }
+    .canonicalize()
+    .map_err(|error| AppError::io(format!("Cannot resolve repository worktree: {error}")))?;
+    let main_repository = Repository::open(&main_path)
+        .map_err(|error| AppError::not_a_repo(format!("Cannot open main worktree: {error}")))?;
+    let names = main_repository
+        .worktrees()
+        .map_err(|error| AppError::io(format!("Cannot list linked worktrees: {error}")))?;
+    let total = names.len().saturating_add(1);
+    let mut worktrees = Vec::with_capacity(limit.min(total));
+    if limit > 0 {
+        worktrees.push(read_metadata(&main_repository, &main_path)?);
+    }
+    for name in names.iter().take(limit.saturating_sub(1)) {
+        let name = name
+            .map_err(|error| AppError::io(format!("Cannot decode linked worktree name: {error}")))?
+            .ok_or_else(|| AppError::io("Linked worktree has no name"))?;
+        let linked = main_repository.find_worktree(name).map_err(|error| {
+            AppError::io(format!("Cannot find linked worktree {name}: {error}"))
+        })?;
+        let linked_repository = Repository::open_from_worktree(&linked).map_err(|error| {
+            AppError::not_a_repo(format!("Cannot open linked worktree {name}: {error}"))
+        })?;
+        let linked_path = linked.path().canonicalize().map_err(|error| {
+            AppError::io(format!("Cannot resolve linked worktree {name}: {error}"))
+        })?;
+        worktrees.push(read_metadata(&linked_repository, &linked_path)?);
+    }
+    Ok(WorktreeSummary { total, worktrees })
 }
 
 fn project_main_repository(path: &Path) -> Result<(PathBuf, Repository), AppError> {
@@ -1322,6 +1377,25 @@ mod tests {
         );
         assert_eq!(linked.dirty_count, 2);
         assert_eq!(linked.state, WorktreeState::Dirty);
+    }
+
+    #[test]
+    fn summary_returns_exact_count_with_a_bounded_metadata_sample() {
+        let temp = TestDir::new();
+        let path = temp.0.join("repo");
+        fs::create_dir_all(&path).unwrap();
+        let _repository = init_repository(&path);
+        let one = summary(&path, 1).unwrap();
+        assert_eq!(one.total, 1);
+        assert_eq!(one.worktrees.len(), 1);
+        assert_eq!(
+            one.worktrees[0].path,
+            path.canonicalize().unwrap().to_string_lossy()
+        );
+
+        let zero = summary(&path, 0).unwrap();
+        assert_eq!(zero.total, 1);
+        assert!(zero.worktrees.is_empty());
     }
 
     #[test]

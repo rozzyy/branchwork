@@ -9,6 +9,8 @@ import { FilesToolbar, FilesView } from "./files/FilesScreen";
 import { BlameToolbar, BlameView } from "./blame/BlameScreen";
 import { TerminalScreen, TerminalToolbar } from "../terminal/TerminalScreen";
 import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
+import { InboxToolbar, InboxView } from "./inbox/InboxScreen";
+import { LaunchpadToolbar, LaunchpadView } from "./launchpad/LaunchpadScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -61,3 +63,5 @@ VIEWS.blame = { Toolbar: BlameToolbar, View: BlameView };
 VIEWS.terminal = { Toolbar: TerminalToolbar, View: TerminalScreen };
 VIEWS.agents = { Toolbar: AgentsToolbar, View: AgentsView };
 VIEWS.repo = { Toolbar: RepoToolbar, View: RepoViewBoundary };
+VIEWS.inbox = { Toolbar: InboxToolbar, View: InboxView };
+VIEWS.launchpad = { Toolbar: LaunchpadToolbar, View: LaunchpadView };

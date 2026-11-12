@@ -1,16 +1,16 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-12
-- **Latest follow-up:** Native terminal file drag-and-drop is implemented and tested (details in `progress.md`); manual Finder-to-pane drop verification remains. The formal M4-10 task and M4.3 checkpoint status below are unchanged.
-- **Current Objective:** User-directed issue #1 fix on `fix/issue-1`, then merge into `main`
+- **Latest follow-up:** GitHub issues #1 and #3 were requested closed, but the authenticated account lacks `CloseIssue` permission; both remain open for a maintainer. Issue #2 fix sets `TERM=xterm-256color` on PTY shell spawn, with explicit per-session overrides preserved. Focused PTY regression test and Clippy pass; packaged-app verification remains.
+- **Current Objective:** M4.4 manual checkpoint was approved by the user on 2026-11-12 (M4-S4-01..04 all passed). Await explicit authorization for the stage commit, merge, and release tag. Issue #2's packaged-app verification remains pending.
 
-- **Milestone / stage:** M1–M3 released. M4 Stages 1+3 committed as `accf093` on `main` (pushed 2026-11-12 per user order). Stage 4 started on `m4-stage-4`.
-- **Branch:** `m4-stage-4` (branched from `main` at `accf093`; M4-01..03 + M4-07/08/09/09b done and merged; M4-04..06 + Stage 2 review cancelled per user order).
-- **Active task:** Issue #1: a failure listing one folder caused global file search indexing to fail for the entire breadth-first batch. The fix now isolates per-folder `fs_tree` failures; FilesScreen regression tests pass 14/14. Full `./init.sh` baseline in this worktree is not green under parallel load (12 unrelated UI test timeouts/failures; 568/580 pass). User authorized merge; commit on `fix/issue-1`, then fast-forward `main` in a separate temporary main worktree so uncommitted M4-10 changes remain untouched.
+- **Milestone / stage:** M1–M3 released. M4 Stage 3 checkpoint approved. M4-10, M4-11, and M4-12 are done; Stage 4 automated code/security/E2E reviews are recorded. M4-04..06 and Stage 2 were removed/cancelled per user order.
+- **Branch:** `m4-stage-4` at `a9f8e59`, same as `origin/main`; issue #1 fix is included. M4 changes remain uncommitted. Follow CLAUDE.md checkpoint and user authorization rules before commit, merge, or tag.
+- **Verification:** issue #2 focused test `pty::tests::applied_env_reaches_the_child` passed 1/1; `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` and `git diff --check` passed. The issue-fix baseline `./init.sh` hit an unrelated GraphScreen test timeout. `cargo fmt --check` also reports pre-existing formatting drift in `src-tauri/src/fs.rs`. Earlier final Stage 4 `./init.sh` passed typecheck, Vitest 68 files / 593 tests, and Clippy; parallel Rust had macOS FSEvent startup failures while serial Rust passed 216 / 3 ignored. User confirmed M4-S4-01..04 passed on 2026-11-12.
 
 ## Recommended Next Step
 
-M4-10 is the active task: advisor-planner writes `.agent/tasks/m4-task-10.md` (missing), then task-executor implements it, then spec-reviewer. Continue to M4-11, M4-12, then the Stage 4 batch review and Checkpoint M4.4. No per-task commits; the user ordered commit+push for Stage 3 only.
+M4-S4-01..04 passed per user report and are recorded in `docs/testing/m0-manual-e2e.md`. Stage 4 reports: `.agent/reviews/m4-stage-4-code-review.md`, `.agent/reviews/m4-stage-4-security-review.md`, and `.agent/reviews/m4-stage-4-e2e.md`. Await explicit commit/merge/tag authorization. Issue #2 packaged-app retest is a separate pending follow-up.
 
 ## M2 structure
 

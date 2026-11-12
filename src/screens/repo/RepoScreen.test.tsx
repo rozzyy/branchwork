@@ -7,6 +7,8 @@ import { useFiles } from "../../state/files";
 import { useWorktrees } from "../../state/worktrees";
 import {
   ghRepoContributors,
+  ghRateLimitStatus,
+  invalidateRepoCache,
   ghRepoFork,
   ghRepoIssues,
   ghRepoMeta,
@@ -59,6 +61,8 @@ const runningFixture = {
 };
 
 vi.mock("../../ipc/repo", () => ({
+  ghRateLimitStatus: vi.fn(),
+  invalidateRepoCache: vi.fn(),
   ghRepoRemote: vi.fn(),
   ghRepoMeta: vi.fn(),
   ghRepoContributors: vi.fn(),
@@ -119,6 +123,8 @@ const rootTree = [
 ];
 
 beforeEach(() => {
+  vi.mocked(ghRateLimitStatus).mockReset().mockResolvedValue(null);
+  vi.mocked(invalidateRepoCache).mockReset().mockResolvedValue(undefined);
   useWorktrees.setState({
     projectId: "p1",
     worktrees: [{ path: "/wt/a" } as never],
@@ -237,6 +243,18 @@ beforeEach(() => {
 });
 
 describe("repo screen", () => {
+  it("shows the quota reset time when GitHub quota is low", async () => {
+    vi.mocked(ghRateLimitStatus).mockResolvedValue({
+      limit: 5000,
+      remaining: 9,
+      reset_at: 1_800_000_000,
+      retry_after: null,
+    });
+    render(<RepoView />);
+    expect(await screen.findByRole("heading", { level: 2 })).toHaveTextContent("o/r");
+    expect(await screen.findByText(/GitHub quota is low\. Retrying at/)).toHaveAttribute("role", "status");
+  });
+
   it("shows loading feedback while the active worktree is being resolved", () => {
     useWorktrees.setState({ projectId: null, activePath: null, loading: false });
     useRepos.setState({ activeProjectId: "p1", status: "ready" });

@@ -2,6 +2,26 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-12: M4.4 manual checkpoint approved
+
+- User confirmed M4-S4-01..04 manual verification is OK. Recorded all four as passed in `docs/testing/m0-manual-e2e.md`; updated the M4 plan and Stage 4 review evidence.
+- **Checkpoint:** M4.4 is approved. Stage 4 implementation and reviews are complete. No commit, merge, release tag, or version bump performed; those actions still require explicit authorization under the session handoff.
+- **Next:** await explicit commit/merge/tag authorization for M4.4.
+
+## 2026-11-12: Issue #2 TERM default; resolve issues #1 and #3
+
+- **Issue #2 fix:** PTY shell spawn now sets `TERM=xterm-256color` before applying caller-provided session variables, so explicit profile values still win. The regression test runs `clear` in a child PTY and asserts the terminal type is present with no missing-TERM warning.
+- **Verification:** focused Rust test `pty::tests::applied_env_reaches_the_child` passed (1/1); `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` passed; `rustfmt --check src-tauri/src/pty.rs --edition 2024`, JSON validation, and `git diff --check` passed. Baseline `./init.sh` stopped at an unrelated timeout in `GraphScreen.test.tsx` (HTMLCanvasElement canvas warnings); `cargo fmt --check` also reports pre-existing formatting drift in `src-tauri/src/fs.rs`.
+- **GitHub status:** issue #1's fix is already on `a9f8e59`; issue #3's initial-command startup fix was previously verified in-app. Attempts to close #1 and #3 failed because the authenticated GitHub user lacks `CloseIssue` permission. They remain open pending a maintainer with permission.
+- **Next:** verify #2 in the packaged app and have a GitHub maintainer close issues #1 and #3. No commit or push.
+
+## 2026-11-12: M4-12 Launchpad complete; Stage 4 at manual checkpoint
+
+- M4-10 Poller/cache/quota, M4-11 Inbox, and M4-12 Launchpad are implemented and reviewed. Launchpad collection is capped at 8 projects, with ≤3 concurrent GitHub calls per project, ≤30 runs and ≤200 worktree metadata rows per project; worktree summary reports exact totals with bounded metadata. Issue context reaches the agent as initial prompt text, not a shell command.
+- Reviews: M4-12 spec PASS; Stage 4 code review PASS; security review PASS; automated E2E review PASS. Reports are under `.agent/reviews/m4-task-12-spec.md` and `.agent/reviews/m4-stage-4-*.md`. Manual steps M4-S4-01..04 are ready in `docs/testing/m0-manual-e2e.md`.
+- Final verification: `./init.sh` passed typecheck, Vitest 68 files / 593 tests, and Clippy. Parallel Rust had 10 macOS FSEvent startup failures (206 passed, 3 ignored); serial full Rust library suite passed 216 / 0 failed / 3 ignored. `./init.sh` exits nonzero in this environment despite the serial Rust pass.
+- **Next:** user runs M4-S4-01..04 in the live app and reports outcomes. Stage 4 remains at Checkpoint M4.4; do not commit, merge, or tag before user approval and separate authorization.
+
 ## 2026-11-12: Fix issue #1 — preserve file search across unreadable folders
 
 - **Root cause:** Files `⌘P` builds a breadth-first index with up to six directory reads in parallel. A single `fs_tree` rejection propagated through `Promise.all`, discarding the entire batch and leaving unrelated readable folders out of the searchable list.
@@ -9,6 +29,13 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - **Complexity/security:** `N` directories and `F` entries remain O(N + F) traversal, with at most six simultaneous IPC reads. Existing `fs_tree` worktree/path validation and ignored-file policy remain unchanged; failed folders contribute no entries.
 - **Verification:** FilesScreen tests pass (14/14); `git diff --check` clean. `./init.sh` baseline passed typecheck but full Vitest had 12 unrelated timeouts/failures (568/580 passed) under parallel load. The worktree initially lacked `node_modules`; a temporary symlink to the existing checkout dependencies enabled checks. No filesystem/backend authorization rules changed.
 - **Next:** Commit the issue fix on `fix/issue-1` and fast-forward it into `main` as requested; keep the separate uncommitted M4-10 work in the `m4-stage-4` worktree untouched.
+
+## 2026-11-12: M4-10 poller, cache, and quota handling (branch `m4-stage-4`, uncommitted)
+
+- **Implemented:** bounded in-memory GitHub response cache (256 entries, 16 MiB total, 512 KiB per entry), account/owner/repo/resource partitioning, 5-minute freshness, REST ETag/304 reuse, mutation and manual-refresh invalidation, active screen polling every 60 seconds, quota-aware poll backoff, and retry-time status banner. Generated IPC bindings and wrappers updated.
+- **Performance/security:** O(1) average cache lookup; eviction scans are capped at 256 entries. Cache stores response JSON only (no credentials); credentials remain in the existing curl stdin config. UI does not issue polling requests while quota is below 10%.
+- **Verification:** `npm run typecheck` passed; repo/UI IPC tests 24/24 passed; targeted Rust GitHub tests 34/34 passed; Clippy with `-D warnings` passed; `git diff --check` passed. `./init.sh` ran typecheck, then Vitest reported 63/64 files and 580/581 tests passed; one unrelated Graph virtualized-history test failed under the full parallel suite, then passed in isolation. Initial cargo test baseline had 10 macOS FSEvent stream failures under parallel execution; serial Rust suite passed 210/3 ignored before implementation.
+- **Next:** M4-11 Inbox. The user has asked to continue through M4 tasks until the M4 tag checkpoint. Changes are uncommitted and not pushed.
 
 ## 2026-11-11: Headless Repo trace + frame inspection (branch `m4-stage-1`, uncommitted)
 

@@ -216,6 +216,7 @@ interface SessionsStore {
   sessions: AgentSession[];
   layoutMode: AgentLayoutMode;
   newAgentOpen: boolean;
+  newAgentPrompt: string | null;
   /** Source session id for the Handover dialog, or null when closed. */
   handoverFor: string | null;
   /** CLI preset for the Handover dialog target (pane switcher); cleared on close. */
@@ -225,6 +226,7 @@ interface SessionsStore {
   raceEntries: RaceEntry[];
   loaded: boolean;
   setNewAgentOpen(open: boolean): void;
+  setNewAgentPrompt(prompt: string | null): void;
   setHandoverFor(id: string | null): void;
   setHandoverTarget(cli: CliId | null): void;
   setRaceOpen(open: boolean): void;
@@ -500,6 +502,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
     sessions: [],
     layoutMode: "grid",
     newAgentOpen: false,
+    newAgentPrompt: null,
     handoverFor: null,
     handoverTarget: null,
     raceOpen: false,
@@ -508,6 +511,10 @@ export const useSessions = create<SessionsStore>((set, get) => {
 
     setNewAgentOpen(open) {
       if (get().newAgentOpen !== open) set({ newAgentOpen: open });
+    },
+
+    setNewAgentPrompt(prompt) {
+      if (get().newAgentPrompt !== prompt) set({ newAgentPrompt: prompt });
     },
 
     setRaceOpen(open) {

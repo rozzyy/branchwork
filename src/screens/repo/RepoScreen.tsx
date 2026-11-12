@@ -15,6 +15,8 @@ import { errorMessage } from "../../ipc/errors";
 import { MarkdownPreview } from "../../editor/MarkdownPreview";
 import {
   ghRepoContributors,
+  ghRateLimitStatus,
+  invalidateRepoCache,
   ghRepoFork,
   ghRepoIssues,
   ghRepoMeta,
@@ -39,6 +41,7 @@ import {
   type RepoPull,
   type RepoRemote,
   type RepoRun,
+  type RepoRateLimit,
   type RepoTreeEntry,
 } from "../../ipc/repo";
 import { createWorktree } from "../../ipc/worktrees";
@@ -57,6 +60,18 @@ function formatCount(count: number): string {
   if (count < 1000) return `${count}`;
   const scaled = Math.round(count / 100) / 10;
   return `${scaled}k`;
+}
+
+function isRateLimited(state: RepoRateLimit | null): boolean {
+  if (!state?.limit || state.remaining == null) return false;
+  return state.remaining < Math.ceil(state.limit / 10);
+}
+
+function rateLimitTime(state: RepoRateLimit): string {
+  const timestamp = state.reset_at ?? (state.retry_after ? Math.floor(Date.now() / 1000) + state.retry_after : null);
+  return timestamp == null
+    ? "soon"
+    : new Date(timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 /** Deterministic avatar hue per login; initials stay readable on both themes. */
@@ -138,6 +153,8 @@ export function RepoView() {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [pollTick, setPollTick] = useState(0);
+  const [rateLimit, setRateLimit] = useState<RepoRateLimit | null>(null);
   const [tab, setTab] = useState<"code" | "issues" | "pulls" | "actions">("code");
   const [accountMenu, setAccountMenu] = useState<{ x: number; y: number } | null>(null);
   const [issues, setIssues] = useState<{ total: number; rows: RepoIssue[] } | null>(null);
@@ -201,6 +218,35 @@ export function RepoView() {
   const selectionRef = useRef({ repoKey, account, activePath });
   selectionRef.current = { repoKey, account, activePath };
 
+  // The mounted Repository screen is the active repo; cached repos without a
+  // mounted screen retain the longer five-minute cache freshness window.
+  useEffect(() => {
+    if (!remote || remote === "missing" || !account) {
+      setRateLimit(null);
+      return;
+    }
+    let live = true;
+    setRateLimit(null);
+    void ghRateLimitStatus().then((state) => {
+      if (live) setRateLimit(state);
+    }).catch(() => {
+      if (live) setRateLimit(null);
+    });
+    const timer = window.setInterval(() => {
+      void ghRateLimitStatus().then(async (state) => {
+        if (!live) return;
+        setRateLimit(state);
+        if (isRateLimited(state)) return;
+        await invalidateRepoCache(remote.owner, remote.repo, account);
+        if (live) setPollTick((tick) => tick + 1);
+      }).catch(() => {});
+    }, 60_000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [repoKey, account, remote]);
+
   // Overview, contributors, branches for the remote + account.
   useEffect(() => {
     if (!remote || remote === "missing" || !account || !activePath) return;
@@ -238,6 +284,24 @@ export function RepoView() {
     };
   }, [repoKey, account, activePath, reload]);
 
+  // Revalidate GitHub overview data on the active-repo cadence without
+  // repeating local branch discovery on every poll.
+  useEffect(() => {
+    if (!pollTick || !remote || remote === "missing" || !account) return;
+    let live = true;
+    Promise.all([
+      ghRepoMeta(remote.owner, remote.repo, account),
+      ghRepoContributors(remote.owner, remote.repo, account).catch(() => [] as RepoContributor[]),
+    ]).then(([loadedMeta, loadedContributors]) => {
+      if (!live) return;
+      setMeta(loadedMeta);
+      setContributors(loadedContributors);
+    }).catch((failure: unknown) => {
+      if (live) setError(errorMessage(failure));
+    });
+    return () => { live = false; };
+  }, [pollTick, repoKey, account]);
+
   // Workflow runs for the Actions tab.
   useEffect(() => {
     if (!remote || remote === "missing" || !account || tab !== "actions") return;
@@ -254,7 +318,7 @@ export function RepoView() {
     return () => {
       live = false;
     };
-  }, [repoKey, account, tab, reload, runsTick]);
+  }, [repoKey, account, tab, reload, runsTick, pollTick]);
 
   // File table + latest commit for the viewed ref and subdir.
   useEffect(() => {
@@ -293,7 +357,7 @@ export function RepoView() {
     setIssueTotals(null);
     setIssueResults(null);
     setIssuesError(null);
-    const key = `${repoKey}:${account}:${reload}`;
+    const key = `${repoKey}:${account}:${reload}:${pollTick}`;
     Promise.all([
       ghRepoIssues(remote.owner, remote.repo, account, "open"),
       ghRepoIssues(remote.owner, remote.repo, account, "closed"),
@@ -310,9 +374,9 @@ export function RepoView() {
     return () => {
       live = false;
     };
-  }, [repoKey, account, tab, reload]);
+  }, [repoKey, account, tab, reload, pollTick]);
 
-  const issueResultsKey = `${repoKey}:${account ?? ""}:${reload}`;
+  const issueResultsKey = `${repoKey}:${account ?? ""}:${reload}:${pollTick}`;
   useEffect(() => {
     if (!issueResults || issueResults.key !== issueResultsKey || tab !== "issues") return;
     const loaded = issueResults[issueFilter];
@@ -349,7 +413,7 @@ export function RepoView() {
     return () => {
       live = false;
     };
-  }, [repoKey, account, tab, reload]);
+  }, [repoKey, account, tab, reload, pollTick]);
 
   // README of the viewed root, rendered below the file table.
   useEffect(() => {
@@ -729,7 +793,15 @@ export function RepoView() {
                 .then((found) => {
                   if (selectionRef.current.activePath !== requestedPath) return;
                   setRemote(found);
-                  setReload((n) => n + 1);
+                  if (found && account) {
+                    void invalidateRepoCache(found.owner, found.repo, account).then(() => {
+                      if (selectionRef.current.activePath === requestedPath) setReload((n) => n + 1);
+                    }).catch((failure: unknown) => {
+                      if (selectionRef.current.activePath === requestedPath) setError(errorMessage(failure));
+                    });
+                  } else {
+                    setReload((n) => n + 1);
+                  }
                 })
                 .catch((failure: unknown) => {
                   if (selectionRef.current.activePath === requestedPath) {
@@ -746,6 +818,11 @@ export function RepoView() {
       </header>
 
       {error && <p className="repo-status">{error}</p>}
+      {isRateLimited(rateLimit) && rateLimit && (
+        <p className="repo-status" role="status">
+          {t("repo.rateLimit").replace("{time}", rateLimitTime(rateLimit))}
+        </p>
+      )}
       <nav className="repo-tabs" aria-label={t("repo.sections")}>
         <button
           type="button"

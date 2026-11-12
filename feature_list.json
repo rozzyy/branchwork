@@ -1133,8 +1133,8 @@
       "dependencies": [
         "m4-stage-3-review"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "2026-11-12 on m4-stage-4: bounded account-partitioned response cache, ETag/304 REST reuse, 60s active polling, 5m inactive freshness, quota backoff/status UI, mutation/manual refresh invalidation. npm typecheck; repo IPC/UI tests 24/24; Rust gh tests 34/34; Clippy -D warnings; diff-check pass. ./init.sh: one unrelated Graph virtualization test failed in full suite (580/581), then passed in isolation."
     },
     {
       "id": "m4-task-11",
@@ -1144,8 +1144,8 @@
       "dependencies": [
         "m4-task-10"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Implemented Inbox and spec-review PASS (.agent/reviews/m4-task-11-spec.md). Bounds: 8 accounts × 50 notifications, 2 MiB response, 30s/request; latest 500 agent events and 500 persisted state entries. Focused Vitest 3 files / 6 tests, pnpm typecheck, Rust notification tests 36/36, Clippy -D warnings, and rustfmt passed. Final Stage 4 verification: Vitest 68 files / 593 tests passed; full Rust serial suite 216 passed / 3 ignored. ./init.sh parallel Rust phase hit macOS FSEvent startup failures (10 watcher tests). No commit/push."
     },
     {
       "id": "m4-task-12",
@@ -1155,8 +1155,8 @@
       "dependencies": [
         "m4-task-11"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Launchpad implemented and spec review PASS (.agent/reviews/m4-task-12-spec.md); bounded project/API/worktree collection, issue assignment prompt, safe routes, scoped cards, and recoverable states. Final ./init.sh: typecheck passed; Vitest 68 files / 593 tests passed; Clippy passed. Parallel Rust had 10 macOS FSEvent startup failures; serial full Rust suite passed 216 / 3 ignored. User confirmed manual Checkpoint M4.4 passed on 2026-11-12."
     },
     {
       "id": "m4-stage-4-review",
@@ -1166,8 +1166,8 @@
       "dependencies": [
         "m4-task-12"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Code, security, and automated E2E reviews recorded in .agent/reviews/m4-stage-4-code-review.md, m4-stage-4-security-review.md, and m4-stage-4-e2e.md. Automated UI suite passed 68 files / 593 tests; serial Rust suite passed 216 / 3 ignored; ./init.sh parallel Rust encountered macOS FSEvent startup failures. User confirmed M4-S4-01..04 manual verification passed on 2026-11-12; outcomes recorded in docs/testing/m0-manual-e2e.md. Checkpoint M4.4 approved. Stage commit/merge/tag awaits explicit authorization."
     },
     {
       "id": "followup-terminal-file-drop",
@@ -1177,6 +1177,15 @@
       "dependencies": [],
       "status": "review",
       "evidence": "Implemented 2026-11-12. Targeted terminal/drop tests 15/15; typecheck clean; full Vitest 64 files / 580 tests; Clippy clean. Direct cargo test passed once (210/3 ignored), but both ./init.sh runs had 10 macOS FSEvent watcher failures, so Rust is not consistently green in this sandbox. Manual native Finder drop verification remains."
+    },
+    {
+      "id": "followup-issue-2-term-env",
+      "stage": 24,
+      "name": "Set terminal type for integrated PTYs",
+      "description": "GitHub issue #2: ensure packaged interactive shells have a TERM value so clear works.",
+      "dependencies": [],
+      "status": "review",
+      "evidence": "PTY spawn now defaults TERM to xterm-256color before applying caller overrides. Focused Rust regression test passed (1/1); cargo clippy -D warnings, rustfmt --check on pty.rs, JSON validation, and git diff --check passed. Full ./init.sh baseline hit an unrelated GraphScreen timeout; cargo fmt --check reports pre-existing drift in fs.rs. Packaged-app manual verification pending. Issues #1 and #3 close attempts were rejected by GitHub due to missing CloseIssue permission."
     }
   ]
 }

@@ -1,7 +1,7 @@
 // Typed wrappers for the Repository screen backend (M4 Task 07).
 // Overview, contributors, star/watch/fork, plus local-git reads for the
 // Code tab. Tokens never appear here; the backend resolves them per account.
-import { commands } from "./bindings";
+import { commands, type RateLimitState_Serialize } from "./bindings";
 
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -99,6 +99,24 @@ export interface RepoRun {
   createdAt: string | null;
   updatedAt: string | null;
   url: string;
+}
+
+export type RepoRateLimit = RateLimitState_Serialize;
+
+/** Invalidate the selected repo's in-memory data before an explicit refresh. */
+export function invalidateRepoCache(owner: string, repo: string, account: string): Promise<void> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Refreshing GitHub data requires the desktop app"));
+  }
+  return commands.ghRepoCacheInvalidate(owner, repo, account).then(() => undefined);
+}
+
+/** Latest low-quota response headers, if the poller should back off. */
+export function ghRateLimitStatus(): Promise<RepoRateLimit | null> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Checking GitHub quota requires the desktop app"));
+  }
+  return commands.ghRateLimitStatus();
 }
 
 /** Resolve the active worktree's origin remote to owner/repo/URL. */
@@ -218,6 +236,25 @@ export function ghRepoIssues(
   }));
 }
 
+/** Open issues assigned to the authenticated viewer. */
+export function ghRepoAssignedIssues(owner: string, repo: string, account: string): Promise<RepoIssueList> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Loading assigned issues requires the desktop app"));
+  }
+  return commands.ghRepoAssignedIssues(owner, repo, account).then((list) => ({
+    total: list.total,
+    issues: list.issues.map((row) => ({
+      number: row.number,
+      title: row.title,
+      author: row.author,
+      url: row.url,
+      updatedAt: row.updated_at,
+      comments: row.comments,
+      labels: row.labels.map((label) => ({ name: label.name, color: label.color })),
+    })),
+  }));
+}
+
 /** Pull request list with its total count for the repo screen Pulls tab. */
 export interface RepoPullList {
   total: number;
@@ -237,7 +274,7 @@ export interface RepoPull {
   state: string;
 }
 
-export type RepoPage = "pulls" | "projects" | "wiki" | "security" | "insights" | "settings" | "pull";
+export type RepoPage = "pulls" | "projects" | "wiki" | "security" | "insights" | "settings" | "issues" | "actions" | "issue" | "pull";
 
 /** Pull request list for the repo screen Pulls tab as one stored account. */
 export function ghRepoPulls(

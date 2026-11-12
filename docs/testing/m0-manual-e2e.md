@@ -752,3 +752,47 @@ Expected: hidden sessions keep running; switching never respawns or replays a te
 | M4-S3-01 | | |
 | M4-S3-02 | | |
 | M4-S3-03 | | |
+
+## M4 Stage 4: Poller, Inbox, and Launchpad
+
+### M4-S4-01 · GitHub polling and quota backoff
+
+1. Link two GitHub accounts and open a repository in Branchwork. Confirm the active repository refreshes on the 60-second cadence and its response cache reuses unchanged REST data.
+2. Switch away from the repository and return after less than five minutes. Confirm cached data paints without a blank view, then refreshes when stale.
+3. With a test account or controlled rate-limit response below 10%, confirm polling pauses and the retry-time status appears. Confirm it resumes after the reset and does not issue a burst of duplicate requests.
+4. Star, Watch, rerun a failed workflow, and manually refresh. Confirm the affected cache entries invalidate and updated state appears.
+
+### M4-S4-02 · Inbox actions and persistence
+
+1. With linked GitHub accounts, open Inbox. Confirm notification records from successful accounts appear alongside waiting/done agent events. Simulate one account failure and confirm other accounts' records remain visible with a per-account error.
+2. Use All, GitHub, Agents, and Unread filters. Confirm each filter changes only the visible rows.
+3. Open a GitHub notification and confirm the browser opens its matching fixed issue/PR/Actions route. Mark one notification done and confirm it becomes read. Mark all read and confirm partial account failures are reported.
+4. For a waiting and a finished agent event, select each Mark done action. Confirm the event disappears while its agent session remains running or done, respectively.
+5. Snooze a GitHub item and an agent event for one hour. Confirm both disappear, restart the app, confirm they remain snoozed, then verify they reappear after expiry. Also check one-day and one-week selections.
+6. Open an agent event and confirm its session is focused in Agents without starting a duplicate process. Confirm external API subject URLs cannot redirect the browser away from the fixed GitHub route.
+
+### M4-S4-03 · Launchpad scope, cards, and actions
+
+1. Open Launchpad with a selected group. Confirm the greeting, project/worktree summary, open PR KPI, 24-hour CI pass-rate sample, and six-bin sparkline render.
+2. Confirm the default scope is the active group. Switch to All groups and verify PRs, assigned issues, worktrees, agent cards, and CI feed all change together. Return to the group scope.
+3. Open a PR card and confirm the browser opens the matching `/pull/<number>` page. Confirm CI rows open the repository Actions page.
+4. Start an assigned issue. Confirm its `fix/issue-<number>` worktree is created/reused and a terminal opens there.
+5. Assign an issue to an agent. Confirm the New Agent dialog opens on the relevant worktree with issue context prefilled; select the provider/profile and start. Confirm the prompt is sent once and no shell command is injected.
+6. Open a scoped agent from its card and confirm its CLI is focused. Open Handover and confirm the existing source session and worktree are preselected.
+7. With no linked GitHub account, confirm local worktree and agent sections still render, while GitHub sections show empty states. With more than eight projects/worktrees, confirm limit notices and responsive layout remain usable.
+8. Resize the window and check light and dark themes. Confirm cards remain readable, actions stay reachable, and no page-level horizontal overflow appears.
+
+### M4-S4-04 · Empty and recoverable states
+
+1. Open Launchpad with no projects. Confirm the empty state and manual refresh remain available.
+2. Disconnect GitHub or use a repository with no GitHub remote. Confirm local worktrees remain visible and the failure stays scoped to the affected project.
+3. Re-enable the account/network and refresh. Confirm successful sections recover without restarting the app or replacing data from another group.
+
+### M4 Stage 4 result
+
+| Step | Pass/Fail | Notes |
+|---|---|---|
+| M4-S4-01 | Pass | User confirmed manual verification is OK (2026-11-12). |
+| M4-S4-02 | Pass | User confirmed manual verification is OK (2026-11-12). |
+| M4-S4-03 | Pass | User confirmed manual verification is OK (2026-11-12). |
+| M4-S4-04 | Pass | User confirmed manual verification is OK (2026-11-12). |

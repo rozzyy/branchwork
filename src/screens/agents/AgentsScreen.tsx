@@ -358,6 +358,8 @@ function slugify(name: string): string {
 function NewAgentDialog() {
   const open = useSessions((s) => s.newAgentOpen);
   const setOpen = useSessions((s) => s.setNewAgentOpen);
+  const newAgentPrompt = useSessions((s) => s.newAgentPrompt);
+  const setNewAgentPrompt = useSessions((s) => s.setNewAgentPrompt);
   const profiles = useProfiles((s) => s.profiles);
   const worktrees = useWorktrees((s) => s.worktrees);
   const activePath = useWorktrees((s) => s.activePath);
@@ -365,6 +367,7 @@ function NewAgentDialog() {
   const [profileSlug, setProfileSlug] = useState<string>(NEW_PROFILE);
   const [profileName, setProfileName] = useState("");
   const [worktreePath, setWorktreePath] = useState<string>("");
+  const [prompt, setPrompt] = useState("");
   const [binaries, setBinaries] = useState<Record<CliId, string | null> | null>(null);
   // Verified login state of the selected profile: true/false when the
   // provider exposes a check, null while checking or when it does not.
@@ -379,6 +382,7 @@ function NewAgentDialog() {
     setProfileSlug(useProfiles.getState().resolveProfile(cliId)?.slug ?? NEW_PROFILE);
     setProfileName("");
     setWorktreePath(activePath ?? "");
+    setPrompt(newAgentPrompt ?? "");
     void useSessions.getState().checkBinaries().then(setBinaries);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activePath]);
@@ -419,6 +423,10 @@ function NewAgentDialog() {
   const slug = profileSlug === NEW_PROFILE ? slugify(profileName) : profileSlug;
   const canStart =
     !!binaries && !binaryMissing && !customNeedsSettings && !!worktreePath && !!slug && linked !== false;
+  const close = () => {
+    setOpen(false);
+    setNewAgentPrompt(null);
+  };
   const start = () => {
     if (!canStart) return;
     void (async () => {
@@ -434,17 +442,23 @@ function NewAgentDialog() {
         cliId,
         profile: { cliId, slug: ref },
         worktreePath,
+        ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
       });
-      if (started) setOpen(false);
+      if (started) {
+        setOpen(false);
+        setNewAgentPrompt(null);
+      }
     })();
   };
 
   return (
-    <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+    <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="dlg dlg-wide" role="dialog" aria-modal="true" aria-labelledby="agent-dialog-title">
         <div className="dlg-ic">✦</div>
         <h3 id="agent-dialog-title">{t("agents.dialogTitle")}</h3>
         <p>{t("agents.dialogBody")}</p>
+        <label className="agent-h4" htmlFor="new-agent-prompt">{t("agents.promptLabel")}</label>
+        <textarea id="new-agent-prompt" className="agent-prompt-input" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} />
         <div className="agent-h4">{t("agents.dialogCli")}</div>
         <div className="agent-apick" role="radiogroup" aria-label={t("agents.dialogCli")}>
           {SELECTABLE_CLI_IDS.map((id) => {
@@ -523,7 +537,7 @@ function NewAgentDialog() {
         </select>
         <div className="dlg-meta">{previewCommand(cliId, slug)}</div>
         <div className="dlg-actions">
-          <button type="button" className="btn" onClick={() => setOpen(false)}>{t("agents.dialogCancel")}</button>
+        <button type="button" className="btn" onClick={close}>{t("agents.dialogCancel")}</button>
           <button type="button" className="btn p" disabled={!canStart} onClick={start}>{t("agents.dialogStart")}</button>
         </div>
       </div>

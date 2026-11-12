@@ -6,6 +6,11 @@ export type { WorktreeState } from "./bindings";
 export type Worktree = Worktree_Serialize;
 export type GitChanged = WorktreeChanged;
 
+export interface WorktreeSummary {
+  total: number;
+  worktrees: Worktree[];
+}
+
 const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function listWorktrees(projectId: string): Promise<Worktree[]> {
@@ -13,6 +18,14 @@ export function listWorktrees(projectId: string): Promise<Worktree[]> {
     return Promise.reject(new Error("Reading worktrees requires the desktop app"));
   }
   return commands.worktreeList(projectId);
+}
+
+/** Return a bounded worktree sample and an exact total for summary surfaces. */
+export function summarizeWorktrees(projectId: string): Promise<WorktreeSummary> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Reading worktrees requires the desktop app"));
+  }
+  return commands.worktreeSummary(projectId);
 }
 
 export function createWorktree(

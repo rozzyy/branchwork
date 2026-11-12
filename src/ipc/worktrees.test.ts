@@ -4,6 +4,7 @@ import {
   createWorktree,
   createWorktreeAtCommit,
   listWorktrees,
+  summarizeWorktrees,
   pruneWorktrees,
   removeWorktree,
   type Worktree,
@@ -24,6 +25,7 @@ afterEach(() => clearMocks());
 
 it("rejects worktree reads outside Tauri", async () => {
   await expect(listWorktrees("project-1")).rejects.toThrow("desktop app");
+  await expect(summarizeWorktrees("project-1")).rejects.toThrow("desktop app");
 });
 
 it("rejects worktree writes outside Tauri", async () => {
@@ -35,6 +37,15 @@ it("rejects worktree writes outside Tauri", async () => {
   ).rejects.toThrow("desktop app");
   await expect(removeWorktree("project-1", "/repos/feature")).rejects.toThrow("desktop app");
   await expect(pruneWorktrees("project-1")).rejects.toThrow("desktop app");
+});
+
+it("loads an exact worktree count with a bounded metadata sample", async () => {
+  mockWindows("main");
+  const summary = { total: 240, worktrees: [worktree] };
+  const calls: Array<{ command: string; payload: unknown }> = [];
+  mockIPC((command, payload) => { calls.push({ command, payload }); return summary; });
+  await expect(summarizeWorktrees("project-1")).resolves.toEqual(summary);
+  expect(calls).toEqual([{ command: "worktree_summary", payload: { projectId: "project-1" } }]);
 });
 
 it("invokes the typed worktree list command with its project id", async () => {

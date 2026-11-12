@@ -2,8 +2,11 @@ import { afterEach, expect, it } from "vitest";
 import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import {
   ghRepoContributors,
+  ghRateLimitStatus,
+  invalidateRepoCache,
   ghRepoFork,
   ghRepoIssues,
+  ghRepoAssignedIssues,
   ghRepoMeta,
   ghRepoPulls,
   ghRepoRemote,
@@ -29,11 +32,14 @@ it("rejects repo commands outside Tauri", async () => {
   await expect(ghRepoSetWatched("o", "r", "octocat", true)).rejects.toThrow("desktop app");
   await expect(ghRepoFork("o", "r", "octocat")).rejects.toThrow("desktop app");
   await expect(ghRepoIssues("o", "r", "octocat", "open")).rejects.toThrow("desktop app");
+  await expect(ghRepoAssignedIssues("o", "r", "octocat")).rejects.toThrow("desktop app");
   await expect(ghRepoPulls("o", "r", "octocat", "open")).rejects.toThrow("desktop app");
   await expect(openGithubRepo("o", "r")).rejects.toThrow("desktop app");
   await expect(openGithubRepoPage("o", "r", "projects")).rejects.toThrow("desktop app");
   await expect(ghRepoRuns("o", "r", "octocat")).rejects.toThrow("desktop app");
   await expect(ghRepoRerun("o", "r", "octocat", 99)).rejects.toThrow("desktop app");
+  await expect(invalidateRepoCache("o", "r", "octocat")).rejects.toThrow("desktop app");
+  await expect(ghRateLimitStatus()).rejects.toThrow("desktop app");
   await expect(gitRepoBranches("/wt/a")).rejects.toThrow("desktop app");
   await expect(gitRepoLatestCommit("/wt/a", "main")).rejects.toThrow("desktop app");
   await expect(gitRepoTree("/wt/a", "main", "")).rejects.toThrow("desktop app");
@@ -126,6 +132,10 @@ it("routes repo commands through generated IPC bindings", async () => {
         ],
       };
     }
+    if (command === "gh_repo_assigned_issues") return { total: 1, issues: [{
+      number: 12, title: "Fix it", author: "octocat", url: "https://github.com/o/r/issues/12",
+      updated_at: "2026-01-02T00:00:00Z", comments: 3, labels: [{ name: "bug", color: "d73a4a" }],
+    }] };
     if (command === "gh_repo_pulls") {
       return {
         total: 1,
@@ -147,6 +157,8 @@ it("routes repo commands through generated IPC bindings", async () => {
     }
     if (command === "gh_open_repo") return undefined;
     if (command === "gh_open_repo_page") return undefined;
+    if (command === "gh_repo_cache_invalidate") return undefined;
+    if (command === "gh_rate_limit_status") return { limit: 5000, remaining: 200, reset_at: 1_800_000_000, retry_after: null };
     throw new Error(`unexpected ${command}`);
   });
 
@@ -155,6 +167,8 @@ it("routes repo commands through generated IPC bindings", async () => {
     repo: "r",
     url: "git@github.com:o/r.git",
   });
+  await expect(invalidateRepoCache("o", "r", "octocat")).resolves.toBeUndefined();
+  await expect(ghRateLimitStatus()).resolves.toMatchObject({ limit: 5000, remaining: 200 });
   const meta = await ghRepoMeta("o", "r", "octocat");
   expect(meta.homepageUrl).toBeNull();
   expect(meta.viewerStarred).toBe(false);
@@ -194,6 +208,7 @@ it("routes repo commands through generated IPC bindings", async () => {
       },
     ],
   });
+  await expect(ghRepoAssignedIssues("o", "r", "octocat")).resolves.toMatchObject({ total: 1, issues: [{ number: 12 }] });
   await expect(ghRepoPulls("o", "r", "octocat", "open")).resolves.toEqual({
     total: 1,
     pulls: [
@@ -233,6 +248,8 @@ it("routes repo commands through generated IPC bindings", async () => {
   await expect(ghRepoRerun("o", "r", "octocat", 99)).resolves.toBeUndefined();
   expect(calls.map((call) => call.command)).toEqual([
     "gh_repo_remote",
+    "gh_repo_cache_invalidate",
+    "gh_rate_limit_status",
     "gh_repo_meta",
     "gh_repo_contributors",
     "gh_repo_set_starred",
@@ -243,6 +260,7 @@ it("routes repo commands through generated IPC bindings", async () => {
     "git_repo_tree",
     "git_repo_read_file",
     "gh_repo_issues",
+    "gh_repo_assigned_issues",
     "gh_repo_pulls",
     "gh_open_repo",
     "gh_open_repo_page",

@@ -335,6 +335,7 @@ impl PtyManager {
         validate_dimensions(columns, rows)?;
         let mut command = CommandBuilder::new_default_prog();
         command.cwd(worktree_path);
+        apply_terminal_defaults(&mut command);
         apply_spawn_env(&mut command, env)?;
         let sink = Arc::new(move |event| emit_event(&app, event));
         self.spawn_command(command, columns, rows, sink)
@@ -699,6 +700,13 @@ fn pty_size(columns: u16, rows: u16) -> PtySize {
     }
 }
 
+/// Give interactive programs a usable terminal type in packaged builds, where
+/// the app may not inherit the launching shell's environment. Explicit
+/// per-session values are applied afterwards and can still override this.
+fn apply_terminal_defaults(command: &mut CommandBuilder) {
+    command.env("TERM", "xterm-256color");
+}
+
 fn validate_dimensions(columns: u16, rows: u16) -> Result<(), AppError> {
     if columns == 0 || columns > MAX_COLUMNS || rows == 0 || rows > MAX_ROWS {
         return Err(AppError::validation(format!(
@@ -979,17 +987,19 @@ mod tests {
         let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
         command.args([
             "-c",
-            "printf 'marker-%s' \"$BRANCHWORK_SPAWN_ENV_TEST\"; sleep 30",
+            "clear; printf 'marker-%s:%s\\n' \"$BRANCHWORK_SPAWN_ENV_TEST\" \"$TERM\"; sleep 30",
         ]);
         let mut env = HashMap::new();
         env.insert("BRANCHWORK_SPAWN_ENV_TEST".to_string(), "yes42".to_string());
+        apply_terminal_defaults(&mut command);
         apply_spawn_env(&mut command, &env).unwrap();
         let session = manager.spawn_command(command, 80, 24, sink).unwrap();
         manager.attach(&session.session_id, 1).unwrap();
 
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         let mut seen = String::new();
-        while std::time::Instant::now() < deadline && !seen.contains("marker-yes42") {
+        while std::time::Instant::now() < deadline && !seen.contains("marker-yes42:xterm-256color")
+        {
             match receiver.recv_timeout(Duration::from_millis(100)) {
                 Ok(PtyEvent::Output(output)) => {
                     seen.push_str(&String::from_utf8_lossy(&output.data));
@@ -999,7 +1009,14 @@ mod tests {
                 Err(error) => panic!("PTY event channel failed: {error}"),
             }
         }
-        assert!(seen.contains("marker-yes42"), "child saw: {seen:?}");
+        assert!(
+            seen.contains("marker-yes42:xterm-256color"),
+            "child saw: {seen:?}"
+        );
+        assert!(
+            !seen.contains("TERM environment variable not set"),
+            "clear emitted a missing TERM warning: {seen:?}"
+        );
         manager.close(&session.session_id).unwrap();
     }
 

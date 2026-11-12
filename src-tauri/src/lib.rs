@@ -220,6 +220,17 @@ fn worktree_list(
 
 #[tauri::command(async)]
 #[specta::specta]
+fn worktree_summary(
+    store: State<'_, Store>,
+    project_id: String,
+) -> Result<worktree::WorktreeSummary, AppError> {
+    validate_id(&project_id, "project")?;
+    let project = project_by_id(&store, &project_id)?;
+    worktree::summary(Path::new(&project.local_path), 200)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
 fn worktree_create(
     store: State<'_, Store>,
     watcher: State<'_, worktree::WorktreeWatcher>,
@@ -964,6 +975,17 @@ fn gh_repo_issues(
     gh::repo_issues(&owner, &repo, &account, &state)
 }
 
+/// Issues assigned to the authenticated viewer for the Launchpad.
+#[tauri::command(async)]
+#[specta::specta]
+fn gh_repo_assigned_issues(
+    owner: String,
+    repo: String,
+    account: String,
+) -> Result<gh::GhIssueList, AppError> {
+    gh::repo_assigned_issues(&owner, &repo, &account)
+}
+
 /// Pull request list for the repo screen Pulls tab as one stored account.
 #[tauri::command(async)]
 #[specta::specta]
@@ -974,6 +996,41 @@ fn gh_repo_pulls(
     state: String,
 ) -> Result<gh::GhPullList, AppError> {
     gh::repo_pulls(&owner, &repo, &account, &state)
+}
+
+/// Remove cached repository responses so an explicit refresh fetches fresh data.
+#[tauri::command(async)]
+#[specta::specta]
+fn gh_repo_cache_invalidate(owner: String, repo: String, account: String) -> Result<(), AppError> {
+    gh::repo_cache_invalidate(&owner, &repo, &account)
+}
+
+/// Latest low-quota state for the Repository retry indicator.
+#[tauri::command]
+#[specta::specta]
+fn gh_rate_limit_status() -> Option<gh::RateLimitState> {
+    gh::rate_limit_status()
+}
+
+/// Fetch a bounded page of notifications for each requested GitHub account.
+#[tauri::command(async)]
+#[specta::specta]
+fn gh_notifications(accounts: Vec<String>) -> Result<gh::GhNotificationBatch, AppError> {
+    gh::notifications(&accounts)
+}
+
+/// Mark one GitHub notification thread as read.
+#[tauri::command(async)]
+#[specta::specta]
+fn gh_notification_mark_read(account: String, thread_id: String) -> Result<(), AppError> {
+    gh::notification_mark_read(&account, &thread_id)
+}
+
+/// Mark all currently fetched GitHub notifications as read for one account.
+#[tauri::command(async)]
+#[specta::specta]
+fn gh_notifications_mark_read_all(account: String) -> Result<(), AppError> {
+    gh::notifications_mark_read_all(&account)
 }
 
 /// Open a GitHub repository page in the system browser. The URL is built
@@ -1189,6 +1246,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             repository_clone,
             path_is_repository,
             worktree_list,
+            worktree_summary,
             worktree_create,
             worktree_create_at_commit,
             worktree_remove,
@@ -1251,7 +1309,13 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             gh_repo_set_watched,
             gh_repo_fork,
             gh_repo_issues,
+            gh_repo_assigned_issues,
             gh_repo_pulls,
+            gh_repo_cache_invalidate,
+            gh_rate_limit_status,
+            gh_notifications,
+            gh_notification_mark_read,
+            gh_notifications_mark_read_all,
             gh_open_repo,
             gh_open_repo_page,
             gh_repo_runs,

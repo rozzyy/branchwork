@@ -20,6 +20,7 @@ export const commands = {
 	/**  Read-only: never executes anything from the repository at `path`. */
 	pathIsRepository: (path: string) => __TAURI_INVOKE<boolean>("path_is_repository", { path }),
 	worktreeList: (projectId: string) => __TAURI_INVOKE<Worktree_Serialize[]>("worktree_list", { projectId }),
+	worktreeSummary: (projectId: string) => __TAURI_INVOKE<WorktreeSummary_Serialize>("worktree_summary", { projectId }),
 	worktreeCreate: (projectId: string, destination: string, branch: string) => __TAURI_INVOKE<Worktree_Serialize>("worktree_create", { projectId, destination, branch }),
 	worktreeCreateAtCommit: (projectId: string, destination: string, branch: string, commit: string) => __TAURI_INVOKE<Worktree_Serialize>("worktree_create_at_commit", { projectId, destination, branch, commit }),
 	worktreeRemove: (projectId: string, path: string, deleteBranch: boolean) => __TAURI_INVOKE<null>("worktree_remove", { projectId, path, deleteBranch }),
@@ -138,8 +139,20 @@ export const commands = {
 	ghRepoFork: (owner: string, repo: string, account: string) => __TAURI_INVOKE<string>("gh_repo_fork", { owner, repo, account }),
 	/**  Issue list for the repo screen Issues tab as one stored account. */
 	ghRepoIssues: (owner: string, repo: string, account: string, state: string) => __TAURI_INVOKE<GhIssueList_Serialize>("gh_repo_issues", { owner, repo, account, state }),
+	/**  Issues assigned to the authenticated viewer for the Launchpad. */
+	ghRepoAssignedIssues: (owner: string, repo: string, account: string) => __TAURI_INVOKE<GhIssueList_Serialize>("gh_repo_assigned_issues", { owner, repo, account }),
 	/**  Pull request list for the repo screen Pulls tab as one stored account. */
 	ghRepoPulls: (owner: string, repo: string, account: string, state: string) => __TAURI_INVOKE<GhPullList_Serialize>("gh_repo_pulls", { owner, repo, account, state }),
+	/**  Remove cached repository responses so an explicit refresh fetches fresh data. */
+	ghRepoCacheInvalidate: (owner: string, repo: string, account: string) => __TAURI_INVOKE<null>("gh_repo_cache_invalidate", { owner, repo, account }),
+	/**  Latest low-quota state for the Repository retry indicator. */
+	ghRateLimitStatus: () => __TAURI_INVOKE<RateLimitState_Serialize | null>("gh_rate_limit_status"),
+	/**  Fetch a bounded page of notifications for each requested GitHub account. */
+	ghNotifications: (accounts: string[]) => __TAURI_INVOKE<GhNotificationBatch_Serialize>("gh_notifications", { accounts }),
+	/**  Mark one GitHub notification thread as read. */
+	ghNotificationMarkRead: (account: string, threadId: string) => __TAURI_INVOKE<null>("gh_notification_mark_read", { account, threadId }),
+	/**  Mark all currently fetched GitHub notifications as read for one account. */
+	ghNotificationsMarkReadAll: (account: string) => __TAURI_INVOKE<null>("gh_notifications_mark_read_all", { account }),
 	/**
 	 *  Open a GitHub repository page in the system browser. The URL is built
 	 *  server-side from validated names, never from caller-supplied URLs.
@@ -452,6 +465,65 @@ export type GhLanguage_Serialize = {
 	name: string,
 	color: string | null,
 	size: number,
+};
+
+/**
+ *  One normalized GitHub notification. API URLs are never returned to the UI;
+ *  `page` and `number` describe a fixed GitHub route for the opener command.
+ */
+export type GhNotification = GhNotification_Serialize | GhNotification_Deserialize;
+
+export type GhNotificationBatch = GhNotificationBatch_Serialize | GhNotificationBatch_Deserialize;
+
+export type GhNotificationBatch_Deserialize = {
+	notifications: GhNotification_Deserialize[],
+	failures: GhNotificationFailure[],
+};
+
+export type GhNotificationBatch_Serialize = {
+	notifications: GhNotification_Serialize[],
+	failures: GhNotificationFailure[],
+};
+
+export type GhNotificationFailure = {
+	account: string,
+	message: string,
+};
+
+/**
+ *  One normalized GitHub notification. API URLs are never returned to the UI;
+ *  `page` and `number` describe a fixed GitHub route for the opener command.
+ */
+export type GhNotification_Deserialize = {
+	id: string,
+	account: string,
+	owner: string,
+	repo: string,
+	title: string,
+	reason: string,
+	subjectType: string,
+	unread: boolean,
+	updatedAt?: string | null,
+	page: string,
+	number?: number | null,
+};
+
+/**
+ *  One normalized GitHub notification. API URLs are never returned to the UI;
+ *  `page` and `number` describe a fixed GitHub route for the opener command.
+ */
+export type GhNotification_Serialize = {
+	id: string,
+	account: string,
+	owner: string,
+	repo: string,
+	title: string,
+	reason: string,
+	subjectType: string,
+	unread: boolean,
+	updatedAt: string | null,
+	page: string,
+	number: number | null,
 };
 
 /**  One pull request row. Tokens never appear here. */
@@ -835,6 +907,37 @@ export type PtySession = {
 	sessionId: string,
 };
 
+/**
+ *  GitHub rate-limit metadata from the response headers. The backend stores
+ *  the last state in memory so the poller can honor the remaining quota while
+ *  keeping the app responsive.
+ */
+export type RateLimitState = RateLimitState_Serialize | RateLimitState_Deserialize;
+
+/**
+ *  GitHub rate-limit metadata from the response headers. The backend stores
+ *  the last state in memory so the poller can honor the remaining quota while
+ *  keeping the app responsive.
+ */
+export type RateLimitState_Deserialize = {
+	limit?: number | null,
+	remaining?: number | null,
+	reset_at?: number | null,
+	retry_after?: number | null,
+};
+
+/**
+ *  GitHub rate-limit metadata from the response headers. The backend stores
+ *  the last state in memory so the poller can honor the remaining quota while
+ *  keeping the app responsive.
+ */
+export type RateLimitState_Serialize = {
+	limit: number | null,
+	remaining: number | null,
+	reset_at: number | null,
+	retry_after: number | null,
+};
+
 export type StashEntry = {
 	index: number,
 	message: string,
@@ -920,6 +1023,18 @@ export type WorktreePin = {
 };
 
 export type WorktreeState = "clean" | "dirty" | "conflict" | "rebasing";
+
+export type WorktreeSummary = WorktreeSummary_Serialize | WorktreeSummary_Deserialize;
+
+export type WorktreeSummary_Deserialize = {
+	total: number,
+	worktrees: Worktree_Deserialize[],
+};
+
+export type WorktreeSummary_Serialize = {
+	total: number,
+	worktrees: Worktree_Serialize[],
+};
 
 export type Worktree_Deserialize = {
 	path: string,
