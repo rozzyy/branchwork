@@ -763,6 +763,22 @@ fn repo_page_url(
     Ok(format!("https://github.com/{owner}/{repo}{suffix}"))
 }
 
+/// GitHub commit page; it links the pull request(s) that contain the commit.
+fn commit_page_url(owner: &str, repo: &str, sha: &str) -> Result<String, AppError> {
+    let owner = validate_name(owner, "owner")?;
+    let repo = validate_name(repo, "repo")?;
+    if !(matches!(sha.len(), 40 | 64) && sha.bytes().all(|byte| byte.is_ascii_hexdigit())) {
+        return Err(AppError::validation(
+            "commit id must be a full hexadecimal SHA".to_string(),
+        ));
+    }
+    Ok(format!("https://github.com/{owner}/{repo}/commit/{sha}"))
+}
+
+pub fn open_commit_page(owner: &str, repo: &str, sha: &str) -> Result<(), AppError> {
+    spawn_open_url(&commit_page_url(owner, repo, sha)?)
+}
+
 /// Open a fixed GitHub repository page in the system browser. The route is
 /// selected from a backend allowlist; callers cannot supply a URL or path.
 pub fn open_repo_page(
@@ -2793,6 +2809,26 @@ mod tests {
             "javascript:alert(1)",
         ] {
             assert!(validate_open_url(bad).is_err(), "{bad:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn commit_page_url_requires_valid_owner_repo_and_full_sha() {
+        let sha = "a".repeat(40);
+        assert_eq!(
+            commit_page_url("octo", "repo", &sha).unwrap(),
+            format!("https://github.com/octo/repo/commit/{sha}")
+        );
+        for (owner, sha) in [
+            ("octo", "abc1234".to_string()),
+            ("octo", format!("{}/../x", "a".repeat(36))),
+            ("octo", "g".repeat(40)),
+            ("../evil", "a".repeat(40)),
+        ] {
+            assert!(
+                commit_page_url(owner, "repo", &sha).is_err(),
+                "{owner:?} {sha:?} must be refused"
+            );
         }
     }
 

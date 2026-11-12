@@ -14,6 +14,11 @@ import {
 } from "../../ipc/graph";
 import { createWorktreeAtCommit, onGitChanged } from "../../ipc/worktrees";
 import { ask } from "../../ui/dialog";
+import { gitFetch, gitPull, gitPush } from "../../ipc/sync";
+import { gitBranchCreate, gitCheckout, gitCherryPick, gitRevert } from "../../ipc/gitops";
+import { useToasts } from "../../ui/toast";
+import { ghRepoRemote, openGithubCommit } from "../../ipc/repo";
+import { useFiles } from "../../state/files";
 
 vi.mock("../../ipc/graph", () => ({
   readGraphCommitDetail: vi.fn(),
@@ -22,6 +27,14 @@ vi.mock("../../ipc/graph", () => ({
 }));
 vi.mock("../../ipc/worktrees", () => ({ createWorktreeAtCommit: vi.fn(), onGitChanged: vi.fn() }));
 vi.mock("../../ui/dialog", () => ({ ask: vi.fn() }));
+vi.mock("../../ipc/sync", () => ({ gitFetch: vi.fn(), gitPull: vi.fn(), gitPush: vi.fn() }));
+vi.mock("../../ipc/repo", () => ({ ghRepoRemote: vi.fn(), openGithubCommit: vi.fn() }));
+vi.mock("../../ipc/gitops", () => ({
+  gitCheckout: vi.fn(),
+  gitBranchCreate: vi.fn(),
+  gitCherryPick: vi.fn(),
+  gitRevert: vi.fn(),
+}));
 
 const page0Commits = Array.from({ length: 500 }, (_, index) => makeCommit(index));
 const initialPage: GraphPage = {
@@ -98,6 +111,7 @@ beforeEach(() => {
 
 afterEach(() => {
   Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+  useWorktrees.setState({ worktrees: [] });
 });
 
 it("filters by worktree head and configured Git email, and reports a missing email as no matches", () => {
@@ -282,9 +296,6 @@ it("filters rows and visibly disables deferred graph actions", async () => {
 
   await userEvent.click(screen.getByRole("button", { name: "All branches" }));
   expect(screen.getByRole("option", { name: /Initial commit/ })).not.toHaveClass("dim");
-  expect(screen.getByRole("button", { name: /Fetch · Later/ })).toBeDisabled();
-  expect(screen.getByRole("button", { name: /Pull · Later/ })).toBeDisabled();
-  expect(screen.getByRole("button", { name: /Push · Later/ })).toBeDisabled();
   const commit = screen.getByRole("option", { name: /Initial commit/ });
   expect(screen.getByRole("button", { name: "＋ Worktree" })).toBeDisabled();
   await userEvent.click(commit);
@@ -292,8 +303,101 @@ it("filters rows and visibly disables deferred graph actions", async () => {
   fireEvent.contextMenu(commit, { clientX: 120, clientY: 120 });
   expect(screen.getByRole("menuitem", { name: "Copy SHA" })).toBeEnabled();
   expect(screen.getByRole("menuitem", { name: "Create worktree here" })).toBeEnabled();
-  expect(screen.getByRole("menuitem", { name: /Checkout · Later/ })).toBeDisabled();
+  expect(screen.getByRole("menuitem", { name: /Rebase from here · Later/ })).toBeDisabled();
   expect(screen.getByRole("menuitem", { name: /Start agent here · Later/ })).toBeDisabled();
+  expect(screen.getByRole("menuitem", { name: /Compare with working tree · Later/ })).toBeDisabled();
+});
+
+it("runs fetch, pull, and push from the toolbar with ahead/behind counts", async () => {
+  useWorktrees.setState({
+    worktrees: [{ path: "/repos/main", branch: "main", head: "head-sha", ahead: 2, behind: 3, dirtyCount: 0, state: "clean" }],
+  });
+  vi.mocked(gitFetch).mockResolvedValue(undefined);
+  vi.mocked(gitPull).mockResolvedValue(true);
+  vi.mocked(gitPush).mockResolvedValue(undefined);
+  setupGraph();
+
+  const pull = screen.getByRole("button", { name: /^Pull\s*3$/ });
+  const push = screen.getByRole("button", { name: /^Push\s*2$/ });
+  await userEvent.click(screen.getByRole("button", { name: "Fetch" }));
+  await userEvent.click(pull);
+  await userEvent.click(push);
+
+  expect(gitFetch).toHaveBeenCalledWith("/repos/main");
+  expect(gitPull).toHaveBeenCalledWith("/repos/main");
+  expect(gitPush).toHaveBeenCalledWith("/repos/main");
+});
+
+it("runs checkout, create branch, cherry-pick, and revert from the commit menu", async () => {
+  setupGraph();
+  vi.mocked(gitCheckout).mockResolvedValue(true);
+  vi.mocked(gitBranchCreate).mockResolvedValue(undefined);
+  vi.mocked(gitCherryPick).mockResolvedValue(true);
+  vi.mocked(gitRevert).mockResolvedValue(true);
+  const branchCommit = await screen.findByRole("option", { name: /Initial commit/ });
+  const plainCommit = screen.getByRole("option", { name: /Commit 1,/ });
+  const openMenu = (row: HTMLElement) => fireEvent.contextMenu(row, { clientX: 120, clientY: 120 });
+
+  openMenu(branchCommit);
+  await userEvent.click(screen.getByRole("menuitem", { name: /^\W*Checkout$/ }));
+  await waitFor(() => expect(gitCheckout).toHaveBeenCalledWith("/repos/main", { kind: "branch", name: "main" }));
+
+  vi.mocked(ask).mockResolvedValueOnce(true);
+  openMenu(plainCommit);
+  await userEvent.click(screen.getByRole("menuitem", { name: /^\W*Checkout$/ }));
+  await waitFor(() =>
+    expect(gitCheckout).toHaveBeenCalledWith("/repos/main", { kind: "commit", sha: page0Commits[1].sha }),
+  );
+  expect(ask).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Check out commit 0000001?" }));
+
+  vi.mocked(ask).mockResolvedValueOnce("topic");
+  openMenu(plainCommit);
+  await userEvent.click(screen.getByRole("menuitem", { name: /Create branch/ }));
+  await waitFor(() => expect(gitBranchCreate).toHaveBeenCalledWith("/repos/main", "topic", page0Commits[1].sha, true));
+
+  openMenu(plainCommit);
+  await userEvent.click(screen.getByRole("menuitem", { name: /Cherry-pick/ }));
+  await waitFor(() => expect(gitCherryPick).toHaveBeenCalledWith("/repos/main", page0Commits[1].sha));
+  await waitFor(() =>
+    expect(useToasts.getState().toasts.some((item) => item.title === "Cherry-pick complete" && item.action?.label === "Undo")).toBe(true),
+  );
+
+  openMenu(plainCommit);
+  await userEvent.click(screen.getByRole("menuitem", { name: /Revert/ }));
+  await waitFor(() => expect(gitRevert).toHaveBeenCalledWith("/repos/main", page0Commits[1].sha));
+});
+
+it("opens the commit on GitHub and blames its first changed file from the commit menu", async () => {
+  const go = vi.fn();
+  setupGraph();
+  useStage.setState({ go });
+  vi.mocked(ghRepoRemote).mockResolvedValue({ owner: "octo", repo: "repo", url: "https://github.com/octo/repo" });
+  vi.mocked(openGithubCommit).mockResolvedValue(undefined);
+  const commit = await screen.findByRole("option", { name: /Initial commit/ });
+
+  fireEvent.contextMenu(commit, { clientX: 120, clientY: 120 });
+  await userEvent.click(screen.getByRole("menuitem", { name: /Open on GitHub/ }));
+  await waitFor(() => expect(openGithubCommit).toHaveBeenCalledWith("octo", "repo", page0Commits[0].sha));
+  expect(ghRepoRemote).toHaveBeenCalledWith("/repos/main");
+
+  fireEvent.contextMenu(commit, { clientX: 120, clientY: 120 });
+  await userEvent.click(screen.getByRole("menuitem", { name: /Blame files/ }));
+  await waitFor(() => expect(go).toHaveBeenCalledWith("blame"));
+  expect(useFiles.getState().current).toBe("src/main.ts");
+});
+
+it("enables Cherry-pick and Revert in the commit inspector", async () => {
+  setupGraph();
+  vi.mocked(gitCherryPick).mockResolvedValue(true);
+  vi.mocked(gitRevert).mockResolvedValue(true);
+  await userEvent.click(await screen.findByRole("option", { name: /Commit 1,/ }));
+  const inspector = screen.getByRole("complementary", { name: "Graph inspector" });
+
+  await userEvent.click(within(inspector).getByRole("button", { name: "Cherry-pick" }));
+  await userEvent.click(within(inspector).getByRole("button", { name: "Revert" }));
+
+  await waitFor(() => expect(gitCherryPick).toHaveBeenCalledWith("/repos/main", page0Commits[1].sha));
+  expect(gitRevert).toHaveBeenCalledWith("/repos/main", page0Commits[1].sha);
 });
 
 it("does not show stale changed paths when a detail retry resolves after selection changes", async () => {

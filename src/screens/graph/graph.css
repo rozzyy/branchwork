@@ -124,7 +124,6 @@ button.graph-chip:hover { background: var(--s4); color: var(--fg); }
   .graph-filter { padding-inline: 5px; font-size: 10.5px; }
   .graph-filter-hint { display: none; }
   .graph-toolbar-actions .btn { padding-inline: 5px; }
-  .graph-deferred-action { display: none; }
   .graph-author { display: none; }
 }
 @container (max-width: 620px) {
@@ -132,3 +131,5 @@ button.graph-chip:hover { background: var(--s4); color: var(--fg); }
   .graph-inspector { border-top: 1px solid var(--line); border-left: 0; }
   .graph-inspector-content { padding: 10px 12px 18px; }
 }
+
+.graph-sync-count { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--accs); color: var(--acc); font-size: 11px; font-variant-numeric: tabular-nums; }

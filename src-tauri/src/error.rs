@@ -103,6 +103,20 @@ impl AppError {
         }
     }
 
+    pub fn network(message: impl Into<String>, stderr: impl Into<String>) -> Self {
+        let detail = stderr.into();
+        Self {
+            kind: ErrorKind::Network,
+            message: message.into(),
+            detail: if detail.is_empty() {
+                None
+            } else {
+                Some(detail)
+            },
+            recoverable: true,
+        }
+    }
+
     pub fn rate_limited(message: impl Into<String>) -> Self {
         Self {
             kind: ErrorKind::RateLimited,

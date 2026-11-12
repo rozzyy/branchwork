@@ -9,6 +9,9 @@ import { onGitChanged } from "../../ipc/worktrees";
 import { useDock } from "../../terminal/dock";
 import { useTerminalScreen } from "../../terminal/screen";
 import { undoLast } from "../../ipc/undo";
+import { runSync, useGitRunning, type SyncOperation } from "../../state/sync";
+import { runGitAction } from "../../state/gitActions";
+import { gitCheckout } from "../../ipc/gitops";
 import type { DiffArea } from "../../ipc/diff";
 import type { CommitOptions } from "../../ipc/changes";
 import type { StatusEntry } from "../../ipc/status";
@@ -302,6 +305,19 @@ function FileRow({
   );
 }
 
+async function checkoutBranch(worktreePath: string) {
+  const name = await ask({
+    title: t("changes.checkoutTitle"),
+    body: t("changes.checkoutBody"),
+    input: "",
+    placeholder: t("graph.newBranchPlaceholder"),
+    ok: t("changes.checkoutOk"),
+    icon: "⎇",
+  });
+  if (typeof name !== "string") return;
+  await runGitAction(worktreePath, t("graph.action.checkout"), () => gitCheckout(worktreePath, { kind: "branch", name }));
+}
+
 export function ChangesView() {
   const activePath = useWorktrees((s) => s.activePath);
   const worktreesLoading = useWorktrees((s) => s.loading);
@@ -319,6 +335,7 @@ export function ChangesView() {
   const select = useChanges((s) => s.select);
   const dispatch = useChanges((s) => s.dispatch);
   const toggleLine = useChanges((s) => s.toggleLine);
+  const syncRunning = useGitRunning(activePath);
 
   const [message, setMessage] = useState("");
   const [closed, setClosed] = useState<Record<string, boolean>>({});
@@ -395,7 +412,33 @@ export function ChangesView() {
     },
   ];
 
+  const syncItem = (operation: SyncOperation, label: string, icon: string): MenuItem => ({
+    kind: "item",
+    label,
+    icon,
+    disabled: !activePath || syncRunning !== undefined,
+    onSelect: () => { if (activePath) void runSync(activePath, operation); },
+  });
+
   const moreMenuItems: MenuItem[] = [
+    syncItem("pull", t("sync.pull"), "↓"),
+    syncItem("push", t("sync.push"), "↑"),
+    syncItem("fetch", t("sync.fetch"), "⟳"),
+    {
+      kind: "item",
+      label: t("changes.checkoutMenu"),
+      icon: "⎇",
+      disabled: !activePath,
+      onSelect: () => { if (activePath) void checkoutBranch(activePath); },
+    },
+    { kind: "separator" },
+    {
+      kind: "item",
+      label: t("changes.popLatestStash"),
+      icon: "⊞",
+      disabled: stashes.length === 0,
+      onSelect: () => void dispatch({ type: "stash-pop", index: 0 }),
+    },
     {
       kind: "item",
       label: t("changes.stashAll"),
@@ -552,7 +595,7 @@ export function ChangesView() {
               rows={3}
               value={message}
             />
-            <button aria-label={t("changes.generateMessage")} className="ib2 changes-commit-generate" disabled title={t("ui.deferred_m6")} type="button">
+            <button aria-label={t("changes.generateMessage")} className="ib2 changes-commit-generate" disabled title={t("ui.deferred_m7")} type="button">
               ✦
             </button>
           </div>

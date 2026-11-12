@@ -719,6 +719,10 @@ fn git_command_with_user_config(repository_path: &Path) -> Command {
         .arg("-C")
         .arg(repository_path)
         .env("GIT_TERMINAL_PROMPT", "0")
+        // No TTY: a configured editor (e.g. `code --wait` for `pull.rebase=interactive`) would
+        // block the worker forever. Callers that need an editor set these explicitly.
+        .env("GIT_EDITOR", "true")
+        .env("GIT_SEQUENCE_EDITOR", "true")
         .env("GIT_CONFIG_COUNT", "0")
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")

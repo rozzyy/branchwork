@@ -1,16 +1,16 @@
 # Session Handoff
 
-- **Last Updated:** 2026-11-12
-- **Latest follow-up:** User confirmed the M5-01 desktop/narrow-stage manual flow is OK; M5-01 is now `done` in `feature_list.json`. Implementation, automated coverage, code review, and manual checkpoint are complete. Full Vitest 606/606 and focused Launchpad/Inbox 17/17 pass; typecheck/Clippy pass. Rust tests retain 10 macOS FSEvent failures. Issue #3 switch attach fix is also in the working tree; its in-app retest remains pending.
-- **Current Objective:** No M5-01 work remains. Do not commit or merge without an explicit order. Separate follow-ups remain: native Finder file drop, packaged-app `clear` retest, and the issue #3 profile-switch in-app retest.
+- **Last Updated:** 2026-11-13
+- **Latest follow-up:** Checkpoint M6.1 approved by the user (incl. packaged-app retest of the issue #3 fix `142c243`, pushed). M6 Stage 1 (M6-01..03) committed and fast-forwarded into `main` (not pushed).
+- **Current Objective:** M6 Stage 2 — Conflict resolver (M6-04 → M6-05 → M6-06) on `m6-stage-2`; stop at Checkpoint M6.2.
 
-- **Milestone / stage:** M1–M3 released. M4 Stage 3 checkpoint approved. M4-10, M4-11, and M4-12 are done; Stage 4 automated code/security/E2E reviews are recorded. M4-04..06 and Stage 2 were removed/cancelled per user order.
-- **Branch:** `m5-stage-1` is based on local `main` at release commit `d15157f`/tag `v0.4.0`. M4 stage branch remains pushed. The M5 spec and planning/state updates are uncommitted; do not commit or push without authorization.
-- **Verification:** M5 post-review: `pnpm test` passed (68 files / 606 tests); focused Launchpad/Inbox tests passed 17/17; `pnpm typecheck`, Clippy, `git diff --check`, and `jq empty feature_list.json` passed. User confirmed the visual/manual checkpoint. `./init.sh` Rust phase and serial retry each had 10 macOS FSEvent startup failures (206 passed / 10 failed / 3 ignored). Issue #3 profile-switch regression `src/agents/sessions.test.ts` passed 39/39; its in-app retest is pending. Issue #2 focused Rust test passed 1/1. User confirmed M4-S4-01..04 on 2026-11-12.
+- **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stage 1 done; Stage 2 active.
+- **Branch:** `m6-stage-2` from `main`. `origin/main` = `142c243` (Stage 1 commit is local only). Tags `v0.4.0`/`v0.5.0` not pushed. Commit/push only on user order.
+- **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters; `.agent/reviews/m6-stage-1-security-review.md` #1); 11 pre-existing Playwright failures from the M5 Launchpad redesign (`.agent/reviews/m6-stage-1-e2e.md`); whether to reopen/annotate GitHub issue #3. Deferred Stage 1 nits are listed in progress.md.
 
 ## Recommended Next Step
 
-M5-01 is done after the user's manual confirmation. No commit or merge has been requested. Continue only with a newly authorized task; the issue #3 profile-switch attach fix and the native file-drop/packaged-app `clear` checks remain separate follow-ups. The M4 checkpoint and `v0.4.0` release are complete locally.
+Refine `.agent/tasks/m6-task-04-*.md` (conflict read model IPC) from the plan row, add its feature_list entry, implement, spec-review.
 
 ## M2 structure
 

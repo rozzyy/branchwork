@@ -11,7 +11,9 @@ echo "=== pnpm test ==="
 pnpm test
 
 echo "=== cd src-tauri && cargo clippy -- -D warnings && cargo test ==="
-(cd src-tauri && cargo clippy -- -D warnings && cargo test)
+# Rust tests drive the git CLI with the user's config (spec §2); isolate them from the
+# developer's global/system git config so results don't depend on the machine.
+(cd src-tauri && cargo clippy -- -D warnings && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test)
 
 echo "=== Verification Complete ==="
 echo ""

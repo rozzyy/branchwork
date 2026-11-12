@@ -17,6 +17,11 @@ import { useTerminalScreen } from "../../terminal/screen";
 import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
 import { useStage } from "../../state/stage";
+import { runSync, useGitRunning, type SyncOperation } from "../../state/sync";
+import { runGitAction } from "../../state/gitActions";
+import { gitBranchCreate, gitCheckout, gitCherryPick, gitRevert } from "../../ipc/gitops";
+import { ghRepoRemote, openGithubCommit } from "../../ipc/repo";
+import { useFiles } from "../../state/files";
 import { ask } from "../../ui/dialog";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { ScreenLoader } from "../../ui/ScreenLoader";
@@ -62,14 +67,8 @@ const filterKeys = {
   mine: "graph.filter.mine",
 } as const;
 const deferredMenuActions = [
-  "graph.action.checkout",
-  "graph.action.createBranch",
-  "graph.action.cherryPick",
-  "graph.action.revert",
   "graph.action.rebase",
-  "graph.action.openPullRequest",
   "graph.action.diff",
-  "graph.action.blame",
   "graph.action.agent",
 ] as const;
 // ponytail: a badge letter for the known bucket a WIP file is in; not a real git status
@@ -225,18 +224,35 @@ export function GraphToolbar() {
   const project = useRepos((state) => state.projects.find((item) => item.id === state.activeProjectId) ?? null);
   const activePath = useWorktrees((state) => state.activePath);
   const worktreesProjectId = useWorktrees((state) => state.projectId);
-  const activeBranch = useWorktrees(
-    (state) => state.worktrees.find((worktree) => worktree.path === state.activePath)?.branch ?? null,
+  const activeWorktree = useWorktrees(
+    (state) => state.worktrees.find((worktree) => worktree.path === state.activePath) ?? null,
   );
+  const activeBranch = activeWorktree?.branch ?? null;
+  const running = useGitRunning(activePath);
+  const syncDisabled = !activePath || worktreesProjectId !== projectId || running !== undefined;
+  const syncButton = (operation: SyncOperation, labelKey: "graph.fetch" | "graph.pull" | "graph.push", count?: number, title?: string) => (
+    <button
+      className="btn sm"
+      disabled={syncDisabled}
+      title={title}
+      aria-busy={running === operation}
+      onClick={() => { if (activePath) void runSync(activePath, operation); }}
+    >
+      {running === operation ? t("sync.running", { action: t(labelKey) }) : t(labelKey)}
+      {count ? <span className="graph-sync-count">{count}</span> : null}
+    </button>
+  );
+  const behind = activeWorktree?.behind ?? 0;
+  const ahead = activeWorktree?.ahead ?? 0;
   return (
     <>
       <h1 className="pane-title">
         {t("nav.graph")} <span className="graph-subtitle mono" aria-hidden="true">{activeBranch ?? t("sidebar.detached")}</span>
       </h1>
       <div className="graph-toolbar-actions">
-        <button className="btn sm graph-deferred-action" disabled title={t("graph.deferredTitle")}>{t("graph.fetch")} · {t("graph.later")}</button>
-        <button className="btn sm graph-deferred-action" disabled title={t("graph.deferredTitle")}>{t("graph.pull")} · {t("graph.later")}</button>
-        <button className="btn sm graph-deferred-action" disabled title={t("graph.deferredTitle")}>{t("graph.push")} · {t("graph.later")}</button>
+        {syncButton("fetch", "graph.fetch")}
+        {syncButton("pull", "graph.pull", behind, behind ? t("sync.behindTitle", { count: behind }) : undefined)}
+        {syncButton("push", "graph.push", ahead, ahead ? t("sync.aheadTitle", { count: ahead }) : undefined)}
         <button
           className="btn primary"
           disabled={selection.kind !== "commit" || !selectedCommit || !project || !activePath || worktreesProjectId !== projectId}
@@ -295,6 +311,67 @@ function GraphFilterBar({
       <span className="graph-filter-hint mono">{hint}</span>
     </div>
   );
+}
+
+/** Checks out the commit's first local branch, or (after confirmation) the commit detached. */
+async function checkoutCommit(worktreePath: string, commit: GraphCommit) {
+  const action = t("graph.action.checkout");
+  const branch = commit.refs.find((ref) => ref.kind === "localBranch")?.name;
+  if (branch) return runGitAction(worktreePath, action, () => gitCheckout(worktreePath, { kind: "branch", name: branch }));
+  const confirmed = await ask({
+    title: t("graph.detachedTitle", { sha: commit.shortSha }),
+    body: t("graph.detachedBody"),
+    ok: t("graph.detachedOk"),
+    icon: "⎇",
+  });
+  if (confirmed !== true) return false;
+  return runGitAction(worktreePath, action, () => gitCheckout(worktreePath, { kind: "commit", sha: commit.sha }));
+}
+
+async function createBranchAtCommit(worktreePath: string, commit: GraphCommit) {
+  const name = await ask({
+    title: t("graph.branchTitle", { sha: commit.shortSha }),
+    body: t("graph.branchBody"),
+    input: "",
+    placeholder: t("graph.newBranchPlaceholder"),
+    ok: t("graph.branchOk"),
+    icon: "⎇",
+  });
+  if (typeof name !== "string") return false;
+  return runGitAction(worktreePath, t("graph.action.createBranch"), () => gitBranchCreate(worktreePath, name, commit.sha, true));
+}
+
+function cherryPickCommit(worktreePath: string, commit: GraphCommit) {
+  return runGitAction(worktreePath, t("graph.action.cherryPick"), () => gitCherryPick(worktreePath, commit.sha));
+}
+
+function revertCommit(worktreePath: string, commit: GraphCommit) {
+  return runGitAction(worktreePath, t("graph.action.revert"), () => gitRevert(worktreePath, commit.sha));
+}
+
+async function openCommitOnGithub(worktreePath: string, commit: GraphCommit) {
+  try {
+    const remote = await ghRepoRemote(worktreePath);
+    await openGithubCommit(remote.owner, remote.repo, commit.sha);
+  } catch (error) {
+    toast({ title: t("graph.openOnGithubFailed", { message: errorMessage(error) }), icon: "⚠" });
+  }
+}
+
+/** Opens the commit's first changed file in the editor tabs and shows it in Blame. */
+async function blameCommitFiles(projectId: string, worktreePath: string, commit: GraphCommit) {
+  try {
+    const detail = await readGraphCommitDetail(projectId, worktreePath, commit.sha);
+    const path = detail.changedPaths[0];
+    if (!path) {
+      toast({ title: t("graph.blameNoFiles"), icon: "ℹ" });
+      return;
+    }
+    useFiles.getState().openFile(path);
+    useStage.getState().go("blame");
+  } catch (error) {
+    toast({ title: t("graph.blameFailed", { message: errorMessage(error) }), icon: "⚠" });
+  }
 }
 
 async function createWorktreeFromCommit(project: Project, commit: GraphCommit) {
@@ -603,6 +680,26 @@ export function GraphView() {
     { kind: "item", label: t("graph.createWorktreeHere"), icon: "⌂", onSelect: () => {
       if (project) void createWorktreeFromCommit(project, menu.commit);
     } },
+    { kind: "separator" },
+    { kind: "item", label: t("graph.action.checkout"), icon: "⎇", disabled: !activePath, onSelect: () => {
+      if (activePath) void checkoutCommit(activePath, menu.commit);
+    } },
+    { kind: "item", label: t("graph.action.createBranch"), icon: "＋", disabled: !activePath, onSelect: () => {
+      if (activePath) void createBranchAtCommit(activePath, menu.commit);
+    } },
+    { kind: "item", label: t("graph.action.cherryPick"), icon: "⇣", disabled: !activePath, onSelect: () => {
+      if (activePath) void cherryPickCommit(activePath, menu.commit);
+    } },
+    { kind: "item", label: t("graph.action.revert"), icon: "↺", disabled: !activePath, onSelect: () => {
+      if (activePath) void revertCommit(activePath, menu.commit);
+    } },
+    { kind: "separator" },
+    { kind: "item", label: t("graph.action.openOnGithub"), icon: "↗", disabled: !activePath, onSelect: () => {
+      if (activePath) void openCommitOnGithub(activePath, menu.commit);
+    } },
+    { kind: "item", label: t("graph.action.blame"), icon: "≡", disabled: !activePath || !projectId, onSelect: () => {
+      if (activePath && projectId) void blameCommitFiles(projectId, activePath, menu.commit);
+    } },
     { kind: "item", label: t("graph.action.terminal"), icon: "❯_", onSelect: () => {
       if (activePath) void useDock.getState().openHere(activePath);
     } },
@@ -905,6 +1002,8 @@ function CommitInspector({
   onRetry(): void;
 }) {
   const color = avatarColor(commit.authorEmail ?? commit.authorName ?? commit.sha);
+  const activePath = useWorktrees((state) => state.activePath);
+  const busy = useGitRunning(activePath) !== undefined;
   return (
     <div className="graph-inspector-content">
       <div className="graph-commit-meta">
@@ -934,8 +1033,8 @@ function CommitInspector({
         ) : null}
       </section>
       <div className="graph-commit-actions">
-        <button className="btn sm" disabled title={t("graph.deferredTitle")}>{t("graph.cherryPick")} · {t("graph.later")}</button>
-        <button className="btn sm" disabled title={t("graph.deferredTitle")}>{t("graph.revert")} · {t("graph.later")}</button>
+        <button className="btn sm" disabled={!activePath || busy} onClick={() => { if (activePath) void cherryPickCommit(activePath, commit); }}>{t("graph.cherryPick")}</button>
+        <button className="btn sm" disabled={!activePath || busy} onClick={() => { if (activePath) void revertCommit(activePath, commit); }}>{t("graph.revert")}</button>
         <button className="btn sm" disabled title={t("graph.deferredTitle")}>{t("graph.action.rebase")} · {t("graph.later")}</button>
       </div>
     </div>

@@ -6,7 +6,6 @@ use serde_json::{Value, json};
 use std::{
     fs,
     path::{Component, Path, PathBuf},
-    process::Command,
 };
 
 pub(crate) fn snapshot_payload_cost(path: &Path, byte_len: u64) -> usize {
@@ -61,11 +60,22 @@ pub(crate) fn record(
     }
     let undoable = matches!(
         operation,
-        "commit" | "sync" | "discard" | "delete_to_trash" | "stash_drop"
+        "commit"
+            | "sync"
+            | "pull"
+            | "checkout"
+            | "cherry_pick"
+            | "revert"
+            | "discard"
+            | "delete_to_trash"
+            | "stash_drop"
     ) && !(operation == "delete_to_trash"
         && payload["inlineBytes"].is_null()
         && !cfg!(any(target_os = "linux", target_os = "windows")))
-        && !(operation == "commit" && payload["beforeHead"].is_null())
+        && !(matches!(
+            operation,
+            "commit" | "pull" | "checkout" | "cherry_pick" | "revert"
+        ) && payload["beforeHead"].is_null())
         && payload["payloadTooLarge"] != true;
     let payload = serde_json::to_vec(&payload)
         .map_err(|error| AppError::internal(format!("Could not encode undo data: {error}")))?;
@@ -150,14 +160,12 @@ fn relative_target(root: &Path, path: &str) -> Result<PathBuf, AppError> {
     Ok(full)
 }
 
+/// Undo writes go through the same invocation as forward writes: local checkout filters and
+/// fsmonitor neutralized, inherited `GIT_DIR`-style variables scrubbed, user config kept.
 fn run_git(root: &Path, args: &[&str]) -> Result<(), AppError> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()
-        .map_err(|error| AppError::io(format!("Could not launch git: {error}")))?;
+    let filters = crate::worktree::configured_checkout_filters(root)?;
+    let argv: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+    let output = crate::worktree::invoke_git_allowing_hooks(root, &argv, &filters)?;
     if output.status.success() {
         Ok(())
     } else {
@@ -175,6 +183,34 @@ fn run_git(root: &Path, args: &[&str]) -> Result<(), AppError> {
 }
 
 fn undo_commit(root: &Path, payload: &Value) -> Result<(), AppError> {
+    undo_head_move(root, payload, "--soft")
+}
+
+/// Undo for pull / cherry-pick / revert. `--keep` refuses to clobber local changes in files the
+/// action touched, unlike `--hard`.
+fn undo_reset_keep(root: &Path, payload: &Value) -> Result<(), AppError> {
+    undo_head_move(root, payload, "--keep")
+}
+
+/// Switches back to the branch (or detached commit) that was checked out before.
+fn undo_checkout(root: &Path, payload: &Value) -> Result<(), AppError> {
+    let (previous, _) = verified_head_move(root, payload)?;
+    match payload["beforeBranch"].as_str() {
+        Some(branch) if !branch.is_empty() && !branch.starts_with('-') => {
+            // `--no-guess`: fail if the branch was deleted instead of recreating it from a remote.
+            run_git(root, &["switch", "--no-guess", branch])
+        }
+        _ => run_git(root, &["switch", "--detach", previous]),
+    }
+}
+
+fn undo_head_move(root: &Path, payload: &Value, mode: &str) -> Result<(), AppError> {
+    let (previous, _) = verified_head_move(root, payload)?;
+    run_git(root, &["reset", mode, previous])
+}
+
+/// Validates `beforeHead`/`afterHead` and that HEAD has not moved since the action ran.
+fn verified_head_move<'p>(root: &Path, payload: &'p Value) -> Result<(&'p str, &'p str), AppError> {
     let previous = payload["beforeHead"]
         .as_str()
         .ok_or_else(|| AppError::validation("Undo record has no previous commit"))?;
@@ -191,10 +227,10 @@ fn undo_commit(root: &Path, payload: &Value) -> Result<(), AppError> {
         .ok_or_else(|| AppError::validation("Cannot undo a commit without a current HEAD"))?;
     if current != expected {
         return Err(AppError::validation(
-            "Cannot undo this commit because HEAD has moved since it was created",
+            "Cannot undo this action because HEAD has moved since it ran",
         ));
     }
-    run_git(root, &["reset", "--soft", previous])
+    Ok((previous, expected))
 }
 
 fn validate_git_sha(sha: &str) -> Result<(), AppError> {
@@ -368,6 +404,8 @@ fn apply_reverse(root: &Path, row: &OplogRow) -> Result<(), AppError> {
     let payload = row_payload(row)?;
     match row.kind.as_str() {
         "commit" | "sync" => undo_commit(root, &payload),
+        "pull" | "cherry_pick" | "revert" => undo_reset_keep(root, &payload),
+        "checkout" => undo_checkout(root, &payload),
         "discard" => undo_discard(root, &payload),
         "delete_to_trash" => undo_delete(root, &payload),
         "stash_drop" => {

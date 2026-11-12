@@ -5,6 +5,7 @@ mod diff;
 mod error;
 mod fs;
 mod gh;
+mod gitops;
 mod graph;
 mod handover;
 mod notify;
@@ -16,6 +17,7 @@ mod stage;
 mod stash;
 mod status;
 mod store;
+mod sync;
 mod worktree;
 
 use error::AppError;
@@ -408,6 +410,107 @@ fn commit_and_sync(
     Ok(store
         .latest_oplog_undoable(worktree_path.to_str().unwrap_or_default())?
         .unwrap_or(false))
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn git_fetch(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    sync::fetch(&worktree_path)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(())
+}
+
+/// Returns whether this pull can be undone (false when it was already up to date).
+#[tauri::command(async)]
+#[specta::specta]
+fn git_pull(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<bool, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = sync::pull(&store, &worktree_path);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn git_push(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    sync::push(&worktree_path)?;
+    emit_op_done(&app, &store, &worktree_path);
+    Ok(())
+}
+
+/// Returns whether the checkout can be undone.
+#[tauri::command(async)]
+#[specta::specta]
+fn git_checkout(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    target: gitops::CheckoutTarget,
+) -> Result<bool, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = gitops::checkout(&store, &worktree_path, &target);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn git_branch_create(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    name: String,
+    start_sha: String,
+    checkout: bool,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = gitops::branch_create(&worktree_path, &name, &start_sha, checkout);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+/// Returns whether the cherry-pick can be undone.
+#[tauri::command(async)]
+#[specta::specta]
+fn git_cherry_pick(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    sha: String,
+) -> Result<bool, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = gitops::cherry_pick(&store, &worktree_path, &sha);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+/// Returns whether the revert can be undone.
+#[tauri::command(async)]
+#[specta::specta]
+fn git_revert(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    sha: String,
+) -> Result<bool, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = gitops::revert(&store, &worktree_path, &sha);
+    emit_op_done(&app, &store, &worktree_path);
+    result
 }
 
 #[tauri::command(async)]
@@ -1067,6 +1170,13 @@ fn gh_open_repo_page(
     gh::open_repo_page(&owner, &repo, &page, pull_number)
 }
 
+/// Open the GitHub commit page (links its pull requests). The backend builds the URL.
+#[tauri::command]
+#[specta::specta]
+fn gh_open_commit(owner: String, repo: String, sha: String) -> Result<(), AppError> {
+    gh::open_commit_page(&owner, &repo, &sha)
+}
+
 /// Latest Actions runs for the repo screen Actions tab as one stored account.
 #[tauri::command(async)]
 #[specta::specta]
@@ -1272,6 +1382,13 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commit,
             commit_and_push,
             commit_and_sync,
+            git_fetch,
+            git_pull,
+            git_push,
+            git_checkout,
+            git_branch_create,
+            git_cherry_pick,
+            git_revert,
             undo_last,
             stash_list,
             stash_push,
@@ -1332,6 +1449,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             gh_notifications_mark_read_all,
             gh_open_repo,
             gh_open_repo_page,
+            gh_open_commit,
             gh_repo_runs,
             gh_repo_rerun,
             git_repo_branches,

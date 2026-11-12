@@ -214,7 +214,9 @@ pub(crate) fn tree(worktree_path: &Path, options: &FsTreeOptions) -> Result<FsTr
             status: if is_dir {
                 None
             } else {
-                statuses.as_ref().and_then(|map| map.get(&relative).cloned())
+                statuses
+                    .as_ref()
+                    .and_then(|map| map.get(&relative).cloned())
             },
             size,
             mtime,

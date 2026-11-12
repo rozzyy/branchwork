@@ -268,6 +268,8 @@ export const useChanges = create<ChangesStore>((set, get) => ({
       toast({
         title: t("changes.actionFailed", { action: action.toLowerCase(), message: errorMessage(error) }),
         icon: "!",
+        // Git CLI failures carry their (capped) output here; shown behind "Show details".
+        details: (error as { detail?: string | null } | null)?.detail ?? undefined,
       });
       return false;
     } finally {

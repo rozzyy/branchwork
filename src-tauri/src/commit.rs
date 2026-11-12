@@ -19,7 +19,9 @@ pub struct CommitOptions {
     pub stage_all: bool,
 }
 
-fn open_worktree(worktree_path: &Path) -> Result<(std::path::PathBuf, git2::Repository), AppError> {
+pub(crate) fn open_worktree(
+    worktree_path: &Path,
+) -> Result<(std::path::PathBuf, git2::Repository), AppError> {
     let root = worktree_path
         .canonicalize()
         .map_err(|error| AppError::io(format!("Could not resolve worktree path: {error}")))?;
@@ -27,7 +29,7 @@ fn open_worktree(worktree_path: &Path) -> Result<(std::path::PathBuf, git2::Repo
     Ok((root, repository))
 }
 
-fn head_sha(repository: &git2::Repository) -> Result<Option<String>, AppError> {
+pub(crate) fn head_sha(repository: &git2::Repository) -> Result<Option<String>, AppError> {
     match repository.head() {
         Ok(head) => Ok(Some(head.peel_to_commit()?.id().to_string())),
         Err(error) if error.code() == git2::ErrorCode::UnbornBranch => Ok(None),
@@ -60,7 +62,7 @@ fn stderr_text(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).trim().to_string()
 }
 
-fn combined_text(output: &Output) -> String {
+pub(crate) fn combined_text(output: &Output) -> String {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     format!("{stdout}\n{stderr}").trim().to_string()
@@ -77,9 +79,9 @@ fn looks_like_hook_failure(text: &str) -> Option<&'static str> {
         "pre-rebase",
         "post-rewrite",
     ] {
-        if lower.contains(hook)
-            && (lower.contains("hook") || lower.contains("failed") || lower.contains("declined"))
-        {
+        // Git's own wording ("pre-push hook declined"); a bare hook name can be part of a
+        // remote URL or path (e.g. a `pre-commit-hooks` fork).
+        if lower.contains(&format!("{hook} hook")) {
             return Some(hook);
         }
     }
@@ -176,16 +178,56 @@ fn looks_like_auth_failure(text: &str) -> bool {
         || lower.contains("could not read username")
         || lower.contains("permission denied (publickey)")
         || lower.contains("invalid username or password")
-        || lower.contains("403")
-        || lower.contains("401")
+        // HTTP status only in git's own wording: a bare "401"/"403" also appears in paths,
+        // commit subjects, and abbreviated SHAs.
+        || lower.contains("returned error: 401")
+        || lower.contains("returned error: 403")
         || lower.contains("terminal prompts disabled")
-        || lower.contains("could not resolve host")
-        || lower.contains("failed to connect")
-        || lower.contains("connection refused")
         || lower.contains("repository not found")
 }
 
-fn classify_git_failure(
+fn looks_like_network_failure(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    [
+        "could not resolve host",
+        "could not resolve hostname",
+        "failed to connect",
+        "connection refused",
+        "connection timed out",
+        "operation timed out",
+        "network is unreachable",
+        "connection reset",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
+/// Caps git output carried in `AppError.detail` so a noisy remote cannot flood IPC/UI state.
+const MAX_DETAIL_BYTES: usize = 16 * 1024;
+
+pub(crate) fn bounded(mut error: AppError) -> AppError {
+    if let Some(detail) = error.detail.as_mut()
+        && detail.len() > MAX_DETAIL_BYTES
+    {
+        let mut end = MAX_DETAIL_BYTES;
+        while !detail.is_char_boundary(end) {
+            end -= 1;
+        }
+        detail.truncate(end);
+        detail.push_str("\n…");
+    }
+    error
+}
+
+/// Operations that stop in a merge/cherry-pick/revert/rebase state when they conflict.
+fn stops_on_conflict(operation: &str) -> bool {
+    matches!(
+        operation,
+        "pull" | "cherry-pick" | "revert" | "rebase" | "merge"
+    )
+}
+
+pub(crate) fn classify_git_failure(
     root: &Path,
     repository: &git2::Repository,
     operation: &str,
@@ -194,36 +236,53 @@ fn classify_git_failure(
     let detail = stderr_text(output);
     let combined = combined_text(output);
     let lower = combined.to_ascii_lowercase();
-    if let Some(hook) = looks_like_hook_failure(&combined) {
+    // Conflicts first, from repository state: merge output lists paths and subjects (e.g.
+    // `.pre-commit-config.yaml`) that must not be read as hook or auth failures. The detail
+    // keeps stdout, where git prints the `CONFLICT …` lines.
+    if stops_on_conflict(operation)
+        && (repository.state() != git2::RepositoryState::Clean
+            || lower.contains("automatic merge failed")
+            || lower.contains("could not apply"))
+    {
+        return AppError::git_conflict(format!("Git {operation} conflicted"), combined);
+    }
+    // Hook, auth and network wording is git's own and goes to stderr.
+    if let Some(hook) = looks_like_hook_failure(&detail) {
         return AppError::git_hook(hook, detail);
     }
-    if looks_like_auth_failure(&combined) {
+    if looks_like_auth_failure(&detail) {
         return AppError::git_auth(
             format!("Git {operation} failed: authentication required"),
             detail,
         );
     }
+    if looks_like_network_failure(&detail) {
+        return AppError::network(
+            format!("Git {operation} failed: the remote could not be reached"),
+            detail,
+        );
+    }
     if lower.contains("conflict") {
-        return AppError::git_conflict(format!("Git {operation} conflicted"), detail);
+        return AppError::git_conflict(format!("Git {operation} conflicted"), combined);
     }
     if let Some(hook) =
         installed_hook(root, repository, operation).filter(|_| !looks_like_plain_git_error(&lower))
     {
         return AppError::git_hook(hook, detail);
     }
-    AppError::internal(if detail.is_empty() {
-        format!("Git {operation} failed with status {}", output.status)
-    } else {
-        format!("Git {operation} failed: {detail}")
-    })
+    // Generic failure: a short message, with git's full output behind "Show details".
+    let mut error = AppError::internal(format!("Git {operation} failed"));
+    error.detail = (!combined.is_empty()).then_some(combined);
+    error.recoverable = true;
+    error
 }
 
-fn run_git(root: &Path, args: &[&OsStr]) -> Result<Output, AppError> {
+pub(crate) fn run_git(root: &Path, args: &[&OsStr]) -> Result<Output, AppError> {
     let filters = worktree::configured_checkout_filters(root)?;
     worktree::invoke_git_allowing_hooks(root, args, &filters)
 }
 
-fn require_success(
+pub(crate) fn require_success(
     root: &Path,
     repository: &git2::Repository,
     operation: &str,
@@ -232,7 +291,9 @@ fn require_success(
     if output.status.success() {
         Ok(())
     } else {
-        Err(classify_git_failure(root, repository, operation, &output))
+        Err(bounded(classify_git_failure(
+            root, repository, operation, &output,
+        )))
     }
 }
 
@@ -702,7 +763,7 @@ mod tests {
     }
 
     #[test]
-    fn push_auth_failure_surfaces_as_git_auth() {
+    fn push_to_unreachable_remote_surfaces_as_network() {
         let temp = TestDir::new("auth");
         let repository = init_repo(&temp.0);
         let branch = repository.head().unwrap().shorthand().unwrap().to_owned();
@@ -739,7 +800,7 @@ mod tests {
             || {},
         )
         .unwrap_err();
-        assert_eq!(error.kind, ErrorKind::GitAuth);
+        assert_eq!(error.kind, ErrorKind::Network);
     }
 
     #[test]

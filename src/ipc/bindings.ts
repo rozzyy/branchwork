@@ -33,6 +33,17 @@ export const commands = {
 	commit: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit", { worktreePath, options }),
 	commitAndPush: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit_and_push", { worktreePath, options }),
 	commitAndSync: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit_and_sync", { worktreePath, options }),
+	gitFetch: (worktreePath: string) => __TAURI_INVOKE<null>("git_fetch", { worktreePath }),
+	/**  Returns whether this pull can be undone (false when it was already up to date). */
+	gitPull: (worktreePath: string) => __TAURI_INVOKE<boolean>("git_pull", { worktreePath }),
+	gitPush: (worktreePath: string) => __TAURI_INVOKE<null>("git_push", { worktreePath }),
+	/**  Returns whether the checkout can be undone. */
+	gitCheckout: (worktreePath: string, target: CheckoutTarget) => __TAURI_INVOKE<boolean>("git_checkout", { worktreePath, target }),
+	gitBranchCreate: (worktreePath: string, name: string, startSha: string, checkout: boolean) => __TAURI_INVOKE<null>("git_branch_create", { worktreePath, name, startSha, checkout }),
+	/**  Returns whether the cherry-pick can be undone. */
+	gitCherryPick: (worktreePath: string, sha: string) => __TAURI_INVOKE<boolean>("git_cherry_pick", { worktreePath, sha }),
+	/**  Returns whether the revert can be undone. */
+	gitRevert: (worktreePath: string, sha: string) => __TAURI_INVOKE<boolean>("git_revert", { worktreePath, sha }),
 	undoLast: (worktreePath: string) => __TAURI_INVOKE<boolean>("undo_last", { worktreePath }),
 	stashList: (worktreePath: string) => __TAURI_INVOKE<StashEntry[]>("stash_list", { worktreePath }),
 	stashPush: (worktreePath: string, options: StashPushOptions_Deserialize) => __TAURI_INVOKE<null>("stash_push", { worktreePath, options }),
@@ -168,6 +179,8 @@ export const commands = {
 	 *  browser. The backend allowlists the route and builds the URL.
 	 */
 	ghOpenRepoPage: (owner: string, repo: string, page: string, pullNumber: number | null) => __TAURI_INVOKE<null>("gh_open_repo_page", { owner, repo, page, pullNumber }),
+	/**  Open the GitHub commit page (links its pull requests). The backend builds the URL. */
+	ghOpenCommit: (owner: string, repo: string, sha: string) => __TAURI_INVOKE<null>("gh_open_commit", { owner, repo, sha }),
 	/**  Latest Actions runs for the repo screen Actions tab as one stored account. */
 	ghRepoRuns: (owner: string, repo: string, account: string) => __TAURI_INVOKE<GhRun_Serialize[]>("gh_repo_runs", { owner, repo, account }),
 	/**  Re-run the failed jobs of one Actions run as one stored account. */
@@ -248,6 +261,8 @@ export type BlameResult = {
 	lines: BlameLine[],
 	groups: BlameGroup[],
 };
+
+export type CheckoutTarget = { kind: "branch"; name: string } | { kind: "commit"; sha: string };
 
 export type CommitOptions = {
 	message: string,

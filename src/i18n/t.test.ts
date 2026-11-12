@@ -4,7 +4,7 @@ import { en, type MsgKey } from "./en";
 const checkedKeys = [
   "ui.deferred_m3",
   "ui.deferred_m4",
-  "ui.deferred_m6",
+  "ui.deferred_m7",
   "palette.openChanges",
   "palette.openFiles",
   "palette.openBlame",

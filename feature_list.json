@@ -1,6 +1,6 @@
 {
-  "milestone": "M5 Launchpad and Inbox UI parity",
-  "plan": "docs/superpowers/plans/2026-11-12-m5-ui-parity.md",
+  "milestone": "M6 Advanced Git",
+  "plan": "docs/superpowers/plans/2026-11-12-m6-advanced-git.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -1206,6 +1206,39 @@
       ],
       "status": "done",
       "evidence": "Implementation and automated coverage complete on 2026-11-12. Added Inbox loading/empty, quota retry, CI/Agent filter, and unknown-reason tests. Launchpad view data is memoized by project data; worktree paths are indexed for session matching; Inbox visible rows are memoized by data/filter. User confirmed the M5 desktop/narrow-stage manual flow is OK on 2026-11-12. pnpm test passed 68 files / 606 tests; focused Launchpad/Inbox passed 17/17; pnpm typecheck, Clippy, git diff --check, and JSON validation passed. ./init.sh and serial Rust each had 10 macOS FSEvent startup failures (206 passed / 10 failed / 3 ignored); recorded as an environment verification gap, unrelated to M5 UI changes. Code and automated E2E review reports are in .agent/reviews/m5-stage-1-code-review.md and m5-stage-1-e2e.md."
+    },
+    {
+      "id": "m6-task-01-remote-sync",
+      "stage": 26,
+      "name": "Remote sync IPC + UI (fetch/pull/push)",
+      "description": ".agent/tasks/m6-task-01-remote-sync.md",
+      "dependencies": [
+        "m5-task-01-launchpad-inbox-redesign"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-12. Spec review PASS after re-review (.agent/reviews/m6-task-01-spec.md); blocking finding (failures without detail / uncapped stderr) fixed with regression test rejected_non_fast_forward_push_keeps_stderr_in_detail; non-blocking findings 2-5 and the re-review nit also fixed. ./init.sh: === Verification Complete === (Vitest 69 files / 611 tests; Rust 224 passed / 3 ignored; Clippy/typecheck clean); cargo test --lib sync:: 8/8; cargo fmt --check and git diff --check clean. Manual Checkpoint M6.1 approved by the user on 2026-11-13."
+    },
+    {
+      "id": "m6-task-02-checkout-branch-picks",
+      "stage": 26,
+      "name": "Checkout, branch, cherry-pick, revert",
+      "description": ".agent/tasks/m6-task-02-checkout-branch-picks.md",
+      "dependencies": [
+        "m6-task-01-remote-sync"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-12. Spec review PASS (.agent/reviews/m6-task-02-spec.md), no blocking findings; non-blocking 1 (no-op checkout left an Undo; regression test checking_out_the_current_branch_records_no_undo) and 4 (undo uses switch --no-guess) fixed; 2 (undo checks commit not branch), 3 (English-only conflict phrase matching, shared with M6-01) and 5 (label) deferred as low risk. ./init.sh: === Verification Complete === (Vitest 69 files / 614 tests; Rust 235 passed / 3 ignored; Clippy/typecheck clean). Manual Checkpoint M6.1 approved by the user on 2026-11-13."
+    },
+    {
+      "id": "m6-task-03-graph-cross-screen",
+      "stage": 26,
+      "name": "Graph cross-screen actions",
+      "description": ".agent/tasks/m6-task-03-graph-cross-screen.md",
+      "dependencies": [
+        "m6-task-02-checkout-branch-picks"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-12. Spec review PASS (.agent/reviews/m6-task-03-spec.md), no blocking findings; plan row note and unused i18n key fixed. Plan deviation recorded: Open pull request -> allowlisted GitHub commit page ('Open on GitHub'). ./init.sh: === Verification Complete === (Vitest 69 files / 615 tests; Rust 236 passed / 3 ignored; Clippy/typecheck clean). Manual Checkpoint M6.1 approved by the user on 2026-11-13."
     }
   ]
 }

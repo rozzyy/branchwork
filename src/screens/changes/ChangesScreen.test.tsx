@@ -25,6 +25,9 @@ import { useWorktrees } from "../../state/worktrees";
 import { useChanges } from "../../state/changes";
 import { useFiles } from "../../state/files";
 import { toast } from "../../ui/toast";
+import { gitFetch, gitPull, gitPush } from "../../ipc/sync";
+import { gitCheckout } from "../../ipc/gitops";
+import { useDialog } from "../../ui/dialog";
 import { ChangesView } from "./ChangesScreen";
 
 vi.mock("../../ipc/status", () => ({ readStatus: vi.fn() }));
@@ -49,6 +52,8 @@ vi.mock("../../ipc/stash", () => ({
   stashDrop: vi.fn(),
 }));
 vi.mock("../../ui/toast", () => ({ toast: vi.fn() }));
+vi.mock("../../ipc/sync", () => ({ gitFetch: vi.fn(), gitPull: vi.fn(), gitPush: vi.fn() }));
+vi.mock("../../ipc/gitops", () => ({ gitCheckout: vi.fn() }));
 
 const modified = { path: "src/auth/callback.ts", oldPath: null, indexStatus: "", worktreeStatus: "M", bytes: 1, large: false };
 const deleted = { path: "src/auth/old.ts", oldPath: null, indexStatus: "", worktreeStatus: "D", bytes: 1, large: false };
@@ -262,7 +267,7 @@ it("renders the disabled Generate button with the deferred tooltip", async () =>
   await setup();
   const generate = screen.getByRole("button", { name: "Generate commit message" });
   expect(generate).toBeDisabled();
-  expect(generate).toHaveAttribute("title", t("ui.deferred_m6"));
+  expect(generate).toHaveAttribute("title", t("ui.deferred_m7"));
 });
 
 it("shows an empty stash count chip", async () => {
@@ -327,6 +332,37 @@ it("stashes all changes from the Changes ⋯ menu", async () => {
 
   await waitFor(() =>
     expect(stashPush).toHaveBeenCalledWith("/repos/main", { includeUntracked: true }),
+  );
+});
+
+it("runs pull, push, fetch, and pop latest stash from the Changes ⋯ menu", async () => {
+  await setup(statusSummary(), [{ index: 0, message: "WIP", time: 0, branch: "main" }]);
+  vi.mocked(gitPull).mockResolvedValue(false);
+  vi.mocked(gitPush).mockResolvedValue(undefined);
+  vi.mocked(gitFetch).mockResolvedValue(undefined);
+  await waitFor(() => expect(useChanges.getState().stashes).toHaveLength(1));
+
+  for (const [name, command] of [["Pull", gitPull], ["Push", gitPush], ["Fetch", gitFetch]] as const) {
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: new RegExp(`^\\W*${name}$`) }));
+    await waitFor(() => expect(command).toHaveBeenCalledWith("/repos/main"));
+  }
+  await userEvent.click(screen.getByRole("button", { name: "More" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: /Pop latest stash/ }));
+  await waitFor(() => expect(stashPop).toHaveBeenCalledWith("/repos/main", 0));
+});
+
+it("checks out a branch from the Changes ⋯ Checkout… prompt", async () => {
+  await setup();
+  vi.mocked(gitCheckout).mockResolvedValue(true);
+  await userEvent.click(screen.getByRole("button", { name: "More" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: /Checkout…/ }));
+
+  expect(useDialog.getState().current?.title).toBe("Check out branch");
+  act(() => useDialog.getState().current?.resolve("feature/login"));
+
+  await waitFor(() =>
+    expect(gitCheckout).toHaveBeenCalledWith("/repos/main", { kind: "branch", name: "feature/login" }),
   );
 });
 

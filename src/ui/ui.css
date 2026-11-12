@@ -52,8 +52,10 @@
 .toast { display: flex; align-items: center; gap: 12px; min-width: 300px; padding: 10px 12px 10px 14px; border-radius: 14px; background: var(--glass2); backdrop-filter: blur(40px) saturate(1.8); -webkit-backdrop-filter: blur(40px) saturate(1.8); box-shadow: var(--shadow-pop), var(--spec), 0 0 0 .5px var(--line2); animation: toast-in .45s var(--spring); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(16px) scale(.92); } }
 .toast-ic { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--accs); color: var(--acc); }
-.toast-body { flex: 1; }
+.toast-body { flex: 1; min-width: 0; }
 .toast-body small { display: block; color: var(--fg3); }
+.toast-details summary { cursor: pointer; color: var(--fg3); font-size: 12px; }
+.toast-details pre { max-width: 420px; max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 6px 8px; border-radius: 8px; background: var(--s2); font-size: 11px; white-space: pre-wrap; word-break: break-word; }
 
 .dlg-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: oklch(0 0 0 / .35); backdrop-filter: blur(6px); animation: fade .2s; }
 @keyframes fade { from { opacity: 0; } }

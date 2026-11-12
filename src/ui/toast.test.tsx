@@ -32,3 +32,14 @@ it("updates the toast Undo action from op:done undoable state", async () => {
   act(() => eventState.callback?.({ payload: { undoable: true } }));
   expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
 });
+
+it("shows stderr behind a Show details disclosure", async () => {
+  useToasts.getState().push({ title: "Push failed", details: "remote: rejected by hook" });
+  render(<Toaster />);
+
+  const summary = screen.getByText("Show details");
+  expect(summary.closest("details")).not.toHaveAttribute("open");
+  act(() => summary.click());
+  expect(summary.closest("details")).toHaveAttribute("open");
+  expect(screen.getByText("remote: rejected by hook")).toBeInTheDocument();
+});

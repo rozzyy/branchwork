@@ -311,6 +311,14 @@ export function openGithubRepo(owner: string, repo: string): Promise<void> {
   return commands.ghOpenRepo(owner, repo).then(() => undefined);
 }
 
+/** Open the GitHub commit page (which links its pull requests); the backend builds the URL. */
+export function openGithubCommit(owner: string, repo: string, sha: string): Promise<void> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Opening a GitHub page requires the desktop app"));
+  }
+  return commands.ghOpenCommit(owner, repo, sha).then(() => undefined);
+}
+
 /** Open a fixed repository page or pull request in the system browser. */
 export function openGithubRepoPage(
   owner: string,
