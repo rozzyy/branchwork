@@ -2,6 +2,14 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-12: Fix issue #1 — preserve file search across unreadable folders
+
+- **Root cause:** Files `⌘P` builds a breadth-first index with up to six directory reads in parallel. A single `fs_tree` rejection propagated through `Promise.all`, discarding the entire batch and leaving unrelated readable folders out of the searchable list.
+- **Fix:** Isolate read failures per directory and continue indexing siblings. Added a regression test with one denied folder and a searchable file in a readable sibling.
+- **Complexity/security:** `N` directories and `F` entries remain O(N + F) traversal, with at most six simultaneous IPC reads. Existing `fs_tree` worktree/path validation and ignored-file policy remain unchanged; failed folders contribute no entries.
+- **Verification:** FilesScreen tests pass (14/14); `git diff --check` clean. `./init.sh` baseline passed typecheck but full Vitest had 12 unrelated timeouts/failures (568/580 passed) under parallel load. The worktree initially lacked `node_modules`; a temporary symlink to the existing checkout dependencies enabled checks. No filesystem/backend authorization rules changed.
+- **Next:** Commit the issue fix on `fix/issue-1` and fast-forward it into `main` as requested; keep the separate uncommitted M4-10 work in the `m4-stage-4` worktree untouched.
+
 ## 2026-11-11: Headless Repo trace + frame inspection (branch `m4-stage-1`, uncommitted)
 
 - **Trace:** entry RepoView → remote `rozzyy/branchwork` (SSH alias `github-pribadi`) → account resolution (no memory for owner → username match) → `gh_repo_meta(owner, repo, account=rozzyy)` asserted via recorded IPC args → Keychain token → `graphql` → `api_json` → `api_failure` (401 surfaces invalid-token text; genuine invisibility keeps "Could not resolve") → header/tabs/file table/sidebar/Issues header.

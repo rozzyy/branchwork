@@ -92,8 +92,14 @@ async function loadFullTree(worktreePath: string, showIgnored: boolean): Promise
   let pending = [""];
   while (pending.length > 0) {
     const results = await mapConcurrent(pending, TREE_IO_CONCURRENCY, async (path) => {
-      const { entries } = await fsTree(worktreePath, { path, showIgnored, includeStatus: false });
-      return [path, entries] as const;
+      try {
+        const { entries } = await fsTree(worktreePath, { path, showIgnored, includeStatus: false });
+        return [path, entries] as const;
+      } catch {
+        // A single unreadable or concurrently removed directory should not discard
+        // search results from every other directory in this breadth-first batch.
+        return [path, [] as FsEntry[]] as const;
+      }
     });
     const next: string[] = [];
     for (const [path, entries] of results) {

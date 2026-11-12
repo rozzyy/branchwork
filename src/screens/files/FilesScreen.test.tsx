@@ -193,6 +193,29 @@ it("⌘P search filters the tree via the fuzzy ranker", async () => {
   expect(screen.queryByText("utils.ts")).not.toBeInTheDocument();
 });
 
+it("keeps searchable files from readable folders when another folder cannot be listed", async () => {
+  await setup();
+  vi.mocked(fsTree).mockImplementation(async (_path, options) => {
+    if (options.path === "") {
+      return {
+        entries: [...rootEntries, { name: "restricted", isDir: true, status: null, size: 0, mtime: 1000 }],
+      };
+    }
+    if (options.path === "src") return { entries: srcEntries };
+    if (options.path === "restricted") throw new Error("Permission denied");
+    return { entries: [] };
+  });
+
+  await userEvent.type(screen.getByPlaceholderText(/Find file/), "main");
+
+  expect(await screen.findByText("main.ts")).toBeInTheDocument();
+  expect(fsTree).toHaveBeenCalledWith(worktreePath, {
+    path: "restricted",
+    showIgnored: false,
+    includeStatus: false,
+  });
+});
+
 it("discarding changes from the context menu asks for confirmation before calling discard_paths", async () => {
   await setup({ expanded: { src: true } });
   const row = (await screen.findByText("main.ts")).closest(".files-tree-node") as HTMLElement;
