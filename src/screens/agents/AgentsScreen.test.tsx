@@ -45,6 +45,19 @@ vi.mock("../../ipc/settings", () => ({
   saveSetting: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock("../../ipc/sessionUsage", () => ({
+  readSessionUsage: vi.fn(() =>
+    Promise.resolve({
+      state: "ok",
+      tokens: { input: 10_100, output: 2_200, total: 12_300 },
+      contextUsed: 99_112,
+      contextLimit: 258_400,
+      quota: null,
+    }),
+  ),
+  readSaverStats: vi.fn(() => Promise.resolve({ runs: 4, bytesBefore: 20_000, bytesAfter: 7_700 })),
+}));
+
 vi.mock("../../ipc/status", () => ({
   readStatus: vi.fn(),
 }));
@@ -96,6 +109,7 @@ function seed() {
         sharedWithDock: false,
         status: "running",
         limitHit: false,
+        savers: { rtk: "unsupported", caveman: "unsupported" },
       },
       {
         id: "a2",
@@ -108,6 +122,7 @@ function seed() {
         sharedWithDock: false,
         status: "idle",
         limitHit: false,
+        savers: { rtk: "unsupported", caveman: "unsupported" },
       },
     ],
     layoutMode: "grid",
@@ -143,6 +158,28 @@ beforeEach(() => {
 });
 
 describe("AgentsView", () => {
+  it("pane shows session meter and saver badges", async () => {
+    useSessions.setState({
+      sessions: useSessions.getState().sessions.map((session) =>
+        session.id === "a1"
+          ? { ...session, id: "agent-a1", savers: { rtk: "active", caveman: "off" } }
+          : session,
+      ),
+    });
+    render(<AgentsView />);
+    const meter = await screen.findByLabelText(/Session tokens — in 10\.1k · out 2\.2k · total 12\.3k/);
+    expect(meter).toHaveTextContent("38%");
+    expect(meter).toHaveTextContent("12.3k tok");
+    const rtk = await screen.findByRole("button", { name: /RTK-style compression.*Active.*Saved 12\.3k chars in 4 runs/ });
+    expect(rtk).toHaveAttribute("data-state", "active");
+    expect(rtk).toHaveTextContent("RTK");
+    const caveman = screen.getByRole("button", { name: /Caveman-style answers.*Off/ });
+    expect(caveman).toHaveAttribute("data-state", "off");
+    // The failed-to-start Claude pane has no live PTY: no meter, and its
+    // savers read unsupported in this fixture.
+    expect(screen.getAllByText("Saver n/a")).toHaveLength(1);
+  });
+
   it("shows loading feedback while agent sessions are being restored", () => {
     useSessions.setState({ loaded: false });
     render(<AgentsView />);
@@ -203,6 +240,7 @@ describe("AgentsView", () => {
           slot: "auto",
           status: "waiting",
           limitHit: false,
+          savers: { rtk: "unsupported", caveman: "unsupported" },
         },
       ],
     });
@@ -269,6 +307,7 @@ describe("AgentsView", () => {
           sharedWithDock: false,
           status: "waiting",
           limitHit: false,
+          savers: { rtk: "unsupported", caveman: "unsupported" },
         },
       ],
     });
@@ -301,6 +340,7 @@ describe("AgentsView", () => {
           sharedWithDock: false,
           status: "waiting",
           limitHit: false,
+          savers: { rtk: "unsupported", caveman: "unsupported" },
         },
       ],
     });
@@ -645,6 +685,7 @@ describe("AgentsView", () => {
           sharedWithDock: false,
           status: "running",
           limitHit: false,
+          savers: { rtk: "unsupported", caveman: "unsupported" },
         },
       ],
       raceEntries: [{ id: "race-1", cliId: "codex", worktreePath: "/wt/fix-it-codex" }],

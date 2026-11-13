@@ -30,6 +30,13 @@ export function parseClaudeAuth(raw: string): ClaudeAuth | null {
   return { loggedIn, email: typeof email === "string" && email.length > 0 ? email : null };
 }
 
+/** "resets in 2h 5m" / "resets in 12m" for a remaining duration in ms. */
+export function resetLabel(remainingMs: number): string {
+  const minutes = Math.floor(Math.max(0, remainingMs) / 60000);
+  const hours = Math.floor(minutes / 60);
+  return hours >= 1 ? `resets in ${hours}h ${minutes % 60}m` : `resets in ${minutes}m`;
+}
+
 export interface MuseUsage {
   /** Human window label derived from the probe, e.g. "resets in 19h 12m". */
   window: string;
@@ -57,13 +64,8 @@ export function parseMuseUsage(raw: string): MuseUsage | null {
   if (typeof percent !== "number" || !Number.isFinite(percent)) return null;
   if (typeof resetsAt !== "number" || !Number.isFinite(resetsAt)) return null;
   const asOf = typeof fields.asOfMs === "number" ? fields.asOfMs : Date.now();
-  const ms = Math.max(0, resetsAt - asOf);
-  const minutes = Math.floor(ms / 60000);
-  const hours = Math.floor(minutes / 60);
-  const windowLabel =
-    hours >= 1 ? `resets in ${hours}h ${minutes % 60}m` : `resets in ${minutes}m`;
   return {
-    window: windowLabel,
+    window: resetLabel(resetsAt - asOf),
     percent: Math.min(100, Math.max(0, Math.round(percent))),
   };
 }

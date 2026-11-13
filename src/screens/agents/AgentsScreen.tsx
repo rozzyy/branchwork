@@ -3,6 +3,8 @@ import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
 import { useProfiles, usageKey } from "../../agents/profiles";
 import { UsageBar } from "../../agents/usage";
+import { formatTokens, useSessionUsage, useUsagePolling } from "../../agents/sessionUsage";
+import { SAVER_IDS, type SaverId, type SaverState } from "../../agents/savers";
 import { useSessions, type AgentSession, type AgentStatus, type RaceEntry } from "../../agents/sessions";
 import { useStage } from "../../state/stage";
 import { useRepos } from "../../state/repos";
@@ -208,6 +210,125 @@ function ProfileChip({ session }: { session: AgentSession }) {
   );
 }
 
+/**
+ * Session token meter. A percentage appears only when the log reports the
+ * model's context window; otherwise just the counted tokens. Unknown and
+ * failed reads get their own short labels, never a zero.
+ */
+function SessionMeter({ session }: { session: AgentSession }) {
+  const view = useSessionUsage((s) => s.views[session.id]);
+  if (!session.sessionId || !view) return null;
+  if (view.kind === "ok") {
+    const detail =
+      t("agents.usageDetail", {
+        input: formatTokens(view.tokens.input),
+        output: formatTokens(view.tokens.output),
+        total: formatTokens(view.tokens.total),
+      }) +
+      (view.percent != null ? ` · ${t("agents.usageContext", { percent: String(view.percent) })}` : "") +
+      (view.stale ? ` · ${t("agents.usageStale")}` : "");
+    return (
+      <span className={"agent-usage" + (view.stale ? " stale" : "")} title={detail} aria-label={detail}>
+        {view.percent != null && (
+          <>
+            {view.percent}% <UsageBar usage={{ percent: view.percent, window: "" }} />{" "}
+          </>
+        )}
+        {t("agents.usageTokens", { tokens: formatTokens(view.tokens.total) })}
+      </span>
+    );
+  }
+  const name = CLI_REGISTRY[session.cliId].name;
+  const [label, help] =
+    view.kind === "loading"
+      ? [t("agents.usageLoading"), t("agents.usageLoading")]
+      : view.kind === "none"
+        ? [t("agents.usageNone"), t("agents.usageNoneHelp")]
+        : view.kind === "unsupported"
+          ? [t("agents.usageNa"), t("agents.usageUnsupportedHelp", { name })]
+          : [t("agents.usageNa"), t("agents.usageUnavailableHelp")];
+  return (
+    <span className="agent-usage muted" title={help} aria-label={help}>
+      {label}
+    </span>
+  );
+}
+
+const SAVER_NAME: Record<SaverId, "agents.saverRtk" | "agents.saverCaveman"> = {
+  rtk: "agents.saverRtk",
+  caveman: "agents.saverCaveman",
+};
+const SAVER_HELP: Record<SaverId, "agents.saverRtkHelp" | "agents.saverCavemanHelp"> = {
+  rtk: "agents.saverRtkHelp",
+  caveman: "agents.saverCavemanHelp",
+};
+const SAVER_STATE: Record<
+  SaverState,
+  "agents.saverActive" | "agents.saverOff" | "agents.saverUnavailable" | "agents.saverUnsupported"
+> = {
+  active: "agents.saverActive",
+  off: "agents.saverOff",
+  unavailable: "agents.saverUnavailable",
+  unsupported: "agents.saverUnsupported",
+};
+
+/**
+ * Compact badges for the session's token savers. Each reflects the running
+ * integration, not the global setting; hover, focus or click reveals what
+ * the method does and, for RTK, the measured saving.
+ */
+function SaverBadges({ session }: { session: AgentSession }) {
+  const savings = useSessionUsage((s) => s.savings[session.id]);
+  const [open, setOpen] = useState<SaverId | null>(null);
+  const shown = SAVER_IDS.filter((id) => session.savers[id] !== "unsupported");
+  if (shown.length === 0) {
+    const help = t("agents.saverNoneHelp", { name: CLI_REGISTRY[session.cliId].name });
+    return (
+      <span className="chip agent-saver-na" title={help} aria-label={help}>
+        {t("agents.saverNone")}
+      </span>
+    );
+  }
+  return (
+    <span className="agent-savers">
+      {shown.map((id) => {
+        const state = session.savers[id];
+        const parts = [t(SAVER_HELP[id]), t(SAVER_STATE[state])];
+        if (id === "rtk" && savings && savings.bytesBefore > savings.bytesAfter) {
+          parts.push(
+            t("agents.saverSaved", {
+              chars: formatTokens(savings.bytesBefore - savings.bytesAfter),
+              runs: String(savings.runs),
+            }),
+          );
+        }
+        const label = parts.join(" — ");
+        return (
+          <span key={id} className="agent-saver-wrap">
+            <button
+              type="button"
+              className="agent-saver"
+              data-state={state}
+              title={label}
+              aria-label={label}
+              aria-expanded={open === id ? "true" : "false"}
+              onClick={() => setOpen(open === id ? null : id)}
+              onBlur={() => setOpen((current) => (current === id ? null : current))}
+            >
+              {t(SAVER_NAME[id])}
+            </button>
+            {open === id && (
+              <span className="agent-saver-tip" role="tooltip">
+                {label}
+              </span>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function StatusDot({ status }: { status: PaneStatus }) {
   return (
     <span
@@ -280,6 +401,8 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
         )}
         <ProfileChip session={session} />
         <StatusChip status={status} />
+        <SessionMeter session={session} />
+        <SaverBadges session={session} />
         <span className="sp" />
         <span className="agent-lay">
           {(["left", "right", "full"] as const).map((side) => (
@@ -1071,6 +1194,7 @@ export function AgentsView() {
   const sessions = useSessions((s) => s.sessions);
   const layoutMode = useSessions((s) => s.layoutMode);
   const loaded = useSessions((s) => s.loaded);
+  useUsagePolling();
   useEffect(() => {
     // Clear Codex limit flags created by the old text heuristic. Codex quota
     // status is not reliable enough to keep showing an inferred exhausted state.

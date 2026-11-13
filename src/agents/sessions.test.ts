@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSessions } from "./sessions";
 import { ensureProfileDir, probeCli, profileHasCredentials, resolveCliBinary, seedClaudeOnboarding } from "../ipc/cli";
-import { ensureAgentHooks, notifySocketPath, onAgentStatus } from "../ipc/notify";
+import { ensureAgentHooks, ensureSaverHook, notifySocketPath, onAgentStatus } from "../ipc/notify";
 import {
   closeTerminal,
   onTerminalExit,
@@ -45,6 +45,7 @@ vi.mock("../ipc/settings", () => ({
 vi.mock("../ipc/notify", () => ({
   notifySocketPath: vi.fn(),
   ensureAgentHooks: vi.fn(),
+  ensureSaverHook: vi.fn(),
   onAgentStatus: vi.fn(),
   notifyWhenUnfocused: vi.fn().mockResolvedValue(false),
 }));
@@ -110,6 +111,7 @@ beforeEach(async () => {
   });
   vi.mocked(notifySocketPath).mockReset().mockResolvedValue("/sock/notify.sock");
   vi.mocked(ensureAgentHooks).mockReset().mockResolvedValue(true);
+  vi.mocked(ensureSaverHook).mockReset().mockResolvedValue(true);
   vi.mocked(onAgentStatus).mockReset().mockImplementation((callback: (event: StatusEvent) => void) => {
     statusHandler = callback;
     return Promise.resolve(() => {});
@@ -119,7 +121,7 @@ beforeEach(async () => {
   vi.mocked(ask).mockReset().mockResolvedValue(true);
   adoptExisting.mockReset();
   useToasts.setState({ toasts: [] });
-  useSettings.setState({ agentAutoSwitch: true });
+  useSettings.setState({ agentAutoSwitch: true, agentTokenSaver: true, agentSaverProtected: [] });
   useWorktrees.setState({ activePath: "/wt/a" });
   useProfiles.setState({
     profiles: [],
@@ -713,5 +715,63 @@ describe("handover output tail", () => {
     await useSessions.getState().closeSession(id!, { confirm: false });
     expect(ask).not.toHaveBeenCalled();
     expect(stopTerminal).toHaveBeenCalledWith("pty-1", 3000);
+  });
+});
+
+describe("token saver", () => {
+  async function startClaude() {
+    await useProfiles.getState().createProfile("claude", "Personal");
+    await useSessions.getState().startSession({
+      cliId: "claude",
+      profile: { cliId: "claude", slug: "personal" },
+      worktreePath: "/wt/a",
+    });
+    const written = vi.mocked(writeTerminal).mock.calls.map(([, data]) => new TextDecoder().decode(data as Uint8Array));
+    const env = vi.mocked(spawnTerminal).mock.calls[0]?.[3] as Record<string, string>;
+    return { written: written.join(""), env, session: useSessions.getState().sessions[0] };
+  }
+
+  it("saver enabled launches claude with caveman and rtk env", async () => {
+    useSettings.setState({ agentSaverProtected: ["git diff", "pytest"] });
+    const { written, env, session } = await startClaude();
+    expect(ensureSaverHook).toHaveBeenCalledWith("claude", "/profiles/claude-personal");
+    expect(written).toContain("'--append-system-prompt'");
+    expect(env).toMatchObject({ BRANCHWORK_SAVER: "rtk", BRANCHWORK_SAVER_PROTECT: "git diff,pytest" });
+    expect(session.savers).toEqual({ rtk: "active", caveman: "active" });
+  });
+
+  it("saver disabled launches plain argv", async () => {
+    useSettings.setState({ agentTokenSaver: false });
+    const { written, env, session } = await startClaude();
+    expect(written).toBe("'claude'\n");
+    expect(env.BRANCHWORK_SAVER).toBeUndefined();
+    expect(ensureSaverHook).not.toHaveBeenCalled();
+    expect(session.savers).toEqual({ rtk: "off", caveman: "off" });
+  });
+
+  it("rtk unavailable when the hook cannot install", async () => {
+    vi.mocked(ensureSaverHook).mockResolvedValue(false);
+    const { env, session } = await startClaude();
+    expect(env.BRANCHWORK_SAVER).toBeUndefined();
+    expect(session.savers).toEqual({ rtk: "unavailable", caveman: "active" });
+  });
+
+  it("marks savers unsupported on CLIs without an integration", async () => {
+    const profile = await seedProfile();
+    await useSessions.getState().startSession({ cliId: "codex", profile, worktreePath: "/wt/a" });
+    expect(useSessions.getState().sessions[0].savers).toEqual({ rtk: "unsupported", caveman: "unsupported" });
+    expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("'codex'\n"));
+  });
+
+  it("resumes restored claude sessions with the concise flag on both sides", async () => {
+    await useProfiles.getState().createProfile("claude", "Personal");
+    await useSessions.getState().startSession({
+      cliId: "claude",
+      profile: { cliId: "claude", slug: "personal" },
+      worktreePath: "/wt/a",
+      resume: true,
+    });
+    const written = vi.mocked(writeTerminal).mock.calls.map(([, data]) => new TextDecoder().decode(data as Uint8Array)).join("");
+    expect(written).toMatch(/^claude --continue --append-system-prompt '.+' \|\| claude --append-system-prompt '.+'\n$/);
   });
 });

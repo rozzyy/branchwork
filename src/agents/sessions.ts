@@ -9,6 +9,7 @@ import { CliIcon } from "./cliIcons";
 import { ensureProfileDir, profileHasCredentials, resolveCliBinary } from "../ipc/cli";
 import {
   ensureAgentHooks,
+  ensureSaverHook,
   notifySocketPath,
   notifyWhenUnfocused,
   onAgentStatus,
@@ -33,6 +34,7 @@ import { useProfiles, type ProfileRef } from "./profiles";
 import { useSettings } from "../state/settings";
 import { useStage } from "../state/stage";
 import { useWorktrees } from "../state/worktrees";
+import { cavemanResumeLine, sessionSavers, withCaveman, type SessionSavers } from "./savers";
 
 export type AgentSlot = "left" | "right" | "auto" | "full";
 
@@ -51,6 +53,10 @@ export interface AgentSession {
   status: AgentStatus;
   /** The CLI printed a usage-limit message; the banner offers a switch. */
   limitHit: boolean;
+  /** Token-saver state of the running integration (not persisted). */
+  savers: SessionSavers;
+  /** When the current PTY started (ms); usage readers ignore older logs. */
+  startedAt?: number;
 }
 
 export type AgentLayoutMode = "grid" | "full";
@@ -393,7 +399,9 @@ export const useSessions = create<SessionsStore>((set, get) => {
     agentId: string,
     cliId: CliId,
     profile: ProfileRef,
-  ): Promise<{ env: Record<string, string> } | { error: string; loginRequired?: boolean }> => {
+  ): Promise<
+    { env: Record<string, string>; savers: SessionSavers } | { error: string; loginRequired?: boolean }
+  > => {
     let profileDir: string;
     try {
       profileDir = await ensureProfileDir(profile.cliId, profile.slug);
@@ -438,17 +446,32 @@ export const useSessions = create<SessionsStore>((set, get) => {
     // Hook setup is best-effort: a missing sidecar or unsupported CLI only
     // loses the primary signal; the output heuristics still apply.
     void ensureAgentHooks(cliId, profileDir).catch(() => false);
+    // Token saver (on by default): RTK counts as active only once the hook
+    // sidecar confirmed installation; the env flag arms it for this session.
+    const { agentTokenSaver, agentSaverProtected } = useSettings.getState();
+    const rtkReady =
+      agentTokenSaver &&
+      sessionSavers(cliId, true, true).rtk === "active" &&
+      (await ensureSaverHook(cliId, profileDir).catch(() => false));
+    const savers = sessionSavers(cliId, agentTokenSaver, rtkReady);
     let env: Record<string, string>;
     try {
       env = {
         ...resolveCli(CLI_REGISTRY[cliId]).envFor(profileDir),
         ...(await hookEnv(agentId).catch(() => ({}))),
+        ...(savers.rtk === "active"
+          ? { BRANCHWORK_SAVER: "rtk", BRANCHWORK_SAVER_PROTECT: agentSaverProtected.join(",") }
+          : {}),
       };
     } catch (error) {
       return { error: errorMessage(error) };
     }
-    return { env };
+    return { env, savers };
   };
+
+  /** Resume/launch line with the concise-answer instruction when active. */
+  const withSaverLine = (cliId: CliId, savers: SessionSavers, line: string): string =>
+    savers.caveman === "active" ? cavemanResumeLine(cliId, line) : line;
 
   /** Spawn the shell and write one raw command line over a prepared env. */
   const spawnPreparedShell = async (
@@ -491,16 +514,17 @@ export const useSessions = create<SessionsStore>((set, get) => {
     prefix: string[] = [],
     beforeWrite?: (sessionId: string) => Promise<void>,
     commandOverride?: string,
-  ): Promise<{ sessionId: string } | { error: string; loginRequired?: boolean }> => {
+  ): Promise<
+    { sessionId: string; savers: SessionSavers } | { error: string; loginRequired?: boolean }
+  > => {
     const ready = await prepareAgentShell(agentId, cliId, profile);
     if (!("env" in ready)) return ready;
-    return spawnPreparedShell(
-      worktreePath,
-      ready.env,
-      commandOverride ?? argv.map(quoteArg).join(" "),
-      prefix,
-      beforeWrite,
-    );
+    const command =
+      commandOverride !== undefined
+        ? withSaverLine(cliId, ready.savers, commandOverride)
+        : (ready.savers.caveman === "active" ? withCaveman(cliId, argv) : argv).map(quoteArg).join(" ");
+    const result = await spawnPreparedShell(worktreePath, ready.env, command, prefix, beforeWrite);
+    return "sessionId" in result ? { ...result, savers: ready.savers } : result;
   };
 
   return {
@@ -631,6 +655,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
         sharedWithDock: false,
         status: "idle",
         limitHit: false,
+        savers: sessionSavers(request.cliId, useSettings.getState().agentTokenSaver, false),
       };
       const existing = findSession(session.id);
       set({
@@ -667,7 +692,13 @@ export const useSessions = create<SessionsStore>((set, get) => {
       }
       if ("sessionId" in result) {
         exitedSessions.delete(result.sessionId);
-        updateSession(session.id, { sessionId: result.sessionId, error: null, status: "running" });
+        updateSession(session.id, {
+          sessionId: result.sessionId,
+          error: null,
+          status: "running",
+          savers: result.savers,
+          startedAt: Date.now(),
+        });
         scheduleIdle(session.id);
       } else if (result.loginRequired) {
         set({ sessions: get().sessions.filter((item) => item.id !== session.id) });
@@ -756,7 +787,11 @@ export const useSessions = create<SessionsStore>((set, get) => {
                 }
                 return;
               }
-              const result = await spawnPreparedShell(removed.worktreePath, ready.env, command);
+              const result = await spawnPreparedShell(
+                removed.worktreePath,
+                ready.env,
+                withSaverLine(removed.cliId, ready.savers, command),
+              );
               if (!("sessionId" in result)) {
                 toast({
                   title: t("agents.spawnError", { name: def.name, message: result.error }),
@@ -768,7 +803,15 @@ export const useSessions = create<SessionsStore>((set, get) => {
               set({
                 sessions: [
                   ...get().sessions,
-                  { ...removed, id: nextSessionId(), sessionId: result.sessionId, error: null, sharedWithDock: false },
+                  {
+                    ...removed,
+                    id: nextSessionId(),
+                    sessionId: result.sessionId,
+                    error: null,
+                    sharedWithDock: false,
+                    savers: ready.savers,
+                    startedAt: Date.now(),
+                  },
                 ],
               });
               save();
@@ -852,7 +895,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
       const result = await spawnPreparedShell(
         session.worktreePath,
         ready.env,
-        command,
+        withSaverLine(session.cliId, ready.savers, command),
         [],
         async (sessionId) => {
           // Switching replaces the mounted PTY just like an initial launch.
@@ -875,6 +918,8 @@ export const useSessions = create<SessionsStore>((set, get) => {
         error: null,
         status: "running",
         limitHit: false,
+        savers: ready.savers,
+        startedAt: Date.now(),
       });
       scheduleIdle(id);
       save();
@@ -1020,6 +1065,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
         sharedWithDock: false,
         status: "idle",
         limitHit: false,
+        savers: sessionSavers(item.cliId, useSettings.getState().agentTokenSaver, false),
       }));
       set({
         sessions: restored,

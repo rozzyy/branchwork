@@ -100,6 +100,7 @@ it("badges the Agents nav while a session waits", () => {
         sharedWithDock: false,
         status: "waiting",
         limitHit: false,
+        savers: { rtk: "unsupported", caveman: "unsupported" },
       },
     ],
   });

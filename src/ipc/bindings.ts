@@ -221,6 +221,20 @@ export const commands = {
 	 */
 	cliEnsureHooks: (cliId: string, profileDir: string) => __TAURI_INVOKE<boolean>("cli_ensure_hooks", { cliId, profileDir }),
 	/**
+	 *  Install the token-saver `PreToolUse` hook into an isolated Claude
+	 *  profile. True only when the sidecar exists and the hook is in place;
+	 *  false for other CLIs or a missing sidecar (the saver then shows as
+	 *  unavailable). Never touches user config outside the profile dir.
+	 */
+	cliEnsureSaverHook: (cliId: string, profileDir: string) => __TAURI_INVOKE<boolean>("cli_ensure_saver_hook", { cliId, profileDir }),
+	/**
+	 *  Token usage for one agent pane from the CLI's own local session log.
+	 *  Numeric aggregates only; unsupported CLIs report `unsupported`.
+	 */
+	agentSessionUsage: (cliId: string, profileDir: string, worktreePath: string, sinceMs: number | null) => __TAURI_INVOKE<SessionUsage_Serialize>("agent_session_usage", { cliId, profileDir, worktreePath, sinceMs }),
+	/**  Measured byte savings the saver sidecar recorded for one agent session. */
+	agentSaverStats: (agentId: string) => __TAURI_INVOKE<SaverStats>("agent_saver_stats", { agentId }),
+	/**
 	 *  Write the handover note and ensure the `.branchwork/` git-exclude entry.
 	 *  The worktree must be catalog-registered; paths inside are fixed names.
 	 */
@@ -1084,6 +1098,31 @@ export type RateLimitState_Serialize = {
 /**  Per-region choice; `both` is ours followed by theirs. */
 export type RegionChoice = { kind: "ours" } | { kind: "theirs" } | { kind: "both" } | { kind: "manual"; text: string };
 
+/**  Measured RTK-style savings for one agent session (bytes, not tokens). */
+export type SaverStats = {
+	runs: number,
+	bytesBefore: number,
+	bytesAfter: number,
+};
+
+export type SessionUsage = SessionUsage_Serialize | SessionUsage_Deserialize;
+
+export type SessionUsage_Deserialize = 
+/**  The CLI has no usage reader. */
+{ state: "unsupported" } | 
+/**  A reader exists but no matching session log was found yet. */
+{ state: "noData" } | {
+	state: "ok",
+} & UsageReport_Deserialize;
+
+export type SessionUsage_Serialize = 
+/**  The CLI has no usage reader. */
+{ state: "unsupported" } | 
+/**  A reader exists but no matching session log was found yet. */
+{ state: "noData" } | {
+	state: "ok",
+} & UsageReport_Serialize;
+
 export type StashEntry = {
 	index: number,
 	message: string,
@@ -1133,6 +1172,53 @@ export type StatusSummary_Deserialize = {
 export type StatusSummary_Serialize = {
 	staged: StatusEntry_Serialize[],
 	unstaged: StatusEntry_Serialize[],
+};
+
+export type TokenCounts = {
+	input: number,
+	output: number,
+	total: number,
+};
+
+/**  Provider-reported account quota window (Codex `rate_limits.primary`). */
+export type UsageQuota = UsageQuota_Serialize | UsageQuota_Deserialize;
+
+/**  Provider-reported account quota window (Codex `rate_limits.primary`). */
+export type UsageQuota_Deserialize = {
+	/**  0–100, the provider's own `used_percent`. */
+	percent: number,
+	windowMinutes?: number | null,
+	/**  Unix seconds. */
+	resetsAt?: number | null,
+};
+
+/**  Provider-reported account quota window (Codex `rate_limits.primary`). */
+export type UsageQuota_Serialize = {
+	/**  0–100, the provider's own `used_percent`. */
+	percent: number,
+	windowMinutes: number | null,
+	/**  Unix seconds. */
+	resetsAt: number | null,
+};
+
+export type UsageReport = UsageReport_Serialize | UsageReport_Deserialize;
+
+export type UsageReport_Deserialize = {
+	tokens: TokenCounts,
+	/**  Tokens in the latest request's context, when the log reports it. */
+	contextUsed?: number | null,
+	/**  The model's context window, when the log reports it. */
+	contextLimit?: number | null,
+	quota?: UsageQuota_Deserialize | null,
+};
+
+export type UsageReport_Serialize = {
+	tokens: TokenCounts,
+	/**  Tokens in the latest request's context, when the log reports it. */
+	contextUsed: number | null,
+	/**  The model's context window, when the log reports it. */
+	contextLimit: number | null,
+	quota: UsageQuota_Serialize | null,
 };
 
 export type WipSummary = WipSummary_Serialize | WipSummary_Deserialize;

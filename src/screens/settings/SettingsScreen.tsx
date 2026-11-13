@@ -345,11 +345,36 @@ function AgentAccounts() {
   );
 }
 
+/** Comma-separated commands the RTK-style saver never rewrites; saved on blur/Enter. */
+function SaverProtectedInput() {
+  const saved = useSettings((s) => s.agentSaverProtected);
+  const setProtected = useSettings((s) => s.setAgentSaverProtected);
+  const [draft, setDraft] = useState(saved.join(", "));
+  useEffect(() => setDraft(saved.join(", ")), [saved]);
+  const commit = () => setProtected(draft.split(","));
+  return (
+    <input
+      type="text"
+      className="input"
+      value={draft}
+      placeholder={t("settings.saverProtectedPlaceholder")}
+      aria-label={t("settings.saverProtected")}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+    />
+  );
+}
+
 export function SettingsView() {
   const theme = useSettings((s) => s.theme);
   const setTheme = useSettings((s) => s.setTheme);
   const agentAutoSwitch = useSettings((s) => s.agentAutoSwitch);
   const setAgentAutoSwitch = useSettings((s) => s.setAgentAutoSwitch);
+  const agentTokenSaver = useSettings((s) => s.agentTokenSaver);
+  const setAgentTokenSaver = useSettings((s) => s.setAgentTokenSaver);
   const profilesLoaded = useProfiles((s) => s.loaded);
   const profileLoadError = useProfiles((s) => s.loadError);
   const loadProfiles = useProfiles((s) => s.load);
@@ -445,6 +470,16 @@ export function SettingsView() {
             checked={agentAutoSwitch}
             onChange={(on) => setAgentAutoSwitch(on)}
           />
+        </Row>
+        <Row label={t("settings.tokenSaver")}>
+          <Switch
+            label={t("settings.tokenSaver")}
+            checked={agentTokenSaver}
+            onChange={(on) => setAgentTokenSaver(on)}
+          />
+        </Row>
+        <Row label={t("settings.saverProtected")}>
+          <SaverProtectedInput />
         </Row>
       </div>
       <h3>{t("settings.agentAccounts")}</h3>

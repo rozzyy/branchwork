@@ -31,6 +31,17 @@ export function ensureAgentHooks(cliId: string, profileDir: string): Promise<boo
   return commands.cliEnsureHooks(cliId, profileDir);
 }
 
+/**
+ * Install the token-saver PreToolUse hook into the isolated profile dir.
+ * Resolves true only when the sidecar exists and the hook is in place.
+ */
+export function ensureSaverHook(cliId: string, profileDir: string): Promise<boolean> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Token saver hooks require the desktop app"));
+  }
+  return commands.cliEnsureSaverHook(cliId, profileDir);
+}
+
 /** Subscribe to hook-reported agent status events. */
 export function onAgentStatus(callback: (event: AgentStatusEvent) => void): Promise<UnlistenFn> {
   return listen<AgentStatusEvent>("agent:status", (event) => callback(event.payload));

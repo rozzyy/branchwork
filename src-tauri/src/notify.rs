@@ -84,34 +84,37 @@ pub fn socket_path() -> Result<PathBuf, AppError> {
 /// Absolute path of the bundled `branchwork-notify` sidecar next to the app
 /// binary. Best-effort: hook setup treats a missing binary as "no hooks".
 pub fn notify_binary_path() -> Result<PathBuf, AppError> {
+    sidecar_path("branchwork-notify")
+}
+
+/// Absolute path of the bundled `branchwork-saver` sidecar (token saver).
+pub fn saver_binary_path() -> Result<PathBuf, AppError> {
+    sidecar_path("branchwork-saver")
+}
+
+fn sidecar_path(stem: &str) -> Result<PathBuf, AppError> {
     let exe = std::env::current_exe()
         .map_err(|error| AppError::internal(format!("Could not locate app binary: {error}")))?;
     let Some(dir) = exe.parent() else {
         return Err(AppError::internal("App binary has no parent dir"));
     };
     #[cfg(windows)]
-    let name = "branchwork-notify.exe";
+    let name = format!("{stem}.exe");
     #[cfg(not(windows))]
-    let name = "branchwork-notify";
+    let name = stem.to_owned();
     let candidate = dir.join(name);
     if candidate.is_file() {
         Ok(candidate)
     } else {
-        Err(AppError::not_found(
-            "branchwork-notify sidecar is not built; run cargo build --bin branchwork-notify",
-        ))
+        Err(AppError::not_found(format!(
+            "{stem} sidecar is not built; run cargo build --bin {stem}"
+        )))
     }
 }
 
-/// Merge Claude Code hook entries into the profile `settings.json`.
-///
-/// Reads the existing file when present (must stay a JSON object; other keys
-/// are preserved byte-for-value), ensures `hooks.Notification` and
-/// `hooks.Stop` each carry our notify command once, and writes the file back.
-/// Returns true when the file changed.
-pub fn ensure_claude_hooks(profile_dir: &Path, notify_bin: &Path) -> Result<bool, AppError> {
-    let path = profile_dir.join("settings.json");
-    let mut root = match std::fs::read_to_string(&path) {
+/// Read the profile `settings.json` as a JSON object (empty when missing).
+fn read_profile_settings(path: &Path) -> Result<serde_json::Value, AppError> {
+    let root = match std::fs::read_to_string(path) {
         Ok(text) => serde_json::from_str::<serde_json::Value>(&text).map_err(|error| {
             AppError::validation(format!("Profile settings.json is not valid JSON: {error}"))
         })?,
@@ -124,16 +127,31 @@ pub fn ensure_claude_hooks(profile_dir: &Path, notify_bin: &Path) -> Result<bool
             )));
         }
     };
+    if !root.is_object() {
+        return Err(AppError::validation(
+            "Profile settings.json must be a JSON object",
+        ));
+    }
+    Ok(root)
+}
+
+fn write_profile_settings(path: &Path, root: &serde_json::Value) -> Result<(), AppError> {
+    let text = serde_json::to_string_pretty(root)
+        .map_err(|error| AppError::internal(format!("Could not serialize settings: {error}")))?;
+    std::fs::write(path, text)
+        .map_err(|error| AppError::io(format!("Could not write profile settings.json: {error}")))
+}
+
+/// The `hooks.<key>` array of a settings object, created when missing.
+fn hook_list<'a>(
+    root: &'a mut serde_json::Value,
+    key: &str,
+) -> Result<&'a mut Vec<serde_json::Value>, AppError> {
     let Some(object) = root.as_object_mut() else {
         return Err(AppError::validation(
             "Profile settings.json must be a JSON object",
         ));
     };
-    let command = format!(
-        "\"{}\" \"$BRANCHWORK_AGENT_SESSION\"",
-        notify_bin.to_string_lossy()
-    );
-    let mut changed = false;
     let hooks = object
         .entry("hooks")
         .or_insert_with(|| serde_json::Value::Object(Default::default()));
@@ -142,41 +160,80 @@ pub fn ensure_claude_hooks(profile_dir: &Path, notify_bin: &Path) -> Result<bool
             "Profile settings.json hooks must be an object",
         ));
     };
+    hooks_object
+        .entry(key)
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| {
+            AppError::validation(format!(
+                "Profile settings.json hooks.{key} must be an array"
+            ))
+        })
+}
+
+fn hook_command(entry: &serde_json::Value) -> Option<&str> {
+    entry.pointer("/hooks/0/command").and_then(|value| value.as_str())
+}
+
+/// Merge Claude Code hook entries into the profile `settings.json`.
+///
+/// Reads the existing file when present (must stay a JSON object; other keys
+/// are preserved byte-for-value), ensures `hooks.Notification` and
+/// `hooks.Stop` each carry our notify command once, and writes the file back.
+/// Returns true when the file changed.
+pub fn ensure_claude_hooks(profile_dir: &Path, notify_bin: &Path) -> Result<bool, AppError> {
+    let path = profile_dir.join("settings.json");
+    let mut root = read_profile_settings(&path)?;
+    let command = format!(
+        "\"{}\" \"$BRANCHWORK_AGENT_SESSION\"",
+        notify_bin.to_string_lossy()
+    );
+    let mut changed = false;
     for (key, event) in [
         ("Notification", NOTIFY_EVENT_WAITING),
         ("Stop", NOTIFY_EVENT_DONE),
     ] {
-        let entries = hooks_object
-            .entry(key)
-            .or_insert_with(|| serde_json::Value::Array(Vec::new()));
-        let Some(list) = entries.as_array_mut() else {
-            return Err(AppError::validation(format!(
-                "Profile settings.json hooks.{key} must be an array"
-            )));
-        };
-        let ours = serde_json::json!({
-            "matcher": "",
-            "hooks": [{ "type": "command", "command": format!("{command} {event}") }]
-        });
-        if !list.iter().any(|entry| {
-            entry
-                .pointer("/hooks/0/command")
-                .and_then(|value| value.as_str())
-                .is_some_and(|existing| existing.contains("branchwork-notify"))
-        }) {
-            list.push(ours);
+        let list = hook_list(&mut root, key)?;
+        if !list
+            .iter()
+            .any(|entry| hook_command(entry).is_some_and(|existing| existing.contains("branchwork-notify")))
+        {
+            list.push(serde_json::json!({
+                "matcher": "",
+                "hooks": [{ "type": "command", "command": format!("{command} {event}") }]
+            }));
             changed = true;
         }
     }
     if changed {
-        let text = serde_json::to_string_pretty(&root).map_err(|error| {
-            AppError::internal(format!("Could not serialize settings: {error}"))
-        })?;
-        std::fs::write(&path, text).map_err(|error| {
-            AppError::io(format!("Could not write profile settings.json: {error}"))
-        })?;
+        write_profile_settings(&path, &root)?;
     }
     Ok(changed)
+}
+
+/// Ensure the profile carries exactly one `hooks.PreToolUse` Bash entry for
+/// the saver sidecar (a stale entry from a moved app is replaced). The hook
+/// is inert unless the session env sets `BRANCHWORK_SAVER=rtk`. Returns true
+/// when the entry is present after the call.
+pub fn ensure_claude_saver_hook(profile_dir: &Path, saver_bin: &Path) -> Result<bool, AppError> {
+    let path = profile_dir.join("settings.json");
+    let mut root = read_profile_settings(&path)?;
+    let command = format!("\"{}\" hook", saver_bin.to_string_lossy());
+    let list = hook_list(&mut root, "PreToolUse")?;
+    let ours = |entry: &serde_json::Value| {
+        hook_command(entry).is_some_and(|existing| existing.contains("branchwork-saver"))
+    };
+    let current: Vec<&str> = list.iter().filter(|entry| ours(entry)).filter_map(hook_command).collect();
+    if current == [command.as_str()] {
+        return Ok(true);
+    }
+    list.retain(|entry| !ours(entry));
+    list.push(serde_json::json!({
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": command }]
+    }));
+    write_profile_settings(&path, &root)?;
+    Ok(true)
 }
 
 /// Accept one notify line (`<session> <event>`) from a connected client.
@@ -326,5 +383,40 @@ mod tests {
             std::fs::read_to_string(profile.join("settings.json")).unwrap(),
             "[1,2]"
         );
+    }
+
+    #[test]
+    fn claude_saver_hook_merges_once() {
+        let home = TempDir::fresh("saver");
+        let profile = home.0.join("claude-x");
+        std::fs::create_dir_all(&profile).unwrap();
+        std::fs::write(
+            profile.join("settings.json"),
+            r#"{"theme": "dark", "hooks": {"PreToolUse": [{"matcher": "Edit", "hooks": [{"type": "command", "command": "lint"}]}]}}"#,
+        )
+        .unwrap();
+        let bin = PathBuf::from("/opt/branchwork/branchwork-saver");
+        assert!(ensure_claude_saver_hook(&profile, &bin).unwrap());
+        assert!(ensure_claude_saver_hook(&profile, &bin).unwrap());
+        let root: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(profile.join("settings.json")).unwrap())
+                .unwrap();
+        assert_eq!(root["theme"], "dark");
+        let list = root["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[1]["matcher"], "Bash");
+        assert_eq!(
+            list[1]["hooks"][0]["command"],
+            "\"/opt/branchwork/branchwork-saver\" hook"
+        );
+        // A moved app replaces its stale entry instead of adding another.
+        let moved = PathBuf::from("/Applications/Branchwork.app/branchwork-saver");
+        assert!(ensure_claude_saver_hook(&profile, &moved).unwrap());
+        let root: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(profile.join("settings.json")).unwrap())
+                .unwrap();
+        let list = root["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(list.len(), 2);
+        assert!(list[1]["hooks"][0]["command"].as_str().unwrap().contains("/Applications/"));
     }
 }

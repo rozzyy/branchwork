@@ -15,6 +15,8 @@ mod pty;
 mod publish;
 mod repogit;
 mod repository;
+pub mod saver;
+mod session_usage;
 mod stage;
 mod stash;
 mod status;
@@ -1446,6 +1448,54 @@ fn cli_ensure_hooks(cli_id: String, profile_dir: String) -> Result<bool, AppErro
     notify::ensure_claude_hooks(dir, &bin)
 }
 
+/// Install the token-saver `PreToolUse` hook into an isolated Claude
+/// profile. True only when the sidecar exists and the hook is in place;
+/// false for other CLIs or a missing sidecar (the saver then shows as
+/// unavailable). Never touches user config outside the profile dir.
+#[tauri::command]
+#[specta::specta]
+fn cli_ensure_saver_hook(cli_id: String, profile_dir: String) -> Result<bool, AppError> {
+    if cli_id != "claude" {
+        return Ok(false);
+    }
+    let dir = Path::new(&profile_dir);
+    let file = dir.file_name().and_then(|name| name.to_str()).unwrap_or("");
+    if !dir.is_absolute() || !file.starts_with("claude-") || !dir.is_dir() {
+        return Err(AppError::validation(
+            "Saver setup needs an isolated claude profile dir",
+        ));
+    }
+    let bin = match notify::saver_binary_path() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("Skipping token saver hook: {error}");
+            return Ok(false);
+        }
+    };
+    notify::ensure_claude_saver_hook(dir, &bin)
+}
+
+/// Token usage for one agent pane from the CLI's own local session log.
+/// Numeric aggregates only; unsupported CLIs report `unsupported`.
+#[tauri::command(async)]
+#[specta::specta]
+fn agent_session_usage(
+    cli_id: String,
+    profile_dir: String,
+    worktree_path: String,
+    since_ms: f64,
+) -> Result<session_usage::SessionUsage, AppError> {
+    session_usage::read_usage(&cli_id, Path::new(&profile_dir), &worktree_path, since_ms)
+}
+
+/// Measured byte savings the saver sidecar recorded for one agent session.
+#[tauri::command(async)]
+#[specta::specta]
+fn agent_saver_stats(agent_id: String) -> Result<session_usage::SaverStats, AppError> {
+    let path = session_usage::saver_stats_path(&agent_id)?;
+    Ok(session_usage::read_saver_stats_file(&path))
+}
+
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
 // one async worker, not a blocking-threadpool thread), which frees the main thread. A true
 // `spawn_blocking` move is deferred to the cancellable-clone work (spec §7).
@@ -1581,6 +1631,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             git_repo_tree,
             git_repo_read_file,
             cli_ensure_hooks,
+            cli_ensure_saver_hook,
+            agent_session_usage,
+            agent_saver_stats,
             agent_write_handover,
             agent_handover_diff,
             notify_socket_path,

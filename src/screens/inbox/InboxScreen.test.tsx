@@ -46,6 +46,7 @@ function agentSession(status: "waiting" | "done"): AgentSession {
     sharedWithDock: false,
     status,
     limitHit: false,
+    savers: { rtk: "unsupported", caveman: "unsupported" },
   };
 }
 

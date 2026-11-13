@@ -4,7 +4,7 @@ version = "0.5.0"
 description = "Branchwork: multi-worktree Git client"
 authors = ["rozzyVive"]
 edition = "2024"
-# Two binaries exist (app + branchwork-notify sidecar); keep `cargo run`
+# Three binaries exist (app + branchwork-notify and branchwork-saver sidecars); keep `cargo run`
 # (used by `tauri dev`) unambiguous.
 default-run = "branchwork"
 
