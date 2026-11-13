@@ -140,6 +140,125 @@ pub fn is_repository(path: &Path) -> Result<bool, AppError> {
     Ok(Repository::open(&path).is_ok())
 }
 
+/// What a picked folder is, before deciding whether to open it or offer `git init`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum FolderKind {
+    Repository,
+    InsideRepository { root: String },
+    NotRepository,
+    Invalid { message: String },
+}
+
+fn existing_folder(path: &Path) -> Result<PathBuf, AppError> {
+    let path = expand_home(path)?;
+    if !path.is_absolute() {
+        return Err(AppError::validation("Folder path must be an absolute path"));
+    }
+    if !path.is_dir() {
+        return Err(AppError::validation(
+            "Folder does not exist or is not a directory",
+        ));
+    }
+    path.canonicalize()
+        .map_err(|error| AppError::io(format!("Cannot resolve folder: {error}")))
+}
+
+/// Read-only: never executes anything from a repository.
+pub fn classify_folder(path: &Path) -> Result<FolderKind, AppError> {
+    let path = existing_folder(path)?;
+    match Repository::open(&path) {
+        Ok(repository) if repository.workdir().is_some() => return Ok(FolderKind::Repository),
+        Ok(_) => {
+            return Ok(FolderKind::Invalid {
+                message: "Bare repositories cannot be opened as projects".into(),
+            });
+        }
+        Err(error) if path.join(".git").exists() => {
+            return Ok(FolderKind::Invalid {
+                message: format!(
+                    "The .git entry in this folder can't be read: {}",
+                    error.message()
+                ),
+            });
+        }
+        Err(_) => {}
+    }
+    // Only "no repository found" means it is safe to offer `git init`; a bare repo or an
+    // unreadable `.git` further up must never get a nested repository.
+    match Repository::discover(&path) {
+        Ok(repository) => match repository.workdir() {
+            Some(workdir) => {
+                let root = workdir
+                    .canonicalize()
+                    .unwrap_or_else(|_| workdir.to_path_buf());
+                Ok(FolderKind::InsideRepository {
+                    root: root.to_string_lossy().into_owned(),
+                })
+            }
+            None => Ok(FolderKind::Invalid {
+                message: "This folder is inside a bare repository".into(),
+            }),
+        },
+        Err(error) if error.code() == git2::ErrorCode::NotFound => {
+            if is_home_or_root(&path) {
+                return Ok(FolderKind::Invalid {
+                    message: "Choose a project folder, not your home folder or the disk root"
+                        .into(),
+                });
+            }
+            Ok(FolderKind::NotRepository)
+        }
+        Err(error) => Ok(FolderKind::Invalid {
+            message: format!(
+                "A repository above this folder can't be read: {}",
+                error.message()
+            ),
+        }),
+    }
+}
+
+fn is_home_or_root(canonical: &Path) -> bool {
+    let home = std::env::var_os("HOME").and_then(|home| Path::new(&home).canonicalize().ok());
+    canonical.parent().is_none() || home.as_deref() == Some(canonical)
+}
+
+/// `git init` in a folder that is not (inside) a repository, then registers it (issue #5).
+pub fn init_and_register(path: &Path, store: &Store) -> Result<Project, AppError> {
+    let path = existing_folder(path)?;
+    if is_home_or_root(&path) {
+        return Err(AppError::validation(
+            "Choose a project folder, not your home folder or the disk root",
+        ));
+    }
+    match classify_folder(&path)? {
+        FolderKind::NotRepository => {}
+        FolderKind::Repository => {
+            return Err(AppError::validation(
+                "This folder is already a Git repository",
+            ));
+        }
+        FolderKind::InsideRepository { root } => {
+            return Err(AppError::validation(format!(
+                "This folder is inside the repository {root}"
+            )));
+        }
+        FolderKind::Invalid { message } => return Err(AppError::validation(message)),
+    }
+    // The user's git CLI and config, so `init.defaultBranch` and templates apply.
+    let output = crate::worktree::invoke_git_allowing_hooks(
+        &path,
+        &[OsStr::new("init"), OsStr::new("-q")],
+        &std::collections::HashSet::new(),
+    )?;
+    if !output.status.success() {
+        let mut error = AppError::internal("Git init failed");
+        error.detail = Some(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+        return Err(error);
+    }
+    open_and_register(&path, store)
+}
+
 pub fn open_and_register(path: &Path, store: &Store) -> Result<Project, AppError> {
     let path = expand_home(path)?;
     if !path.is_absolute() {
@@ -394,5 +513,111 @@ mod tests {
                 .message
                 .contains("absolute path")
         );
+    }
+
+    fn git(cwd: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    }
+
+    #[test]
+    fn classify_folder_reports_repository_inside_not_repository_and_invalid() {
+        let repo = TestDir::new();
+        init_repository(&repo.0);
+        fs::create_dir_all(repo.0.join("sub")).unwrap();
+        let plain = TestDir::new();
+        let broken = TestDir::new();
+        fs::write(broken.0.join(".git"), "garbage").unwrap();
+
+        assert_eq!(classify_folder(&repo.0).unwrap(), FolderKind::Repository);
+        assert_eq!(
+            classify_folder(&repo.0.join("sub")).unwrap(),
+            FolderKind::InsideRepository {
+                root: repo
+                    .0
+                    .canonicalize()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            }
+        );
+        assert_eq!(
+            classify_folder(&plain.0).unwrap(),
+            FolderKind::NotRepository
+        );
+        assert!(matches!(
+            classify_folder(&broken.0).unwrap(),
+            FolderKind::Invalid { .. }
+        ));
+
+        // Regression: a malformed `.git` above, or a bare repository around, must not look like
+        // "not a repository" (that offered `git init` and created a nested repo).
+        fs::create_dir_all(broken.0.join("child")).unwrap();
+        assert!(matches!(
+            classify_folder(&broken.0.join("child")).unwrap(),
+            FolderKind::Invalid { .. }
+        ));
+        let bare = TestDir::new();
+        Repository::init_bare(&bare.0).unwrap();
+        assert!(matches!(
+            classify_folder(&bare.0.join("objects")).unwrap(),
+            FolderKind::Invalid { .. }
+        ));
+        let store = Store::in_memory().unwrap();
+        assert!(init_and_register(&broken.0.join("child"), &store).is_err());
+        assert!(!broken.0.join("child/.git").exists());
+    }
+
+    #[test]
+    fn init_and_register_creates_repo_with_default_branch_and_registers_project() {
+        let store = Store::in_memory().unwrap();
+        let folder = TestDir::new();
+        let sibling = TestDir::new();
+        git(&sibling.0, &["init", "-q"]);
+        let expected_head = git(&sibling.0, &["symbolic-ref", "HEAD"]);
+
+        let project = init_and_register(&folder.0, &store).unwrap();
+
+        assert_eq!(git(&folder.0, &["symbolic-ref", "HEAD"]), expected_head);
+        assert_eq!(
+            project.local_path,
+            folder.0.canonicalize().unwrap().to_string_lossy()
+        );
+        assert!(
+            store
+                .project_by_path(&project.local_path)
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn init_refuses_home_root_inside_repo_and_existing_repo() {
+        let store = Store::in_memory().unwrap();
+        let repo = TestDir::new();
+        init_repository(&repo.0);
+        fs::create_dir_all(repo.0.join("sub")).unwrap();
+        let home = PathBuf::from(std::env::var_os("HOME").unwrap());
+
+        for path in [Path::new("/"), home.as_path(), &repo.0.join("sub"), &repo.0] {
+            let error = init_and_register(path, &store).unwrap_err();
+            assert_eq!(
+                error.kind,
+                crate::error::ErrorKind::Validation,
+                "{}",
+                path.display()
+            );
+        }
+        assert!(!repo.0.join("sub/.git").exists());
     }
 }

@@ -1,5 +1,5 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { commands, type Group, type Project_Serialize, type WorktreePin } from "./bindings";
+import { commands, type Group, type Project_Serialize, type WorktreePin, type FolderKind } from "./bindings";
 
 export type { Group, WorktreePin } from "./bindings";
 export type Project = Project_Serialize;
@@ -137,6 +137,20 @@ export function pinWorktree(pin: WorktreePin): Promise<void> {
 export function openRepository(path: string): Promise<Project> {
   if (!inTauri()) return Promise.reject(new Error("Opening a repository requires the desktop app"));
   return commands.repositoryOpen(path);
+}
+
+/** Read-only: whether a picked folder is a repository, inside one, not one, or unreadable. */
+export type { FolderKind };
+
+export function classifyFolder(path: string): Promise<FolderKind> {
+  if (!inTauri()) return Promise.reject(new Error("Opening a folder requires the desktop app"));
+  return commands.repositoryClassify(path);
+}
+
+/** Runs `git init` in a folder that isn't a repository yet and registers it as a project. */
+export function initRepository(path: string): Promise<Project> {
+  if (!inTauri()) return Promise.reject(new Error("Initializing a repository requires the desktop app"));
+  return commands.repositoryInit(path);
 }
 
 /** Read-only check: whether `path` is itself a Git repository root (no parent search). Outside Tauri, resolves `false` (no browser equivalent to check against). */

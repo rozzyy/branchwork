@@ -19,6 +19,16 @@ export const commands = {
 	repositoryClone: (url: string, destination: string) => __TAURI_INVOKE<Project_Serialize>("repository_clone", { url, destination }),
 	/**  Read-only: never executes anything from the repository at `path`. */
 	pathIsRepository: (path: string) => __TAURI_INVOKE<boolean>("path_is_repository", { path }),
+	/**  Classifies a picked folder: repository, inside a repository, not a repository, or invalid. */
+	repositoryClassify: (path: string) => __TAURI_INVOKE<FolderKind>("repository_classify", { path }),
+	/**  Runs `git init` in a folder that isn't a repository yet and registers it (issue #5). */
+	repositoryInit: (path: string) => __TAURI_INVOKE<Project_Serialize>("repository_init", { path }),
+	/**  Owners (the account and its organizations) a linked account can publish a repository to. */
+	ghPublishOwners: (account: string) => __TAURI_INVOKE<PublishOwner[]>("gh_publish_owners", { account }),
+	/**  Whether the worktree has an `origin` remote of any host (Publish is offered only without). */
+	gitHasOrigin: (worktreePath: string) => __TAURI_INVOKE<boolean>("git_has_origin", { worktreePath }),
+	/**  Creates a GitHub repository, sets it as origin, and pushes the current branch (issue #5). */
+	ghRepoPublish: (worktreePath: string, request: PublishRequest) => __TAURI_INVOKE<PublishResult_Serialize>("gh_repo_publish", { worktreePath, request }),
 	worktreeList: (projectId: string) => __TAURI_INVOKE<Worktree_Serialize[]>("worktree_list", { projectId }),
 	worktreeSummary: (projectId: string) => __TAURI_INVOKE<WorktreeSummary_Serialize>("worktree_summary", { projectId }),
 	worktreeCreate: (projectId: string, destination: string, branch: string) => __TAURI_INVOKE<Worktree_Serialize>("worktree_create", { projectId, destination, branch }),
@@ -431,6 +441,9 @@ export type FileHistoryRequest = {
 
 /**  Whole-file side; `delete` accepts a deletion (only for deleted-by-us/them conflicts). */
 export type FileSide = "ours" | "theirs" | "delete";
+
+/**  What a picked folder is, before deciding whether to open it or offer `git init`. */
+export type FolderKind = { kind: "repository" } | { kind: "insideRepository"; root: string } | { kind: "notRepository" } | { kind: "invalid"; message: string };
 
 export type FsEncoding = "utf-8" | "utf-16" | "binary";
 
@@ -1001,6 +1014,40 @@ export type PtyOutput = {
 
 export type PtySession = {
 	sessionId: string,
+};
+
+export type PublishOwner = {
+	login: string,
+	id: string,
+	kind: PublishOwnerKind,
+};
+
+export type PublishOwnerKind = "user" | "organization";
+
+export type PublishRequest = {
+	account: string,
+	owner: string,
+	name: string,
+	private: boolean,
+	description: string,
+};
+
+export type PublishResult = PublishResult_Serialize | PublishResult_Deserialize;
+
+export type PublishResult_Deserialize = {
+	/**  `https://github.com/<owner>/<name>`. */
+	url: string,
+	pushed: boolean,
+	/**  Set when the repository was created but the first push failed (the repo is kept). */
+	pushError?: AppError_Deserialize | null,
+};
+
+export type PublishResult_Serialize = {
+	/**  `https://github.com/<owner>/<name>`. */
+	url: string,
+	pushed: boolean,
+	/**  Set when the repository was created but the first push failed (the repo is kept). */
+	pushError: AppError_Serialize | null,
 };
 
 /**

@@ -868,13 +868,57 @@ fn invoke_git_with_filters(
 }
 
 fn run_with_filters(
-    mut command: Command,
+    command: Command,
     args: &[&OsStr],
     filters: &HashSet<String>,
     disable_hooks: bool,
 ) -> Result<Output, AppError> {
+    run_with_config(command, args, filters, disable_hooks, &[])
+}
+
+/// Like [`invoke_git_allowing_hooks`], plus `extra` config entries passed only through the
+/// child's `GIT_CONFIG_*` environment (never argv or stored config). Used for the publish push,
+/// whose auth header must not leak: trace variables that could log it are removed.
+pub(crate) fn invoke_git_with_extra_config(
+    repository_path: &Path,
+    args: &[&OsStr],
+    filters: &HashSet<String>,
+    extra: &[(String, String)],
+) -> Result<Output, AppError> {
+    let mut command = git_command_with_user_config(repository_path);
+    // Every trace channel that can print config values or HTTP headers (trace2 with
+    // `GIT_TRACE2_CONFIG_PARAMS`/`GIT_TRACE2_ENV_VARS` echoes the Authorization header).
+    for name in [
+        "GIT_TRACE",
+        "GIT_TRACE_CURL",
+        "GIT_TRACE_PACKET",
+        "GIT_TRACE_SETUP",
+        "GIT_CURL_VERBOSE",
+        "GIT_TRACE2_CONFIG_PARAMS",
+        "GIT_TRACE2_ENV_VARS",
+    ] {
+        command.env_remove(name);
+    }
+    // trace2 targets can also come from the user's global config, which `-c`/GIT_CONFIG_* can't
+    // override early enough; "0" in the environment disables each target outright.
+    for name in ["GIT_TRACE2", "GIT_TRACE2_EVENT", "GIT_TRACE2_PERF"] {
+        command.env(name, "0");
+    }
+    run_with_config(command, args, filters, false, extra)
+}
+
+fn run_with_config(
+    mut command: Command,
+    args: &[&OsStr],
+    filters: &HashSet<String>,
+    disable_hooks: bool,
+    extra: &[(String, String)],
+) -> Result<Output, AppError> {
     command
-        .env("GIT_CONFIG_COUNT", (filters.len() * 2).to_string())
+        .env(
+            "GIT_CONFIG_COUNT",
+            (filters.len() * 2 + extra.len()).to_string(),
+        )
         .arg("-c")
         .arg("core.fsmonitor=false");
     if disable_hooks {
@@ -890,6 +934,12 @@ fn run_with_filters(
                 )
                 .env(format!("GIT_CONFIG_VALUE_{config_index}"), "");
         }
+    }
+    for (offset, (key, value)) in extra.iter().enumerate() {
+        let config_index = filters.len() * 2 + offset;
+        command
+            .env(format!("GIT_CONFIG_KEY_{config_index}"), key)
+            .env(format!("GIT_CONFIG_VALUE_{config_index}"), value);
     }
     command
         .args(args)
@@ -938,6 +988,11 @@ fn create_from(
         return Err(AppError::validation("Branch name is invalid"));
     }
     let (main_path, repository) = project_main_repository(Path::new(&project.local_path))?;
+    if start_point.is_none() && unborn_branch(&repository).is_some() {
+        return Err(AppError::validation(
+            "Make a first commit before creating worktrees",
+        ));
+    }
     let mut destination = resolve_worktree_destination(destination)?;
     ensure_destination_missing(&destination)?;
     if registered_worktree_paths(&repository)?
@@ -1156,10 +1211,48 @@ pub fn prune(project: &Project) -> Result<(), AppError> {
     Ok(())
 }
 
+/// The branch HEAD points at when the repository has no commits yet ("unborn"), else `None`.
+pub(crate) fn unborn_branch(repository: &Repository) -> Option<String> {
+    match repository.head() {
+        Err(error) if error.code() == ErrorCode::UnbornBranch => repository
+            .find_reference("HEAD")
+            .ok()?
+            .symbolic_target()
+            .ok()
+            .flatten()
+            .map(|target| {
+                target
+                    .strip_prefix("refs/heads/")
+                    .unwrap_or(target)
+                    .to_owned()
+            }),
+        _ => None,
+    }
+}
+
 fn read_metadata(repository: &Repository, worktree_path: &Path) -> Result<Worktree, AppError> {
-    let head_ref = repository
-        .head()
-        .map_err(|error| format!("Cannot read HEAD for {}: {error}", worktree_path.display()))?;
+    let head_ref = match repository.head() {
+        Ok(head_ref) => head_ref,
+        // A repository with no commits yet (fresh `git init`): branch from HEAD, no head commit.
+        Err(error) if error.code() == ErrorCode::UnbornBranch => {
+            let (dirty_count, state) = dirty_state(repository)?;
+            return Ok(Worktree {
+                path: worktree_path.to_string_lossy().into_owned(),
+                branch: unborn_branch(repository),
+                head: String::new(),
+                ahead: 0,
+                behind: 0,
+                dirty_count,
+                state,
+            });
+        }
+        Err(error) => {
+            return Err(AppError::internal(format!(
+                "Cannot read HEAD for {}: {error}",
+                worktree_path.display()
+            )));
+        }
+    };
     let head = head_ref
         .target()
         .ok_or_else(|| format!("HEAD has no commit in {}", worktree_path.display()))?;
@@ -1210,6 +1303,19 @@ fn read_metadata(repository: &Repository, worktree_path: &Path) -> Result<Worktr
         (0, 0)
     };
 
+    let (dirty_count, state) = dirty_state(repository)?;
+    Ok(Worktree {
+        path: worktree_path.to_string_lossy().into_owned(),
+        branch,
+        head: head.to_string(),
+        ahead,
+        behind,
+        dirty_count,
+        state,
+    })
+}
+
+fn dirty_state(repository: &Repository) -> Result<(usize, WorktreeState), AppError> {
     let mut options = StatusOptions::new();
     options
         .include_untracked(true)
@@ -1239,15 +1345,7 @@ fn read_metadata(repository: &Repository, worktree_path: &Path) -> Result<Worktr
         WorktreeState::Dirty
     };
 
-    Ok(Worktree {
-        path: worktree_path.to_string_lossy().into_owned(),
-        branch,
-        head: head.to_string(),
-        ahead,
-        behind,
-        dirty_count: dirty_paths.len(),
-        state,
-    })
+    Ok((dirty_paths.len(), state))
 }
 
 #[cfg(test)]
@@ -2184,5 +2282,53 @@ mod tests {
             .unwrap()["worktree"],
             "/repo"
         );
+    }
+
+    /// `git init` with HEAD on `main` and no commits.
+    fn unborn_repository(path: &Path) -> Repository {
+        let repository = Repository::init(path).unwrap();
+        repository.set_head("refs/heads/main").unwrap();
+        repository
+    }
+
+    #[test]
+    fn lists_a_repository_with_no_commits() {
+        let temp = TestDir::new();
+        let path = temp.0.join("fresh");
+        fs::create_dir_all(&path).unwrap();
+        unborn_repository(&path);
+        fs::write(path.join("a.txt"), "a\n").unwrap();
+
+        let listed = summary(&path, 10).unwrap();
+
+        assert_eq!(listed.total, 1);
+        let worktree = &listed.worktrees[0];
+        assert_eq!(worktree.branch.as_deref(), Some("main"));
+        assert_eq!(worktree.head, "");
+        assert_eq!((worktree.ahead, worktree.behind), (0, 0));
+        assert_eq!(worktree.dirty_count, 1);
+    }
+
+    #[test]
+    fn create_worktree_requires_a_first_commit() {
+        let temp = TestDir::new();
+        let main_path = temp.0.join("main");
+        fs::create_dir(&main_path).unwrap();
+        unborn_repository(&main_path);
+        let store = Store::open(&temp.0.join("catalog.db")).unwrap();
+        let project = register_project(&main_path, &store);
+        let watcher = WorktreeWatcher::new(|_| {});
+
+        let error = create(
+            &project,
+            &temp.0.join("wt").join("feature"),
+            "feature",
+            &store,
+            &watcher,
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind, crate::error::ErrorKind::Validation);
+        assert!(error.message.contains("first commit"), "{}", error.message);
     }
 }

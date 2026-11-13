@@ -512,3 +512,11 @@ it("shows Mine's configured-email guidance and leaves Agent unavailable", async 
   expect(screen.getByText("Mine needs a Git user.email configured for this repository. No email is configured.")).toBeVisible();
   expect(screen.getByRole("button", { name: "Agent commits are unavailable until agent metadata is available" })).toBeDisabled();
 });
+
+it("shows an empty state for a repository with no commits", async () => {
+  setupGraph(async () => ({ ...initialPage, commits: [], hasMore: false, totalCommits: 0 }));
+
+  const empty = await screen.findByText(/No commits yet — make your first commit in Changes\./);
+  await userEvent.click(within(empty).getByRole("button", { name: "Open in Changes" }));
+  expect(useStage.getState().go).toHaveBeenCalledWith("changes");
+});

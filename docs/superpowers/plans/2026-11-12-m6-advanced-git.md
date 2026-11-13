@@ -50,9 +50,9 @@ Detailed plan: `docs/superpowers/plans/2026-11-13-m6-stage3-init-publish.md`.
 
 | Task | Scope | Depends on |
 |---|---|---|
-| M6-07 Initialize on add | `repository_classify` + `repository_init`: a non-Git folder offers a confirmed `git init` (honoring `init.defaultBranch`) and becomes a normal project; a folder inside a repo offers that repo; home/root refused. | M6-06 |
-| M6-08 Repositories with no commits | Worktree list, Graph, file history tolerate an unborn HEAD; Graph empty state; first commit from Changes; worktree creation asks for a first commit. | M6-07 |
-| M6-09 Publish to GitHub | `gh_publish_owners` + `gh_repo_publish`: create the repo (Private default) with the selected account, set `origin`, first push authenticated with that account's token via the git child environment only; Repository screen and Changes ⋯ entry points. | M6-08 |
+| M6-07 Initialize on add ✅ | `repository_classify` + `repository_init`: a non-Git folder offers a confirmed `git init` (honoring `init.defaultBranch`) and becomes a normal project; a folder inside a repo offers that repo; home/root refused. | M6-03 (reordered: Stage 3 runs before Stage 2's checkpoint by user order, 2026-11-13) |
+| M6-08 Repositories with no commits ✅ | Worktree list, Graph, file history tolerate an unborn HEAD; Graph empty state; first commit from Changes; worktree creation asks for a first commit. | M6-07 |
+| M6-09 Publish to GitHub ✅ | `gh_publish_owners` + `gh_repo_publish`: create the repo (Private default) with the selected account, set `origin`, first push authenticated with that account's token via the git child environment only; Repository screen and Changes ⋯ entry points. | M6-08 |
 
 Manual checkpoint M6.3: init a new folder, refusal of `~`, inside-repo offer, first commit,
 Graph empty state, private publish with a second account, name collision, push-failure retry.

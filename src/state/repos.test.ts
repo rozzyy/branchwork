@@ -6,6 +6,8 @@ import {
   listGroups,
   listProjects,
   openRepository,
+  classifyFolder,
+  initRepository,
   saveGroup as saveGroupIpc,
   saveProject as saveProjectIpc,
   type Group,
@@ -16,6 +18,7 @@ import { useStage } from "./stage";
 import { useFiles } from "./files";
 import { initialStage } from "../stage/stageModel";
 import { useToasts } from "../ui/toast";
+import { ask } from "../ui/dialog";
 
 vi.mock("../ipc/catalog", () => ({
   listGroups: vi.fn(),
@@ -26,7 +29,10 @@ vi.mock("../ipc/catalog", () => ({
   deleteProject: vi.fn(),
   openRepository: vi.fn(),
   cloneRepository: vi.fn(),
+  classifyFolder: vi.fn(),
+  initRepository: vi.fn(),
 }));
+vi.mock("../ui/dialog", () => ({ ask: vi.fn() }));
 vi.mock("../ipc/settings", () => ({
   loadSetting: vi.fn(),
   saveSetting: vi.fn(),
@@ -49,6 +55,9 @@ beforeEach(() => {
   vi.mocked(saveProjectIpc).mockResolvedValue(undefined);
   vi.mocked(deleteProjectIpc).mockResolvedValue(true);
   vi.mocked(openRepository).mockReset();
+  vi.mocked(initRepository).mockReset();
+  vi.mocked(ask).mockReset();
+  vi.mocked(classifyFolder).mockResolvedValue({ kind: "repository" });
   vi.mocked(cloneRepository).mockReset();
   useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, openProjectIds: [], collapsedGroupIds: [], status: "idle", error: null });
   useStage.setState({ ...initialStage });
@@ -315,4 +324,43 @@ it("refuses to change the active project while an editor buffer is dirty (R7)", 
   useFiles.setState({ dirty: {} });
   useRepos.getState().selectProject("p3");
   expect(useRepos.getState().activeProjectId).toBe("p3");
+});
+
+const fresh = { id: "/p", owner: null, name: "p", localPath: "/p", groupId: null };
+
+it("openRepo initializes a non-Git folder after confirmation", async () => {
+  vi.mocked(classifyFolder).mockResolvedValue({ kind: "notRepository" });
+  vi.mocked(ask).mockResolvedValue(true);
+  vi.mocked(initRepository).mockResolvedValue(fresh);
+
+  const project = await useRepos.getState().openRepo("/p");
+
+  expect(ask).toHaveBeenCalledWith(expect.objectContaining({ title: "Initialize Git in p?", ok: "Initialize Git" }));
+  expect(initRepository).toHaveBeenCalledWith("/p");
+  expect(openRepository).not.toHaveBeenCalled();
+  expect(project).toEqual(fresh);
+  expect(useRepos.getState().activeProjectId).toBe("/p");
+});
+
+it("openRepo does nothing when initialization is cancelled", async () => {
+  vi.mocked(classifyFolder).mockResolvedValue({ kind: "notRepository" });
+  vi.mocked(ask).mockResolvedValue(null);
+
+  expect(await useRepos.getState().openRepo("/p")).toBeUndefined();
+
+  expect(initRepository).not.toHaveBeenCalled();
+  expect(useToasts.getState().toasts).toHaveLength(0);
+  expect(useRepos.getState().projects).toHaveLength(0);
+});
+
+it("openRepo offers the enclosing repository instead of init", async () => {
+  vi.mocked(classifyFolder).mockResolvedValue({ kind: "insideRepository", root: "/r" });
+  vi.mocked(ask).mockResolvedValue(true);
+  vi.mocked(openRepository).mockResolvedValue({ ...fresh, id: "/r", localPath: "/r", name: "r" });
+
+  await useRepos.getState().openRepo("/r/sub");
+
+  expect(ask).toHaveBeenCalledWith(expect.objectContaining({ title: "This folder is inside the repository /r", ok: "Open that repository" }));
+  expect(openRepository).toHaveBeenCalledWith("/r");
+  expect(initRepository).not.toHaveBeenCalled();
 });

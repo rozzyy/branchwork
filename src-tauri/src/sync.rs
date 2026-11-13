@@ -2,7 +2,7 @@
 //! global config so credential helpers apply (spec §2). Failures are classified by
 //! `commit::classify_git_failure` (GitAuth / Network / GitHook / GitConflict).
 //! Pull shares the oplog lifecycle of `gitops::recorded_write`.
-use crate::commit::{open_worktree, require_success, run_git};
+use crate::commit::{head_sha, open_worktree, require_success, run_git};
 use crate::error::AppError;
 use crate::gitops::recorded_write;
 use crate::store::Store;
@@ -23,6 +23,19 @@ pub(crate) fn current_branch(
         .map_err(|_| AppError::validation("The current branch name is not valid UTF-8"))
 }
 
+/// A fresh `git init` has no commit; git's own error ("reference not found") is opaque.
+pub(crate) fn require_first_commit(
+    repository: &git2::Repository,
+    action: &str,
+) -> Result<(), AppError> {
+    if head_sha(repository)?.is_none() {
+        return Err(AppError::validation(format!(
+            "Make a first commit before {action}"
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) fn fetch(worktree_path: &Path) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
     let output = run_git(&root, &[OsStr::new("fetch"), OsStr::new("--prune")])?;
@@ -32,6 +45,7 @@ pub(crate) fn fetch(worktree_path: &Path) -> Result<(), AppError> {
 /// Returns whether the pull left an undoable oplog entry (false when already up to date).
 pub(crate) fn pull(store: &Store, worktree_path: &Path) -> Result<bool, AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
+    require_first_commit(&repository, "pulling")?;
     current_branch(&repository, "pull")?;
     recorded_write(
         store,
@@ -49,6 +63,7 @@ pub(crate) fn pull(store: &Store, worktree_path: &Path) -> Result<bool, AppError
 
 pub(crate) fn push(worktree_path: &Path) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
+    require_first_commit(&repository, "pushing")?;
     let branch = current_branch(&repository, "push")?;
     let has_upstream = repository
         .find_branch(&branch, git2::BranchType::Local)
@@ -310,5 +325,17 @@ mod tests {
 
         assert_eq!(error.kind, ErrorKind::Network);
         assert!(error.detail.is_some());
+    }
+
+    #[test]
+    fn push_and_pull_on_a_branch_with_no_commits_ask_for_a_first_commit() {
+        let store = Store::in_memory().unwrap();
+        let dir = TestDir::new("unborn-sync");
+        git(&dir.0, &["init", "-q", "-b", "main"]);
+
+        for error in [push(&dir.0).unwrap_err(), pull(&store, &dir.0).unwrap_err()] {
+            assert_eq!(error.kind, ErrorKind::Validation);
+            assert!(error.message.contains("first commit"), "{}", error.message);
+        }
     }
 }

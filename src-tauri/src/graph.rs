@@ -627,7 +627,9 @@ fn read_wip(repository: &Repository, worktree_path: &Path) -> Result<WipSummary,
             .as_ref()
             .and_then(|reference| reference.target())
             .map(|oid| oid.to_string()),
-        branch: head.and_then(|reference| reference.shorthand().ok().map(str::to_string)),
+        branch: head
+            .and_then(|reference| reference.shorthand().ok().map(str::to_string))
+            .or_else(|| crate::worktree::unborn_branch(repository)),
         staged_files: staged.into_iter().collect(),
         unstaged_files: unstaged.into_iter().collect(),
         untracked_files: untracked.into_iter().collect(),
@@ -1027,5 +1029,18 @@ mod tests {
         assert_eq!(page.commits.len(), GRAPH_PAGE_SIZE);
         assert!(page.has_more);
         assert_eq!(page.total_commits, None);
+    }
+
+    #[test]
+    fn graph_of_a_repository_with_no_commits_is_empty() {
+        let temp = TestDir::new();
+        let repository = Repository::init(&temp.0).unwrap();
+        repository.set_head("refs/heads/main").unwrap();
+
+        let page = read(&temp.0, &temp.0, 0).unwrap();
+
+        assert!(page.commits.is_empty());
+        assert!(!page.has_more);
+        assert_eq!(page.wip.branch.as_deref(), Some("main"));
     }
 }

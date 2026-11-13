@@ -1,6 +1,7 @@
 // Repository screen (M4 Task 07): header, Code tab, sidebar.
 // Serves the active worktree's GitHub repo as the linked account.
 import { useEffect, useRef, useState } from "react";
+import { useOriginMissing, usePublish } from "./PublishDialog";
 import { t } from "../../i18n/t";
 import { useWorktrees } from "../../state/worktrees";
 import { useGithubAccounts } from "../../github/store";
@@ -140,6 +141,8 @@ export function RepoView() {
   const project = projects.find((item) => item.id === projectId);
   const projectGroup = groups.find((group) => group.id === project?.groupId);
   const [remote, setRemote] = useState<RepoRemote | null | "missing">(null);
+  const publishRevision = usePublish((state) => state.revision);
+  const originMissing = useOriginMissing(activePath);
   const [meta, setMeta] = useState<RepoMeta | null>(null);
   const [contributors, setContributors] = useState<RepoContributor[] | null>(null);
   const [branches, setBranches] = useState<RepoBranches | null>(null);
@@ -199,7 +202,7 @@ export function RepoView() {
     return () => {
       live = false;
     };
-  }, [activePath]);
+  }, [activePath, publishRevision]);
 
   // Org owners match no username, so the stored per-owner choice wins
   // over the username match and default fallback (multi-account setups).
@@ -452,6 +455,11 @@ export function RepoView() {
           ◫
         </div>
         <p>{t("repo.noRepo")}</p>
+        {activePath && originMissing && (
+          <button className="btn primary" onClick={() => usePublish.getState().open(activePath)}>
+            {t("publish.menu")}
+          </button>
+        )}
       </div>
     );
   }

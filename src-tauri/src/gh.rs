@@ -625,7 +625,7 @@ fn same_github_account(left: &str, right: &str) -> bool {
     left.eq_ignore_ascii_case(right)
 }
 
-fn account_token(account: &str) -> Result<String, AppError> {
+pub(crate) fn account_token(account: &str) -> Result<String, AppError> {
     let account = validate_account(account)?;
     if let Some(cli_token) = gh_cli_token(&account)? {
         match user_login(&cli_token) {
@@ -933,7 +933,7 @@ pub struct GhRemote {
 }
 
 /// GitHub owner/repo segments: dots, hyphens, underscores, alphanumerics.
-fn validate_name(value: &str, what: &str) -> Result<String, AppError> {
+pub(crate) fn validate_name(value: &str, what: &str) -> Result<String, AppError> {
     let trimmed = value.trim().to_string();
     if trimmed.is_empty() || trimmed.len() > 100 {
         return Err(AppError::validation(format!("{what} must not be empty")));
@@ -1109,7 +1109,7 @@ pub struct GhContributor {
 const REPO_META_QUERY: &str = "query($owner:String!,$name:String!) { repository(owner:$owner,name:$name) { id isPrivate description homepageUrl stargazerCount forkCount watchers{totalCount} viewerHasStarred viewerSubscription defaultBranchRef{name} licenseInfo{name} repositoryTopics(first:10){nodes{topic{name}}} releases(first:5,orderBy:{field:CREATED_AT,direction:DESC}){nodes{name tagName publishedAt isDraft isPrerelease url}} languages(first:8,orderBy:{field:SIZE,direction:DESC}){edges{size node{name color}}} } }";
 
 /// POST a GraphQL query with variables. Credentials are sent to curl on stdin.
-fn graphql(
+pub(crate) fn graphql(
     token: &str,
     query: &str,
     variables: serde_json::Value,

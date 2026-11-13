@@ -6,6 +6,9 @@ import {
   listGroups,
   listProjects,
   openRepository,
+  classifyFolder,
+  initRepository,
+  type FolderKind,
   saveGroup as saveGroupIpc,
   saveProject as saveProjectIpc,
   type Group,
@@ -14,6 +17,7 @@ import {
 import { errorMessage } from "../ipc/errors";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { toast } from "../ui/toast";
+import { ask } from "../ui/dialog";
 import { t } from "../i18n/t";
 import { useFiles } from "./files";
 
@@ -275,8 +279,37 @@ export const useRepos = create<ReposStore>((set, get) => ({
     persistRepos(get());
   },
   async openRepo(path) {
+    // Issue #5: a non-Git folder is offered `git init`; a folder inside a repo offers that repo.
+    let kind: FolderKind;
     try {
-      const project = await openRepository(path);
+      kind = await classifyFolder(path);
+    } catch (e) {
+      toast({ title: t("repos.openError", { message: errorMessage(e) }), icon: "⚠" });
+      return undefined;
+    }
+    if (kind.kind === "invalid") {
+      toast({ title: t("repos.openError", { message: kind.message }), icon: "⚠" });
+      return undefined;
+    }
+    if (kind.kind === "insideRepository") {
+      const confirmed = await ask({ title: t("repos.insideTitle", { root: kind.root }), ok: t("repos.insideOk"), icon: "⌂" });
+      if (confirmed !== true) return undefined;
+      path = kind.root;
+    }
+    let initialize = false;
+    if (kind.kind === "notRepository") {
+      const folder = path.split("/").filter(Boolean).pop() ?? path;
+      const confirmed = await ask({
+        title: t("repos.initTitle", { folder }),
+        body: t("repos.initBody", { path }),
+        ok: t("repos.initOk"),
+        icon: "⎇",
+      });
+      if (confirmed !== true) return undefined;
+      initialize = true;
+    }
+    try {
+      const project = await (initialize ? initRepository(path) : openRepository(path));
       revision++;
       const openProjectIds = get().openProjectIds.includes(project.id) ? get().openProjectIds : [...get().openProjectIds, project.id];
       const activate = !dirtySwitchBlocked(get().activeProjectId, project.id);
@@ -288,7 +321,11 @@ export const useRepos = create<ReposStore>((set, get) => ({
       persistRepos(get());
       return project;
     } catch (e) {
-      toast({ title: t("repos.openError", { message: errorMessage(e) }), icon: "⚠" });
+      toast({
+        title: t("repos.openError", { message: errorMessage(e) }),
+        icon: "⚠",
+        details: (e as { detail?: string | null } | null)?.detail ?? undefined,
+      });
       return undefined;
     }
   },

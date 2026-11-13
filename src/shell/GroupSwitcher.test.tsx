@@ -26,6 +26,8 @@ vi.mock("../ipc/catalog", () => ({
   openRepository: vi.fn(),
   pickFolder: vi.fn(),
   cloneRepository: vi.fn(),
+  classifyFolder: vi.fn(async () => ({ kind: "repository" })),
+  initRepository: vi.fn(),
 }));
 
 const groups: Group[] = [{ id: "g1", name: "Acme", color: "oklch(.68 .19 250)", clonePathTemplate: "~/clients/{repo}" }];

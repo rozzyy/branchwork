@@ -1,4 +1,5 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useOriginMissing, usePublish } from "../repo/PublishDialog";
 import { t } from "../../i18n/t";
 import { screenById } from "../registry";
 import { useWorktrees } from "../../state/worktrees";
@@ -336,6 +337,7 @@ export function ChangesView() {
   const dispatch = useChanges((s) => s.dispatch);
   const toggleLine = useChanges((s) => s.toggleLine);
   const syncRunning = useGitRunning(activePath);
+  const originMissing = useOriginMissing(activePath);
 
   const [message, setMessage] = useState("");
   const [closed, setClosed] = useState<Record<string, boolean>>({});
@@ -424,6 +426,9 @@ export function ChangesView() {
     syncItem("pull", t("sync.pull"), "↓"),
     syncItem("push", t("sync.push"), "↑"),
     syncItem("fetch", t("sync.fetch"), "⟳"),
+    ...(originMissing && activePath
+      ? [{ kind: "item" as const, label: t("publish.menu"), icon: "↑", onSelect: () => usePublish.getState().open(activePath) }]
+      : []),
     {
       kind: "item",
       label: t("changes.checkoutMenu"),

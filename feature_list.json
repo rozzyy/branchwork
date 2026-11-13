@@ -1272,6 +1272,39 @@
       ],
       "status": "done",
       "evidence": "Done 2026-11-13. Spec review PASS (.agent/reviews/m6-task-06-spec.md), no blocking findings; fixed: Result line numbers, failed save keeps choices and only a stale-stamp Conflict re-reads (regression test), summary stale-stamp refresh, footer layout, rebase Ours/Theirs captions and wording, truncated count, no duplicate undo entries. Deferred: narrow-width caption alignment, submodule-status hint, zero-region explanation, button-wrapping-div markup. ./init.sh: === Verification Complete === (Vitest 70 files / 626 tests; Rust 255 passed / 3 ignored). One run hit a GraphScreen findBy timeout under parallel load; passes 3/3 alone and on rerun."
+    },
+    {
+      "id": "m6-task-07-init-on-add",
+      "stage": 28,
+      "name": "Initialize on add (issue #5)",
+      "description": ".agent/tasks/m6-task-07-init-on-add.md",
+      "dependencies": [
+        "m6-task-03-graph-cross-screen"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review FAIL (nested git init under a malformed .git or inside a bare repo) then PASS after fix (.agent/reviews/m6-task-07-spec.md); regression assertions; home/root classify as Invalid. The user's accidental ~/.git was moved to Trash by user order, so no home-repo exception is needed. ./init.sh: === Verification Complete === (Vitest 70 files / 630 tests; Rust 267 passed / 3 ignored)."
+    },
+    {
+      "id": "m6-task-08-unborn-repos",
+      "stage": 28,
+      "name": "Repositories with no commits",
+      "description": ".agent/tasks/m6-task-08-unborn-repos.md",
+      "dependencies": [
+        "m6-task-07-init-on-add"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review PASS (.agent/reviews/m6-task-08-spec.md); nits fixed (first-commit test asserts a non-undoable row exists; read_metadata reads HEAD once; button keeps the existing 'Open in Changes' string). Push/Pull no-commit message deferred to M6-09. ./init.sh: === Verification Complete === (Vitest 70 files / 630 tests; Rust 267 passed / 3 ignored)."
+    },
+    {
+      "id": "m6-task-09-publish-github",
+      "stage": 28,
+      "name": "Publish to GitHub",
+      "description": ".agent/tasks/m6-task-09-publish-github.md",
+      "dependencies": [
+        "m6-task-08-unborn-repos"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review FAIL (Publish offered for non-GitHub origins; untrimmed name sent to createRepository) then PASS after fixes (.agent/reviews/m6-task-09-spec.md) with regression tests; hardening: credential helper disabled and trace2 forced off for the token push, GIT_TRACE* removed. Deviation: repo-name sanitizer in the UI. ./init.sh: === Verification Complete === (Vitest 71 files / 635 tests; Rust 277 passed / 3 ignored)."
     }
   ]
 }

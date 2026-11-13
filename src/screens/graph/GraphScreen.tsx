@@ -794,7 +794,16 @@ export function GraphView() {
                   <div className="graph-notice" role="status">{t("graph.mineNoEmail")}</div>
                 )}
                 {commits.length === 0 && !loading && !error && (
-                  <div className="graph-empty" role="status">{t("graph.empty")}</div>
+                  <div className="graph-empty" role="status">
+                    {hasMore ? t("graph.empty") : (
+                      <>
+                        {t("graph.noCommitsYet")}{" "}
+                        <button type="button" className="btn sm" onClick={() => useStage.getState().go("changes")}>
+                          {t("graph.openChanges")}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
                 <div style={{ height: firstVisible * ROW_HEIGHT }} aria-hidden />
                 {visibleRows.map((rowIndex) => rowIndex === 0 ? (

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { ConflictWatcher } from "./screens/conflicts/ConflictsScreen";
+import { PublishDialogHost } from "./screens/repo/PublishDialog";
 import { TitleBar } from "./shell/TitleBar";
 import { Sidebar } from "./shell/Sidebar";
 import { ProjectSidebar } from "./shell/ProjectSidebar";
@@ -79,6 +80,7 @@ export default function App() {
         <ProjectSidebar />
       </div>
       <ConflictWatcher />
+      <PublishDialogHost />
       <Toaster />
       <DialogHost />
       <Palette />

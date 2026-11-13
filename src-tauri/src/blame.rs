@@ -210,6 +210,13 @@ pub fn file_history(
     file_path: &str,
     request: FileHistoryRequest,
 ) -> Result<Vec<FileHistoryEntry>, AppError> {
+    // No commits yet: there is no history, which is not an error.
+    diff::validate_file_path(file_path)?;
+    if let Ok(repository) = Repository::open(worktree_path)
+        && crate::worktree::unborn_branch(&repository).is_some()
+    {
+        return Ok(Vec::new());
+    }
     let (repository, relative) = open_tracked(worktree_path, file_path)?;
 
     let mut revwalk = repository.revwalk().map_err(AppError::from)?;
@@ -415,5 +422,20 @@ mod tests {
         let history_error =
             file_history(&dir.0, "missing.txt", FileHistoryRequest { limit: 10 }).unwrap_err();
         assert_eq!(history_error.kind, ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn history_of_a_repository_with_no_commits_is_empty() {
+        let temp = TestDir::new();
+        let repository = Repository::init(&temp.0).unwrap();
+        repository.set_head("refs/heads/main").unwrap();
+        fs::write(temp.0.join("new.txt"), "n\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("new.txt")).unwrap();
+        index.write().unwrap();
+
+        let history = file_history(&temp.0, "new.txt", FileHistoryRequest { limit: 50 }).unwrap();
+
+        assert!(history.is_empty());
     }
 }

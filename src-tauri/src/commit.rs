@@ -842,4 +842,35 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.kind, ErrorKind::Validation);
     }
+
+    #[test]
+    fn first_commit_in_an_empty_repository_succeeds() {
+        let store = Store::in_memory().unwrap();
+        let temp = TestDir::new("first-commit");
+        git2::Repository::init(&temp.0).unwrap();
+        git(&temp.0, &["config", "user.name", "Branchwork Test"]);
+        git(&temp.0, &["config", "user.email", "test@example.com"]);
+        fs::write(temp.0.join("a.txt"), b"a\n").unwrap();
+        git(&temp.0, &["add", "a.txt"]);
+
+        commit(
+            &store,
+            &temp.0,
+            &CommitOptions {
+                message: "first".into(),
+                amend: false,
+                stage_all: false,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(head_message(&temp.0), "first");
+        let path = temp.0.canonicalize().unwrap();
+        let row = store.latest_oplog(path.to_str().unwrap()).unwrap();
+        let row = row.expect("the first commit records an oplog row");
+        assert!(
+            !row.undoable,
+            "a first commit has no previous HEAD to return to"
+        );
+    }
 }

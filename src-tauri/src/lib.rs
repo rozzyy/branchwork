@@ -12,6 +12,7 @@ mod handover;
 mod notify;
 mod oplog;
 mod pty;
+mod publish;
 mod repogit;
 mod repository;
 mod stage;
@@ -207,6 +208,50 @@ fn project_by_id(store: &Store, project_id: &str) -> Result<Project, AppError> {
 #[specta::specta]
 fn path_is_repository(path: String) -> Result<bool, AppError> {
     repository::is_repository(Path::new(&path))
+}
+
+/// Whether the worktree has an `origin` remote of any host (Publish is offered only without).
+#[tauri::command(async)]
+#[specta::specta]
+fn git_has_origin(store: State<'_, Store>, worktree_path: String) -> Result<bool, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    publish::has_origin(&worktree_path)
+}
+
+/// Owners (the account and its organizations) a linked account can publish a repository to.
+#[tauri::command(async)]
+#[specta::specta]
+fn gh_publish_owners(account: String) -> Result<Vec<publish::PublishOwner>, AppError> {
+    publish::publish_owners(&account)
+}
+
+/// Creates a GitHub repository, sets it as origin, and pushes the current branch (issue #5).
+#[tauri::command(async)]
+#[specta::specta]
+fn gh_repo_publish(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    request: publish::PublishRequest,
+) -> Result<publish::PublishResult, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = publish::publish(&worktree_path, &request);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+/// Classifies a picked folder: repository, inside a repository, not a repository, or invalid.
+#[tauri::command(async)]
+#[specta::specta]
+fn repository_classify(path: String) -> Result<repository::FolderKind, AppError> {
+    repository::classify_folder(Path::new(&path))
+}
+
+/// Runs `git init` in a folder that isn't a repository yet and registers it (issue #5).
+#[tauri::command(async)]
+#[specta::specta]
+fn repository_init(store: State<'_, Store>, path: String) -> Result<Project, AppError> {
+    repository::init_and_register(Path::new(&path), &store)
 }
 
 #[tauri::command(async)]
@@ -1437,6 +1482,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             repository_open,
             repository_clone,
             path_is_repository,
+            repository_classify,
+            repository_init,
+            gh_publish_owners,
+            git_has_origin,
+            gh_repo_publish,
             worktree_list,
             worktree_summary,
             worktree_create,

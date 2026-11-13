@@ -50,3 +50,17 @@ Restart the app fully first (Rust changed). Use a scratch repository you can mer
 - [ ] **M6-S2-08 Whole-file choices.** Make a binary file or a modify/delete conflict → the file shows a summary with Use ours / Use theirs (and **Accept deletion** for the deleted case); each works.
 - [ ] **M6-S2-09 Special file names.** A conflict on a file named like `pages/[id].tsx` resolves without touching other files (uncommitted edits elsewhere survive; untracked files stay unstaged).
 - [ ] **M6-S2-10 Undo is refused mid-operation.** During an unresolved cherry-pick, ⌘Z / Undo toast → message to finish or abort first; the cherry-pick is still in progress.
+
+## Stage 3 — Local project init & publish, GitHub issue #5 (Checkpoint M6.3)
+
+Restart the app fully first (Rust changed). Use a linked GitHub account; for the multi-account step, link two.
+
+- [ ] **M6-S3-01 Initialize a new folder.** Create an empty folder (e.g. `~/Projects/demo app`), then Open (or Add repository into a group) → "Initialize Git in demo app?" → Initialize Git → the project appears in the sidebar on your default branch (`init.defaultBranch`). Cancel instead → nothing is created.
+- [ ] **M6-S3-02 Refused folders.** Pick `~` or `/` → error toast, no init dialog. Pick a subfolder of an existing repo → "This folder is inside the repository …" with Open that repository (opens the root; never inits).
+- [ ] **M6-S3-03 Empty repository works.** In the new project: Changes lists the files, Files and the terminal work, Graph shows "No commits yet — make your first commit in Changes." with Open in Changes. Push/Pull say to make a first commit. Creating a worktree asks for a first commit.
+- [ ] **M6-S3-04 First commit.** Stage and commit from Changes → Graph shows the commit.
+- [ ] **M6-S3-05 Publish entry points.** With no `origin`, Repository shows "Publish to GitHub…" and the Changes ⋯ menu has it. A repo whose origin is GitLab/Bitbucket shows neither. Before the first commit, the dialog's Publish button is disabled with "Make a first commit before publishing."
+- [ ] **M6-S3-06 Publish private.** Dialog defaults: your default account, owner = that account, name = sanitized folder name (`demo-app`), Private. Publish → toast "Published to …" with Open on GitHub; the repo exists on GitHub as private with your commit; `git status -sb` shows the upstream; `.git/config` contains no token or extraheader.
+- [ ] **M6-S3-07 Second account / organization.** Pick the other account (or an organization owner) → publish works as that account (the first push uses that account's token even if your keychain holds the other account).
+- [ ] **M6-S3-08 Name collision.** Publish with a name that already exists on that owner → clear GitHub error; no `origin` is added; nothing pushed.
+- [ ] **M6-S3-09 Push failure keeps the repo.** Simulate a push failure (e.g. a pre-push hook that exits 1) → toast says the repo was created and to retry with Push; `origin` is set; Push from Graph succeeds after removing the hook.

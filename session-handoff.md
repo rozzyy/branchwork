@@ -1,16 +1,16 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-13
-- **Latest follow-up:** Stage 2 (conflict resolver) committed on `m6-stage-2` by user order before its manual Checkpoint M6.2 (still pending; not merged into `main`). Issue #5 (M6 Stage 3) in progress in worktree `/Users/apple/orca/projects/branchwork-m6-stage-3` (`m6-stage-3`), to be rebased onto `m6-stage-2`. The accidental `~/.git` was moved to `~/.Trash/home-dotgit-2026-11-13`.
-- **Current Objective:** Continue issue #5 in the worktree: M6-07 re-review, M6-08 spec review, M6-09 Publish to GitHub, then Stage 3 gate and Checkpoint M6.3. Checkpoint M6.2 remains open for the user.
+- **Latest follow-up:** By user order, M6 Stage 2 (conflict resolver, `de62b34`) and Stage 3 (local project init & publish, GitHub issue #5) were committed and fast-forwarded into `main` before their manual checkpoints. Not pushed; issue #5 not closed on GitHub yet.
+- **Current Objective:** User runs the pending manual checks — `docs/testing/m6-manual-e2e.md` Stage 2 (M6-S2-01..10) and Stage 3 (M6-S3-01..09) — on `main`. Then Stage 4 (Interactive rebase, M6-10..12) on `m6-stage-4`.
 
-- **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stage 1 done; Stage 2 done pending Checkpoint M6.2; Stage 3 (issue #5) planned.
-- **Branch:** `m6-stage-2` from `main`. `origin/main` = `142c243` (Stage 1 commit is local only). Tags `v0.4.0`/`v0.5.0` not pushed. Commit/push only on user order.
-- **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters; `.agent/reviews/m6-stage-1-security-review.md` #1); 11 pre-existing Playwright failures from the M5 Launchpad redesign (`.agent/reviews/m6-stage-1-e2e.md`); whether to reopen/annotate GitHub issue #3. Deferred Stage 1 nits are listed in progress.md.
+- **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stages 1–3 on `main`; Stages 4 (rebase) and 5 (compare) remain, then the M6 review gate and `v0.6.0`.
+- **Branch:** `main` (local, ahead of `origin/main` `142c243`). Stage worktree `branchwork-m6-stage-3` removed after merge. Tags `v0.4.0`/`v0.5.0` not pushed. Commit/push only on user order.
+- **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters); 11 pre-existing Playwright failures from the M5 Launchpad redesign; close GitHub issue #5 (needs a push of `main` first); unused worktrees `fix-issue-5`, `fix-issue-1` (not created by the agent).
 
 ## Recommended Next Step
 
-Refine `.agent/tasks/m6-task-04-*.md` (conflict read model IPC) from the plan row, add its feature_list entry, implement, spec-review.
+After the user's manual checks: write `.agent/tasks/m6-task-10-*.md` (rebase plan read IPC) from the plan row, branch `m6-stage-4` from `main`, implement, spec-review.
 
 ## M2 structure
 
