@@ -1,4 +1,5 @@
 import { beforeEach, vi } from "vitest";
+import { useStage } from "./stage";
 import { gitPull, gitPush } from "../ipc/sync";
 import { undoLast } from "../ipc/undo";
 import { useDock } from "../terminal/dock";
@@ -59,4 +60,17 @@ it("refuses a second git write in the same worktree while one is running", async
   expect(await first).toBe(true);
   expect(write).toHaveBeenCalledTimes(1);
   expect(gitPull).not.toHaveBeenCalled();
+});
+
+it("offers Resolve conflicts on a conflict failure", async () => {
+  const go = vi.fn();
+  useStage.setState({ go });
+  vi.mocked(gitPull).mockRejectedValue({ kind: "gitConflict", message: "Git pull conflicted", detail: "CONFLICT (content)", recoverable: true });
+
+  await runSync("/repos/main", "pull");
+
+  const shown = vi.mocked(toast).mock.calls[0][0];
+  expect(shown.action?.label).toBe("Resolve conflicts");
+  shown.action?.run();
+  expect(go).toHaveBeenCalledWith("conflicts");
 });

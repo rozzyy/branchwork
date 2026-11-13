@@ -1,0 +1,46 @@
+/* Conflicts screen (M6-06), after the prototype's `.cf*` styles. */
+.conf { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.conf > .conf-body, .conf > .conf-summary, .conf > .conf-state { flex: 1; min-height: 0; }
+.conf-subtitle { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--fg3); }
+.conf-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.conf-remaining, .conf-count { background: color-mix(in oklch, var(--red) 14%, transparent); color: var(--red); }
+.conf-head { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--line); min-width: 0; }
+.conf-tabs { display: flex; gap: 4px; overflow-x: auto; min-width: 0; }
+.conf-tab { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--fg2); cursor: pointer; white-space: nowrap; }
+.conf-tab.on { background: var(--s2); color: var(--fg); box-shadow: var(--spec); }
+.conf-hint { margin-left: auto; white-space: nowrap; }
+.conf-muted { color: var(--fg3); font-size: 12px; }
+.conf-captions, .conf-row { display: grid; grid-template-columns: 1fr 1.1fr 1fr; }
+.conf-captions > div { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 12px; }
+.conf-captions > div + div, .conf-row > div + div { border-left: 1px solid var(--line); }
+.conf-captions .conf-muted { margin-left: auto; font-weight: 400; }
+.conf-dot { width: 8px; height: 8px; border-radius: 50%; }
+.conf-dot.o { background: var(--blu); } .conf-dot.r { background: var(--grn); } .conf-dot.t { background: var(--pur); }
+.conf-body { overflow: auto; min-height: 0; font: 12px/1.8 "SF Mono", "JetBrains Mono", monospace; }
+.conf-row > div { min-width: 0; padding: 0; }
+.conf-line { display: grid; grid-template-columns: 40px 1fr; white-space: pre; padding-right: 10px; }
+.conf-line i { font-style: normal; color: var(--fg3); text-align: right; padding-right: 10px; opacity: .6; }
+.conf-line span { overflow: hidden; text-overflow: ellipsis; }
+.conf-hunk { display: block; width: calc(100% - 16px); margin: 4px 8px; padding: 2px 0; border: 0; border-radius: 9px; text-align: left; font: inherit; color: inherit; background: transparent; overflow: hidden; }
+button.conf-hunk { cursor: pointer; }
+.conf-hunk.o { background: color-mix(in oklch, var(--blu) 13%, transparent); box-shadow: inset 3px 0 var(--blu); }
+.conf-hunk.t { background: color-mix(in oklch, var(--pur) 13%, transparent); box-shadow: inset 3px 0 var(--pur); }
+.conf-hunk.chosen { outline: 1.5px solid var(--grn); }
+.conf-hunk.res { background: color-mix(in oklch, var(--grn) 12%, transparent); box-shadow: inset 3px 0 var(--grn); }
+.conf-hunk.pend { background: color-mix(in oklch, var(--red) 10%, transparent); box-shadow: inset 3px 0 var(--red); border: 1px dashed color-mix(in oklch, var(--red) 40%, transparent); }
+.conf-pending { padding: 2px 14px; color: var(--red); font-family: system-ui, sans-serif; }
+.conf-hunk-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px 6px 40px; font-family: system-ui, sans-serif; }
+.conf-edit { width: calc(100% - 20px); margin: 6px 10px 0; padding: 6px 8px; border: 1px solid var(--line2); border-radius: 8px; background: var(--s2); color: var(--fg); resize: vertical; font-size: 12px; }
+.conf-savebar, .conf-footer { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--line); }
+.conf-savebar .conf-muted, .conf-footer .conf-muted { flex: 1; }
+.conf-footer .btn.primary { margin-left: auto; }
+.conf-summary { padding: 24px; }
+.conf-summary h2 { margin: 0 0 6px; font-size: 15px; }
+.conf-summary-actions { display: flex; gap: 8px; margin-top: 14px; }
+.conf-state { display: grid; place-content: center; gap: 6px; padding: 32px; text-align: center; }
+.conf-state h2 { margin: 0; font-size: 15px; }
+@container (max-width: 760px) {
+  .conf-hint { display: none; }
+  .conf-captions, .conf-row { grid-template-columns: 1fr; }
+  .conf-captions > div + div, .conf-row > div + div { border-left: 0; border-top: 1px solid var(--line); }
+}

@@ -44,6 +44,16 @@ export const commands = {
 	gitCherryPick: (worktreePath: string, sha: string) => __TAURI_INVOKE<boolean>("git_cherry_pick", { worktreePath, sha }),
 	/**  Returns whether the revert can be undone. */
 	gitRevert: (worktreePath: string, sha: string) => __TAURI_INVOKE<boolean>("git_revert", { worktreePath, sha }),
+	/**  Conflicted paths and the in-progress operation (spec §6.8). */
+	conflictList: (worktreePath: string) => __TAURI_INVOKE<ConflictList>("conflict_list", { worktreePath }),
+	/**  Base/ours/theirs regions of one conflicted file, or a summary for binary/large/deleted files. */
+	conflictRead: (worktreePath: string, path: string) => __TAURI_INVOKE<ConflictFile_Serialize>("conflict_read", { worktreePath, path }),
+	/**  Writes and stages a resolution for one conflicted file. */
+	conflictResolve: (worktreePath: string, path: string, stamp: string, resolution: ConflictResolution) => __TAURI_INVOKE<null>("conflict_resolve", { worktreePath, path, stamp, resolution }),
+	/**  Aborts the in-progress merge / cherry-pick / revert (the UI confirms first). */
+	conflictAbort: (worktreePath: string) => __TAURI_INVOKE<null>("conflict_abort", { worktreePath }),
+	/**  "Mark resolved & commit": continues the operation once no path is conflicted. */
+	conflictContinue: (worktreePath: string) => __TAURI_INVOKE<null>("conflict_continue", { worktreePath }),
 	undoLast: (worktreePath: string) => __TAURI_INVOKE<boolean>("undo_last", { worktreePath }),
 	stashList: (worktreePath: string) => __TAURI_INVOKE<StashEntry[]>("stash_list", { worktreePath }),
 	stashPush: (worktreePath: string, options: StashPushOptions_Deserialize) => __TAURI_INVOKE<null>("stash_push", { worktreePath, options }),
@@ -270,6 +280,69 @@ export type CommitOptions = {
 	stageAll: boolean,
 };
 
+export type ConflictEntry = {
+	path: string,
+	kind: ConflictKind,
+};
+
+export type ConflictFile = ConflictFile_Serialize | ConflictFile_Deserialize;
+
+export type ConflictFile_Deserialize = {
+	path: string,
+	kind: ConflictKind,
+	summary?: ConflictSummary_Deserialize | null,
+	regions: ConflictRegion[],
+	/**  Index object ids of base/ours/theirs; `conflict_resolve` refuses a stale stamp. */
+	stamp: string,
+};
+
+export type ConflictFile_Serialize = {
+	path: string,
+	kind: ConflictKind,
+	summary: ConflictSummary_Serialize | null,
+	regions: ConflictRegion[],
+	/**  Index object ids of base/ours/theirs; `conflict_resolve` refuses a stale stamp. */
+	stamp: string,
+};
+
+export type ConflictKind = "bothModified" | "bothAdded" | "deletedByUs" | "deletedByThem";
+
+export type ConflictList = {
+	operation: ConflictOperation,
+	files: ConflictEntry[],
+	truncated: boolean,
+};
+
+export type ConflictOperation = "merge" | "cherryPick" | "revert" | "rebase" | "none";
+
+export type ConflictRegion = { kind: "context"; text: string } | { kind: "conflict"; index: number; ours: string; base: string; theirs: string };
+
+/**
+ *  `regions`: one choice per conflict region, in order. `file`: a whole-file side, the only
+ *  option for summarized files.
+ */
+export type ConflictResolution = { kind: "regions"; choices: RegionChoice[] } | { kind: "file"; side: FileSide };
+
+export type ConflictSummary = ConflictSummary_Serialize | ConflictSummary_Deserialize;
+
+/**
+ *  Why a file is summarized (choose ours/theirs only); `notUtf8` means a text merge would not be
+ *  byte-exact.
+ */
+export type ConflictSummaryReason = "binary" | "tooLarge" | "deletedByUs" | "deletedByThem" | "tooManyConflicts" | "symlink" | "submodule" | "notUtf8" | "markerLike";
+
+export type ConflictSummary_Deserialize = {
+	reason: ConflictSummaryReason,
+	oursBytes?: number | null,
+	theirsBytes?: number | null,
+};
+
+export type ConflictSummary_Serialize = {
+	reason: ConflictSummaryReason,
+	oursBytes: number | null,
+	theirsBytes: number | null,
+};
+
 /**  `gh_auth_poll` shape. */
 export type DevicePoll = DevicePoll_Serialize | DevicePoll_Deserialize;
 
@@ -355,6 +428,9 @@ export type FileHistoryEntry = {
 export type FileHistoryRequest = {
 	limit: number,
 };
+
+/**  Whole-file side; `delete` accepts a deletion (only for deleted-by-us/them conflicts). */
+export type FileSide = "ours" | "theirs" | "delete";
 
 export type FsEncoding = "utf-8" | "utf-16" | "binary";
 
@@ -957,6 +1033,9 @@ export type RateLimitState_Serialize = {
 	reset_at: number | null,
 	retry_after: number | null,
 };
+
+/**  Per-region choice; `both` is ours followed by theirs. */
+export type RegionChoice = { kind: "ours" } | { kind: "theirs" } | { kind: "both" } | { kind: "manual"; text: string };
 
 export type StashEntry = {
 	index: number,

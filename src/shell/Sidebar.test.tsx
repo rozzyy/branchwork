@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useConflicts } from "../screens/conflicts/conflictsState";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./Sidebar";
 import { useStage } from "../state/stage";
@@ -69,6 +70,20 @@ it("context menu offers split directions", async () => {
   fireEvent.contextMenu(screen.getByRole("button", { name: /Agents/ }));
   await userEvent.click(screen.getByRole("menuitem", { name: /Split left/ }));
   expect(useStage.getState().panes).toEqual(["agents", "launchpad"]);
+});
+
+it("badges the Conflicts nav with the conflicted-file count", async () => {
+  useConflicts.setState({
+    worktree: useWorktrees.getState().activePath,
+    list: {
+      operation: "merge",
+      truncated: false,
+      files: [{ path: "a.ts", kind: "bothModified" }, { path: "b.ts", kind: "bothAdded" }],
+    },
+  });
+  render(<Sidebar />);
+
+  expect(await screen.findByRole("status", { name: "2 conflicted files" })).toHaveTextContent("2");
 });
 
 it("badges the Agents nav while a session waits", () => {

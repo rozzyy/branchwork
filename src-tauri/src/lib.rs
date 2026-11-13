@@ -1,6 +1,7 @@
 mod blame;
 mod cli;
 mod commit;
+mod conflict;
 mod diff;
 mod error;
 mod fs;
@@ -450,6 +451,74 @@ fn git_push(
     sync::push(&worktree_path)?;
     emit_op_done(&app, &store, &worktree_path);
     Ok(())
+}
+
+/// Conflicted paths and the in-progress operation (spec §6.8).
+#[tauri::command(async)]
+#[specta::specta]
+fn conflict_list(
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<conflict::ConflictList, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    conflict::list(&worktree_path)
+}
+
+/// Base/ours/theirs regions of one conflicted file, or a summary for binary/large/deleted files.
+#[tauri::command(async)]
+#[specta::specta]
+fn conflict_read(
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+) -> Result<conflict::ConflictFile, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    conflict::read(&worktree_path, &path)
+}
+
+/// Writes and stages a resolution for one conflicted file.
+#[tauri::command(async)]
+#[specta::specta]
+fn conflict_resolve(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    path: String,
+    stamp: String,
+    resolution: conflict::ConflictResolution,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = conflict::resolve(&worktree_path, &path, &stamp, &resolution);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+/// Aborts the in-progress merge / cherry-pick / revert (the UI confirms first).
+#[tauri::command(async)]
+#[specta::specta]
+fn conflict_abort(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = conflict::abort(&worktree_path);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+/// "Mark resolved & commit": continues the operation once no path is conflicted.
+#[tauri::command(async)]
+#[specta::specta]
+fn conflict_continue(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = conflict::continue_operation(&worktree_path);
+    emit_op_done(&app, &store, &worktree_path);
+    result
 }
 
 /// Returns whether the checkout can be undone.
@@ -1389,6 +1458,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             git_branch_create,
             git_cherry_pick,
             git_revert,
+            conflict_list,
+            conflict_read,
+            conflict_resolve,
+            conflict_abort,
+            conflict_continue,
             undo_last,
             stash_list,
             stash_push,

@@ -35,3 +35,18 @@ push to, plus a scratch branch you can rewrite. Restart the app fully first (Rus
 - [x] **M6-S1-20 Still deferred.** Compare with working tree, Rebase from here, Start agent here show "· Later" and are disabled.
 
 Stage 1 manual flows confirmed OK by the user on 2026-11-13 (Checkpoint M6.1 approved), including the packaged-app retest of the issue #3 fix.
+
+## Stage 2 — Conflict resolver (Checkpoint M6.2)
+
+Restart the app fully first (Rust changed). Use a scratch repository you can merge in.
+
+- [ ] **M6-S2-01 Merge conflict across files.** Create two branches that change the same lines in 2+ text files; merge in the terminal (or pull). The sidebar Conflicts item shows a badge with the file count; the toast offers **Resolve conflicts**, which opens the screen.
+- [ ] **M6-S2-02 Columns and choices.** Each file is a tab; Ours | Result | Theirs columns show context lines and highlighted conflict blocks. Resolve one region by clicking the Ours block, one by clicking Theirs, one with **Both**, one with **Edit** (type manual text, Apply). The unresolved count on the tab drops to zero.
+- [ ] **M6-S2-03 Undo a resolution.** Change a region's choice twice, press **Undo** → the previous choice returns; Undo again → the region is unresolved.
+- [ ] **M6-S2-04 Save resolution.** Save each file → it leaves the tab list; the working file contains exactly the Result (line endings follow `.gitattributes`); `git status` shows it staged.
+- [ ] **M6-S2-05 Mark resolved & commit.** With no files left, the button is enabled; it creates the merge commit (two parents in Graph) and opens Graph.
+- [ ] **M6-S2-06 Abort.** Start another conflicting merge, click **Abort** → danger confirmation; Cancel does nothing; confirm → branch back at the pre-merge commit, clean tree, badge gone.
+- [ ] **M6-S2-07 Cherry-pick conflict from Stage 1.** Cherry-pick a conflicting commit from the Graph menu → toast offers Resolve conflicts → resolve → Mark resolved & commit finishes the cherry-pick with the original message.
+- [ ] **M6-S2-08 Whole-file choices.** Make a binary file or a modify/delete conflict → the file shows a summary with Use ours / Use theirs (and **Accept deletion** for the deleted case); each works.
+- [ ] **M6-S2-09 Special file names.** A conflict on a file named like `pages/[id].tsx` resolves without touching other files (uncommitted edits elsewhere survive; untracked files stay unstaged).
+- [ ] **M6-S2-10 Undo is refused mid-operation.** During an unresolved cherry-pick, ⌘Z / Undo toast → message to finish or abort first; the cherry-pick is still in progress.

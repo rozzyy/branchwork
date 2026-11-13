@@ -1239,6 +1239,39 @@
       ],
       "status": "done",
       "evidence": "Done 2026-11-12. Spec review PASS (.agent/reviews/m6-task-03-spec.md), no blocking findings; plan row note and unused i18n key fixed. Plan deviation recorded: Open pull request -> allowlisted GitHub commit page ('Open on GitHub'). ./init.sh: === Verification Complete === (Vitest 69 files / 615 tests; Rust 236 passed / 3 ignored; Clippy/typecheck clean). Manual Checkpoint M6.1 approved by the user on 2026-11-13."
+    },
+    {
+      "id": "m6-task-04-conflict-read-model",
+      "stage": 27,
+      "name": "Conflict read model IPC",
+      "description": ".agent/tasks/m6-task-04-conflict-read-model.md",
+      "dependencies": [
+        "m6-task-02-checkout-branch-picks"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review PASS (.agent/reviews/m6-task-04-spec.md); non-blocking findings fixed before M6-05 builds on the contract: missing final newline at EOF trimmed (regression test), symlink/submodule conflicts summarized (regression test), sizes from object headers before loading blobs, list/clean-path tests tightened. ./init.sh: === Verification Complete === (Vitest 69 files / 617 tests; Rust 245 passed / 3 ignored; Clippy/typecheck clean)."
+    },
+    {
+      "id": "m6-task-05-conflict-resolve",
+      "stage": 27,
+      "name": "Resolve, abort, continue IPC",
+      "description": ".agent/tasks/m6-task-05-conflict-resolve.md",
+      "dependencies": [
+        "m6-task-04-conflict-read-model"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review FAIL then PASS after re-review (.agent/reviews/m6-task-05-spec.md). Blocking fixes: submodule side staged via update-index (regression test), non-UTF-8 files summarized as notUtf8 (regression test). Follow-ups fixed: eol re-materialization after regions resolve (regression test), empty cherry-pick explained (regression test), abort/continue labels, symlink leaf refused, cap wording. ./init.sh: === Verification Complete === (Vitest 69 files / 617 tests; Rust 255 passed / 3 ignored). One run hit the timing-sensitive worktree::coalesces_events test under load; it passes 4/4 alone and on rerun."
+    },
+    {
+      "id": "m6-task-06-conflicts-screen",
+      "stage": 27,
+      "name": "Conflicts screen",
+      "description": ".agent/tasks/m6-task-06-conflicts-screen.md",
+      "dependencies": [
+        "m6-task-05-conflict-resolve"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review PASS (.agent/reviews/m6-task-06-spec.md), no blocking findings; fixed: Result line numbers, failed save keeps choices and only a stale-stamp Conflict re-reads (regression test), summary stale-stamp refresh, footer layout, rebase Ours/Theirs captions and wording, truncated count, no duplicate undo entries. Deferred: narrow-width caption alignment, submodule-status hint, zero-region explanation, button-wrapping-div markup. ./init.sh: === Verification Complete === (Vitest 70 files / 626 tests; Rust 255 passed / 3 ignored). One run hit a GraphScreen findBy timeout under parallel load; passes 3/3 alone and on rerun."
     }
   ]
 }

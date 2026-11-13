@@ -3,6 +3,7 @@ import { t } from "../i18n/t";
 import { errorMessage, type AppError } from "../ipc/errors";
 import { undoLast } from "../ipc/undo";
 import { useDock } from "../terminal/dock";
+import { useStage } from "./stage";
 import { toast } from "../ui/toast";
 import { useRepos } from "./repos";
 import { useWorktrees } from "./worktrees";
@@ -36,7 +37,9 @@ export function showGitError(worktreePath: string, action: string, error: unknow
     details: appError.detail ?? undefined,
     action: appError.kind === "gitAuth"
       ? { label: t("sync.openTerminalAuth"), run: () => void useDock.getState().openHere(worktreePath) }
-      : undefined,
+      : appError.kind === "gitConflict"
+        ? { label: t("conflicts.resolveAction"), run: () => useStage.getState().go("conflicts") }
+        : undefined,
   });
 }
 
@@ -66,6 +69,8 @@ export async function runGitAction(
   worktreePath: string,
   action: string,
   write: () => Promise<boolean | void>,
+  /** Called with the typed error after the failure toast (not when another write is running). */
+  onError?: (error: Partial<AppError>) => void,
 ): Promise<boolean> {
   if (!beginGitWrite(worktreePath, "local")) return false;
   try {
@@ -74,6 +79,7 @@ export async function runGitAction(
     return true;
   } catch (error) {
     showGitError(worktreePath, action, error);
+    onError?.(asAppError(error));
     return false;
   } finally {
     endGitWrite(worktreePath);

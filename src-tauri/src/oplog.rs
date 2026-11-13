@@ -436,6 +436,13 @@ pub(crate) fn undo_last(store: &Store, worktree: &Path) -> Result<(), AppError> 
     if !row.undoable {
         return Err(AppError::validation("The latest action cannot be undone"));
     }
+    // A reset during a merge/cherry-pick/revert/rebase would silently end it and mix the undone
+    // commit into the in-progress resolution.
+    if git2::Repository::open(&root)?.state() != git2::RepositoryState::Clean {
+        return Err(AppError::validation(
+            "Finish or abort the merge, cherry-pick, revert, or rebase before undoing",
+        ));
+    }
     apply_reverse(&root, &row)?;
     store.delete_oplog(row.id).map_err(AppError::from)
 }

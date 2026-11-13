@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useStage } from "./stage";
 import { readStatus, type StatusEntry } from "../ipc/status";
 import { readDiff, type DiffArea, type DiffModel } from "../ipc/diff";
 import {
@@ -270,6 +271,9 @@ export const useChanges = create<ChangesStore>((set, get) => ({
         icon: "!",
         // Git CLI failures carry their (capped) output here; shown behind "Show details".
         details: (error as { detail?: string | null } | null)?.detail ?? undefined,
+        action: (error as { kind?: string } | null)?.kind === "gitConflict"
+          ? { label: t("conflicts.resolveAction"), run: () => useStage.getState().go("conflicts") }
+          : undefined,
       });
       return false;
     } finally {

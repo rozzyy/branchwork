@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { ConflictWatcher } from "./screens/conflicts/ConflictsScreen";
 import { TitleBar } from "./shell/TitleBar";
 import { Sidebar } from "./shell/Sidebar";
 import { ProjectSidebar } from "./shell/ProjectSidebar";
@@ -77,6 +78,7 @@ export default function App() {
         </div>
         <ProjectSidebar />
       </div>
+      <ConflictWatcher />
       <Toaster />
       <DialogHost />
       <Palette />

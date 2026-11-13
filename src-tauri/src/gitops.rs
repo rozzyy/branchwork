@@ -507,4 +507,35 @@ mod tests {
 
         assert_eq!(error.kind, ErrorKind::Validation);
     }
+
+    // Regression (stage review): Undo during a conflicted cherry-pick reset the previous action
+    // and silently ended the cherry-pick.
+    #[test]
+    fn undo_is_refused_while_a_cherry_pick_is_in_progress() {
+        let store = Store::in_memory().unwrap();
+        let (dir, _, feature) = repo("undo-during-pick");
+        assert!(cherry_pick(&store, &dir.0, &feature).unwrap());
+        git(&dir.0, &["switch", "-q", "feature"]);
+        let clash = commit_file(&dir.0, "README.md", "feature side\n", "clash");
+        git(&dir.0, &["switch", "-q", "main"]);
+        commit_file(&dir.0, "README.md", "main side\n", "main side");
+        // The earlier undoable cherry-pick no longer matches HEAD; record a fresh undoable one.
+        git(&dir.0, &["switch", "-q", "-c", "work"]);
+        let head = git(&dir.0, &["rev-parse", "HEAD"]);
+        assert!(cherry_pick(&store, &dir.0, &commit_on_side(&dir.0, &head)).unwrap());
+        assert!(cherry_pick(&store, &dir.0, &clash).is_err());
+
+        let error = oplog::undo_last(&store, &dir.0).unwrap_err();
+
+        assert_eq!(error.kind, ErrorKind::Validation);
+        assert!(dir.0.join(".git/CHERRY_PICK_HEAD").exists());
+    }
+
+    /// A commit on a side branch off `base` touching only `side.txt`; returns its sha.
+    fn commit_on_side(dir: &Path, base: &str) -> String {
+        git(dir, &["switch", "-q", "-c", "side", base]);
+        let sha = commit_file(dir, "side.txt", "side\n", "side");
+        git(dir, &["switch", "-q", "work"]);
+        sha
+    }
 }

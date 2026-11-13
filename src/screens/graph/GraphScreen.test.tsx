@@ -226,7 +226,8 @@ it("loads and scrolls to a selected commit beyond the first page", async () => {
 
   useGraphUi.getState().select({ kind: "commit", sha: olderCommit.sha });
 
-  const selected = await screen.findByRole("option", { name: /Older blamed commit/ });
+  // Renders a second 500-commit page; the default 1 s wait flakes under the parallel suite.
+  const selected = await screen.findByRole("option", { name: /Older blamed commit/ }, { timeout: 5000 });
   const list = screen.getByRole("listbox", { name: "Commit history" });
   expect(readGraphPage).toHaveBeenCalledWith("project-1", "/repos/main", 1);
   expect(selected).toHaveAttribute("aria-selected", "true");

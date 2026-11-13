@@ -11,6 +11,7 @@ import { TerminalScreen, TerminalToolbar } from "../terminal/TerminalScreen";
 import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
 import { InboxToolbar, InboxView } from "./inbox/InboxScreen";
 import { LaunchpadToolbar, LaunchpadView } from "./launchpad/LaunchpadScreen";
+import { ConflictsToolbar, ConflictsView } from "./conflicts/ConflictsScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -65,3 +66,4 @@ VIEWS.agents = { Toolbar: AgentsToolbar, View: AgentsView };
 VIEWS.repo = { Toolbar: RepoToolbar, View: RepoViewBoundary };
 VIEWS.inbox = { Toolbar: InboxToolbar, View: InboxView };
 VIEWS.launchpad = { Toolbar: LaunchpadToolbar, View: LaunchpadView };
+VIEWS.conflicts = { Toolbar: ConflictsToolbar, View: ConflictsView };

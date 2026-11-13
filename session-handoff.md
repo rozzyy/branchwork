@@ -1,10 +1,10 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-13
-- **Latest follow-up:** Checkpoint M6.1 approved by the user (incl. packaged-app retest of the issue #3 fix `142c243`, pushed). M6 Stage 1 (M6-01..03) committed and fast-forwarded into `main` (not pushed).
-- **Current Objective:** M6 Stage 2 — Conflict resolver (M6-04 → M6-05 → M6-06) on `m6-stage-2`; stop at Checkpoint M6.2.
+- **Latest follow-up:** Stage 2 (conflict resolver) committed on `m6-stage-2` by user order before its manual Checkpoint M6.2 (still pending; not merged into `main`). Issue #5 (M6 Stage 3) in progress in worktree `/Users/apple/orca/projects/branchwork-m6-stage-3` (`m6-stage-3`), to be rebased onto `m6-stage-2`. The accidental `~/.git` was moved to `~/.Trash/home-dotgit-2026-11-13`.
+- **Current Objective:** Continue issue #5 in the worktree: M6-07 re-review, M6-08 spec review, M6-09 Publish to GitHub, then Stage 3 gate and Checkpoint M6.3. Checkpoint M6.2 remains open for the user.
 
-- **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stage 1 done; Stage 2 active.
+- **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stage 1 done; Stage 2 done pending Checkpoint M6.2; Stage 3 (issue #5) planned.
 - **Branch:** `m6-stage-2` from `main`. `origin/main` = `142c243` (Stage 1 commit is local only). Tags `v0.4.0`/`v0.5.0` not pushed. Commit/push only on user order.
 - **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters; `.agent/reviews/m6-stage-1-security-review.md` #1); 11 pre-existing Playwright failures from the M5 Launchpad redesign (`.agent/reviews/m6-stage-1-e2e.md`); whether to reopen/annotate GitHub issue #3. Deferred Stage 1 nits are listed in progress.md.
 

@@ -1195,3 +1195,39 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 ## 2026-11-13: Checkpoint M6.1 approved
 
 - User confirmed the issue #3 fix in the packaged app and approved the Stage 1 manual checkpoint (`docs/testing/m6-manual-e2e.md` M6-S1-01..20). Stage 1 committed on `m6-stage-1` and fast-forwarded into `main` (not pushed). Next: Stage 2 (conflict resolver) on `m6-stage-2`, starting with M6-04.
+
+## 2026-11-13: M6 Stage 2 started — M6-04 Conflict read model IPC
+
+- Stage 1 committed `2fad157` and fast-forwarded into `main` (not pushed); branch `m6-stage-2` created. Task file `.agent/tasks/m6-task-04-conflict-read-model.md`; feature_list entries for M6-04..06.
+- `conflict.rs`: `conflict_list` (operation from repository state + conflicted index paths with kind, sorted, cap 1000) and `conflict_read` (index stages 1/2/3 → libgit2 `merge_file` in diff3 style with 31-char labelled markers → context/conflict regions with exact text; empty base for add/add; summaries for binary, >1 MB sides, deleted-by-us/them, >500 regions). Path validation via `diff::validate_file_path`; non-conflicted path → NotFound. No git process, no writes; ≤3 blobs of ≤1 MB per read.
+- 5 Rust tests. `./init.sh` → `=== Verification Complete ===` (Vitest 69 files / 617 tests; Rust 243 passed / 3 ignored). Spec review pending.
+- Spec review PASS. Fixed findings: libgit2's added newline on an EOF conflict section is trimmed when the side had none (regression test); symlink (120000) and submodule (160000) conflicts return `symlink` / `submodule` summaries instead of text merge / NotFound (regression test); sizes come from ODB headers so oversized blobs are never loaded; tests tightened. Notes carried to M6-05: rebase "ours" is upstream; write through git (filters) not raw bytes where possible. `./init.sh` green (617 Vitest; Rust 245 passed / 3 ignored). **M6-04 done.**
+
+## 2026-11-13: Issue #5 — design and plan (M6 Stage 3)
+
+- Brainstormed GitHub issue #5 with the user. Finding: Git repos without a remote already open; only non-Git folders are refused, and every screen/IPC is built on registered Git worktrees. User chose Approach A (confirmed `git init` on add) over true non-Git projects; first publish push uses the selected account's token via the git child environment only; delivered as M6 Stage 3 in `v0.6.0` (Rebase → Stage 4, Compare → Stage 5, tasks renumbered M6-10..14).
+- Design approved: `docs/superpowers/specs/2026-11-13-local-project-init-publish-design.md` (builder check done). Plan: `docs/superpowers/plans/2026-11-13-m6-stage3-init-publish.md`; M6 plan table updated. Not committed.
+- M6-05 review fixes remain applied but uncompiled/untested (see 2026-11-13 M6-05 notes); resume there next.
+
+## 2026-11-13: M6-05 Resolve, abort, continue IPC — done
+
+- `conflict_resolve` (stamp-checked; `regions` choices ours/theirs/both/manual or `file` ours/theirs/delete; worktree-boundary + symlink-leaf checks; `git add`, then file re-materialized from the index so eol attributes apply; gitlinks via `update-index --cacheinfo`), `conflict_abort` (merge/cherry-pick/revert `--abort`), `conflict_continue` (refused while conflicted; `commit --no-edit` / `cherry-pick --continue` / `revert --continue`; emptied pick explained). `conflict_read` gained `stamp` and the `notUtf8` summary reason.
+- Spec review: first FAIL (submodule theirs staged ours; non-UTF-8 text corrupted to U+FFFD), fixed with regression tests; re-review PASS; follow-ups (no-op eol checkout, empty-pick wording) fixed with regression tests. 17 conflict tests. `./init.sh` green (617 Vitest; Rust 255 passed / 3 ignored); `worktree::coalesces_events_independently_per_worktree` flaked once under parallel load (passes alone 4/4 and on rerun). **M6-05 done.** Next: M6-06 Conflicts screen.
+
+## 2026-11-13: M6-06 Conflicts screen — implemented
+
+- `src/ipc/conflicts.ts`; `useConflicts` store (list/select/choose/undo with previous-choice history) and `ConflictWatcher` (mounted in App: reload on worktree switch + debounced `git:changed`); `ConflictsToolbar` (branch · operation, remaining chip, Terminal, confirmed Abort for merge/cherry-pick/revert) and `ConflictsView` (file tabs with unresolved count, Ours | Result | Theirs columns, click side or ← Ours / Both / Theirs → / Edit, Undo, Save resolution with overwrite note, summarized-file Use ours / Use theirs / Accept deletion, disabled ✦ Explain, Mark resolved & commit → Graph). Sidebar Conflicts badge; `GitConflict` toasts offer Resolve conflicts.
+- Vitest: 6 screen tests + sidebar badge + toast action. `./init.sh` → `=== Verification Complete ===` (Vitest 70 files / 625 tests; Rust 255 passed / 3 ignored). Spec review pending.
+- Spec review PASS; fixed Result line numbering, failed-save choice wipe (regression test; only a stale-stamp `Conflict` re-reads), summary stale-stamp refresh, footer layout, rebase captions/wording, truncated count, duplicate undo entries. `./init.sh` green (626 Vitest; Rust 255 passed / 3 ignored). **M6-06 done — all Stage 2 tasks done.** Next: Stage 2 review gate.
+
+## 2026-11-13: M6 Stage 2 review gate — 🛑 Checkpoint M6.2
+
+- Security review first FAIL (high: conflicted paths reached git as pathspecs, so `*` / `[id]` names touched other files — reproduced data loss), fixed with `:(literal)` on every add/checkout/rm (regression test, verified to fail without the fix); low: marker-like content now summarized (`markerLike`, regression test); TOCTOU low accepted. Re-review PASS.
+- Code review PASS with should-fixes, all fixed: emptied cherry-pick/revert continue points to `git <cmd> --skip` (regression test for revert); `undo_last` refused while a merge/cherry-pick/revert/rebase is in progress (regression test); stash conflict toasts offer Resolve conflicts. Re-review PASS; remaining nits recorded in the report.
+- E2E: `.agent/reviews/m6-stage-2-e2e.md` — Playwright 63/11 (same pre-existing M5 failures). Several full runs flaked on unrelated UI timeouts at machine load ~235 from outside processes; `vitest --maxWorkers=2` 626/626 and canonical `./init.sh` green at lower load (Vitest 70 files / 626 tests; Rust 259 passed / 3 ignored). Test-only: GraphScreen deep-page wait timeout 5 s.
+- Manual spec: `docs/testing/m6-manual-e2e.md` Stage 2 (M6-S2-01..10). Waiting for the user. No commit or push.
+
+## 2026-11-13: Stage 2 committed by user order (before Checkpoint M6.2)
+
+- User ordered committing the pre-issue-#5 work before continuing issue #5. Stage 2 (M6-04..06 + review fixes) and the issue #5 design/plan docs committed on `m6-stage-2`. Checkpoint M6.2 manual run (`docs/testing/m6-manual-e2e.md` Stage 2) is still pending, so the branch is not fast-forwarded into `main` yet. Last `./init.sh` on this tree green (Vitest 70 files / 626 tests; Rust 259 passed / 3 ignored). No push.
+- Also per user order: the accidental `~/.git` (150 commits, 6 branches, no remote, 954 MB) was moved to `~/.Trash/home-dotgit-2026-11-13` (recoverable), not deleted; no working files touched.

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useConflictCount } from "../screens/conflicts/conflictsState";
 import { createPortal } from "react-dom";
 import { NAV_SECTIONS, SCREENS, screenById, type ScreenDef, type ScreenId } from "../screens/registry";
 import { useStage } from "../state/stage";
@@ -373,6 +374,7 @@ export function Sidebar() {
   ];
 
   const waitingAgents = useSessions((store) => store.sessions.filter((s) => s.status === "waiting").length);
+  const conflictCount = useConflictCount();
 
   const item = (s: ScreenDef) => (
     <button
@@ -390,6 +392,11 @@ export function Sidebar() {
       {s.id === "agents" && waitingAgents > 0 && (
         <span className="nav-badge" role="status" aria-label={t("agents.waitingBadge", { count: waitingAgents })}>
           {waitingAgents}
+        </span>
+      )}
+      {s.id === "conflicts" && conflictCount > 0 && (
+        <span className="nav-badge" role="status" aria-label={t("conflicts.badge", { count: conflictCount })}>
+          {conflictCount}
         </span>
       )}
       {glyph(s.id)}
