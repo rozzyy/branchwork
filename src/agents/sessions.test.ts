@@ -777,6 +777,31 @@ describe("profile switching", () => {
     expect(titles).not.toContain("Codex stopped");
   });
 
+  it("ignores a second switch while the first is still settling", async () => {
+    switchTiming.settleMs = 50;
+    const { work, home } = await twoProfiles();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
+    const first = useSessions.getState().switchProfile(id!, home);
+    expect(await useSessions.getState().switchProfile(id!, home)).toBeNull();
+    expect(await first).toBe(id);
+    expect(copyConversation).toHaveBeenCalledTimes(1);
+    expect(spawnTerminal).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts the settle window only after the resume command is typed", async () => {
+    switchTiming.settleMs = 20;
+    const { work, home } = await twoProfiles();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
+    // A slow shell prompt outlasts the settle window before the command is sent.
+    vi.mocked(waitTerminalReady).mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve(true), 80)));
+    const switching = useSessions.getState().switchProfile(id!, home);
+    await vi.waitFor(() => expect(writes()).toContain(`'codex' 'resume' '${CONV_A}' || exit\n`));
+    exitHandler?.({ sessionId: "pty-2", exitCode: 1, signal: null });
+    expect(await switching).toBeNull();
+    expect(useSessions.getState().sessions[0].profile).toEqual(work);
+    expect(closeTerminal).toHaveBeenCalledWith("pty-2");
+  });
+
   it("rolls back when the copy fails", async () => {
     const { work, home } = await twoProfiles();
     const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });

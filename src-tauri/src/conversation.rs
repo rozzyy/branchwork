@@ -46,6 +46,10 @@ fn is_real_dir(path: &Path) -> bool {
 }
 
 fn subdirs(dir: &Path) -> Vec<PathBuf> {
+    // A symlinked `projects` / `sessions` dir could lead outside the profile.
+    if !is_real_dir(dir) {
+        return Vec::new();
+    }
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     entries
         .flatten()
@@ -55,6 +59,9 @@ fn subdirs(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn files(dir: &Path) -> Vec<PathBuf> {
+    if !is_real_dir(dir) {
+        return Vec::new();
+    }
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     entries
         .flatten()
@@ -102,6 +109,26 @@ fn codex_transcripts(profile: &Path, id: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Every existing path from `root` down to `dest`'s parent must be a real
+/// dir (no symlink), so the write cannot be redirected out of the profile.
+fn ensure_no_symlinks(root: &Path, dest: &Path) -> Result<(), AppError> {
+    let mut current = root.to_path_buf();
+    let relative = dest.parent().and_then(|parent| parent.strip_prefix(root).ok());
+    let components = relative.map(|path| path.components().collect::<Vec<_>>()).unwrap_or_default();
+    for component in std::iter::once(None).chain(components.into_iter().map(Some)) {
+        if let Some(component) = component {
+            current.push(component);
+        }
+        match std::fs::symlink_metadata(&current) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                return Err(AppError::validation("Profile path contains a symlink"));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 /// Copy into `dest` via a temp file in the same dir, then rename.
 fn copy_atomic(source: &Path, dest: &Path) -> Result<(), AppError> {
     let Some(parent) = dest.parent() else {
@@ -111,6 +138,8 @@ fn copy_atomic(source: &Path, dest: &Path) -> Result<(), AppError> {
         .map_err(|error| AppError::io(format!("Could not create transcript dir: {error}")))?;
     let name = dest.file_name().and_then(|name| name.to_str()).unwrap_or("transcript");
     let temp = parent.join(format!(".{name}.branchwork-tmp"));
+    // A leftover temp (or a planted symlink) is removed, never written through.
+    std::fs::remove_file(&temp).ok();
     std::fs::copy(source, &temp)
         .and_then(|_| std::fs::rename(&temp, dest))
         .map_err(|error| {
@@ -137,7 +166,9 @@ fn copy_between(cli_id: &str, from: &Path, to: &Path, id: &str) -> Result<bool, 
     let relative = source
         .strip_prefix(from)
         .map_err(|_| AppError::internal("Transcript outside the profile dir"))?;
-    copy_atomic(source, &to.join(relative))?;
+    let dest = to.join(relative);
+    ensure_no_symlinks(to, &dest)?;
+    copy_atomic(source, &dest)?;
     Ok(true)
 }
 
@@ -182,22 +213,18 @@ fn same_path(a: &str, b: &str) -> bool {
     }
 }
 
-/// The one rollout for `worktree` touched since `since_ms` and not claimed by
-/// another pane. None when there are zero or several candidates.
+/// The most recently written rollout for `worktree` touched since `since_ms`
+/// and not claimed by another pane. Newest wins: after Codex `/new` the
+/// pane's previous rollout is also a candidate, and the new one is current.
 fn find_codex_in(profile: &Path, worktree: &str, since_ms: u64, exclude: &[String]) -> Option<String> {
     let floor = since_ms.saturating_sub(DISCOVERY_SLACK_MS);
-    let mut found: Vec<String> = codex_rollouts(profile)
+    codex_rollouts(profile)
         .into_iter()
-        .filter(|path| modified_ms(path).is_some_and(|ms| ms >= floor))
-        .filter_map(|path| rollout_meta(&path))
-        .filter(|(id, cwd)| valid_conversation_id(id) && !exclude.contains(id) && same_path(cwd, worktree))
-        .map(|(id, _)| id)
-        .collect();
-    found.dedup();
-    match found.as_slice() {
-        [one] => Some(one.clone()),
-        _ => None,
-    }
+        .filter_map(|path| modified_ms(&path).filter(|ms| *ms >= floor).map(|ms| (ms, path)))
+        .filter_map(|(ms, path)| rollout_meta(&path).map(|(id, cwd)| (ms, id, cwd)))
+        .filter(|(_, id, cwd)| valid_conversation_id(id) && !exclude.contains(id) && same_path(cwd, worktree))
+        .max_by_key(|(ms, _, _)| *ms)
+        .map(|(_, id, _)| id)
 }
 
 pub fn find_codex(
@@ -319,12 +346,29 @@ mod tests {
     }
 
     #[test]
-    fn codex_find_excludes_claimed_and_refuses_ambiguity() {
-        let temp = TempDir::fresh("ambiguous");
-        rollout(&temp.0, "14", ID, "/wt/a");
+    fn codex_find_prefers_newest_and_excludes_claimed() {
+        let temp = TempDir::fresh("newest");
+        let older = rollout(&temp.0, "14", ID, "/wt/a");
+        let file = std::fs::File::options().write(true).open(&older).unwrap();
+        file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(2)).unwrap();
         rollout(&temp.0, "14", OTHER, "/wt/a");
-        assert_eq!(find_codex_in(&temp.0, "/wt/a", now_ms(), &[]), None);
+        // After `/new`, the newer rollout is the pane's current conversation.
+        assert_eq!(find_codex_in(&temp.0, "/wt/a", now_ms(), &[]), Some(OTHER.to_owned()));
         assert_eq!(find_codex_in(&temp.0, "/wt/a", now_ms(), &[OTHER.to_owned()]), Some(ID.to_owned()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_symlinked_destination_dirs() {
+        let temp = TempDir::fresh("dest-symlink");
+        let (from, to) = (temp.0.join("a"), temp.0.join("b"));
+        write(&from.join(format!("projects/-wt/{ID}.jsonl")), "line\n");
+        let outside = temp.0.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::create_dir_all(&to).unwrap();
+        std::os::unix::fs::symlink(&outside, to.join("projects")).unwrap();
+        assert!(copy_between("claude", &from, &to, ID).is_err());
+        assert!(std::fs::read_dir(&outside).unwrap().next().is_none(), "nothing written outside");
     }
 
     #[test]

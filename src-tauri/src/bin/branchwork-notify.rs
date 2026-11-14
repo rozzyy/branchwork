@@ -49,6 +49,9 @@ fn run(session: &std::ffi::OsString, event: &std::ffi::OsString) -> i32 {
         eprintln!("branchwork-notify: bad argument shape");
         return 2;
     }
+    // Read the hook payload before dialing, so a slow stdin never holds the
+    // app's notify socket.
+    let conversation = conversation_from_stdin();
     let socket = match std::env::var_os("BRANCHWORK_NOTIFY_SOCKET") {
         Some(path) => path,
         None => {
@@ -63,7 +66,7 @@ fn run(session: &std::ffi::OsString, event: &std::ffi::OsString) -> i32 {
             return 1;
         }
     };
-    let line = match conversation_from_stdin() {
+    let line = match conversation {
         Some(conversation) => format!("{session} {event} {conversation}"),
         None => format!("{session} {event}"),
     };

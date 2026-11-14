@@ -294,6 +294,9 @@ fn parse_notify_line(text: &str) -> Option<(&str, &str, Option<&str>)> {
 #[cfg(unix)]
 fn handle_client(stream: std::os::unix::net::UnixStream, app: &tauri::AppHandle) {
     use std::io::Read;
+    // The listener serves clients one at a time: a client that connects and
+    // never writes must not stall every other pane's notifications.
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(1))).ok();
     let mut bytes = [0u8; 256];
     let text = match stream.take(257).read(&mut bytes) {
         Ok(0) => return,
