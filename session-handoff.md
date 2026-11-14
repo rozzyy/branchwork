@@ -1,14 +1,30 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-14
-- **Current Objective:** M7 UI/UX redesign, Stage 1 (design system foundation: Tasks 01–03) on `m7-stage-1`, executed subagent-driven (user choice). Plan: `docs/superpowers/plans/2026-11-14-m7-ui-redesign.md`; spec: `docs/superpowers/specs/2026-11-14-ui-redesign-design-system-design.md`; visual reference: `docs/design/redesign-prototype.html`.
+- **Current Objective:** M7 UI redesign implementation complete on `m7-stage-1`; final automated verification passed. Remaining evidence: native/manual E2E checklist is unverified. Plan: `docs/superpowers/plans/2026-11-14-m7-ui-redesign.md`; normative spec: `docs/superpowers/specs/2026-11-14-ui-redesign-design-system-design.md`.
 - **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stages 1–4 on `main` (Stage 4 `bd6bcc4`, Checkpoint M6.4 approved without reported manual results); M6 Stage 5 (compare) and the M6 review gate / `v0.6.0` remain and are deferred by the user in favor of M7.
 - **Branch:** `m7-stage-1` from `main`. `main` also carries the agent-session commits `21feaad`, `3d3ec85`, `cb7ed59`. Feature worktree `../branchwork-agent-session-token-saver` (`feat/agent-session-token-saver`, fully merged) still exists. Commit/push only on user order.
 - **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters); 11 pre-existing Playwright failures from the M5 Launchpad redesign; local branches `fix/issue-1`, `fix/issue-5`; remove the agent-session worktree/branch; manual checks M6-S2, M6-S3, M6-S4 unreported.
 
 ## Recommended Next Step
 
-Execute M7 Task 01 (tokens and global rules) from the plan, then Tasks 02–03, the Stage 1 review gate, `docs/testing/m7-manual-e2e.md` Stage 1, and stop at 🛑 Checkpoint M7.1.
+M7 implementation Tasks 01–12 are complete against the normative spec. Final `./init.sh` passed (Vitest 78 files / 679 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean); `git diff --check` passed. Native visual/manual checklist remains unverified because Cua Driver did not answer during the earlier check. Do not claim those manual checks passed. No commit or push was requested.
+
+## M7 Task 03 handover (2026-11-14)
+
+- Claude handover reported a reviewer finding: `.count` and `.kbd` used 11px text despite the 12px floor; switch and interactive chip hit areas were under 24px; `.seg { overflow: hidden }` could clip focus rings.
+- Fixes in the working diff: count/kbd and metadata text meet the 12px floor; switch track stays 34×20 within a 34×24 target; interactive chips, `.ib2`, and swatches meet 24×24 targets; segmented buttons no longer clip the global ring; scalable text tokens cover sidebar/worktree, pane headings, Changes, and Settings; input and shadowed title/settings controls preserve the global focus ring; CountBadge has a named status role.
+- Independent review PASS is recorded in `.agent/reviews/m7-stage-1-code-review.md`. Focused UI tests: 7 files / 15 tests passed; typecheck and diff check passed.
+- `RUST_TEST_THREADS=1 ./init.sh`: typecheck passed; Vitest 78 files / 679 tests passed; Clippy passed; Rust 298 passed / 10 failed / 3 ignored. All 10 failures report `unable to start FSEvent stream` in existing worktree tests, including serialized execution.
+- Retried one failing test with `TMPDIR=/private/tmp`; it failed with the same FSEvent error, so the failure is independent of the default temp directory.
+- `pnpm tauri dev` compiled and launched. Cua Driver's permission check returned “the app didn't answer”; native window inspection and manual checklist verification remain pending. No commit or push.
+
+## 2026-11-14: M7 full spec implementation completed
+
+- Implemented M7 Tasks 04–12: screen migration/History and Home, worktree-first sidebar and project picker, breadcrumb/status bar, navigation shortcuts, Home attention feed, History completion, contextual operation banner, per-worktree split layouts, and flush-pane/system typography restyle. The approved design spec is normative; prototype-only differences were not followed.
+- Final `./init.sh`: exit 0 / `=== Verification Complete ===`; Vitest 78 files / 679 tests passed; Clippy passed; Rust 308 passed / 3 ignored; typecheck passed. `git diff --check` passed.
+- Performance/security bounds include at most 200 persisted worktree layouts, 32 sanitized/deduplicated pane IDs per state, and 50 ancestor commits in BasePicker. No Rust/IPC changes were introduced for M7.
+- `docs/testing/m7-manual-e2e.md` remains unchecked: native appearance, navigation, and terminal regression checks were not verified because Cua Driver was unresponsive. Implementation and automated checks are complete; manual visual signoff remains unverified. No commit/push.
 
 ## M2 structure
 

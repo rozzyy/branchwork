@@ -257,14 +257,16 @@ it("retries a failed next page without restarting the loaded graph", async () =>
 
 it("shows all worktree file groups, opens Changes, and inspects commit details", async () => {
   setupGraph();
+  const openSplit = vi.fn();
+  useStage.setState({ openSplit });
   await screen.findByRole("option", { name: /Initial commit/ });
   expect(screen.getByText("staged.ts")).toBeVisible();
   expect(screen.getByText("edited.ts")).toBeVisible();
   expect(screen.getByText("new.ts")).toBeVisible();
   expect(screen.getByText("conflict.ts")).toBeVisible();
 
-  await userEvent.click(screen.getByRole("button", { name: "± Open in Changes" }));
-  expect(useStage.getState().go).toHaveBeenCalledWith("changes");
+  await userEvent.click(screen.getByRole("button", { name: /Commit…/ }));
+  expect(openSplit).toHaveBeenCalledWith("changes", "right");
 
   await userEvent.click(screen.getByRole("option", { name: /Initial commit/ }));
   expect(await screen.findByText("src/main.ts")).toBeVisible();
@@ -383,7 +385,7 @@ it("opens the commit on GitHub and blames its first changed file from the commit
 
   fireEvent.contextMenu(commit, { clientX: 120, clientY: 120 });
   await userEvent.click(screen.getByRole("menuitem", { name: /Blame files/ }));
-  await waitFor(() => expect(go).toHaveBeenCalledWith("blame"));
+  await waitFor(() => expect(go).toHaveBeenCalledWith("history"));
   expect(useFiles.getState().current).toBe("src/main.ts");
 });
 
@@ -521,7 +523,7 @@ it("Rebase from here sets the base and opens the Rebase screen", async () => {
   await userEvent.click(screen.getByRole("menuitem", { name: /Rebase from here/ }));
 
   expect(useRebaseUi.getState().base).toEqual({ worktree: "/repos/main", sha: page0Commits[1].sha });
-  expect(useStage.getState().go).toHaveBeenCalledWith("rebase");
+  expect(useStage.getState().go).toHaveBeenCalledWith("history");
 });
 
 it("shows an empty state for a repository with no commits", async () => {

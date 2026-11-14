@@ -58,10 +58,14 @@ it("changes theme mode and density from the Appearance card", async () => {
   expect(document.documentElement.dataset.theme).toBe("light");
 });
 
-it("toggles reduce transparency", async () => {
+it("appearance offers text size", async () => {
   render(<SettingsView />);
-  await userEvent.click(screen.getByRole("switch", { name: "Reduce transparency" }));
-  expect(useSettings.getState().theme.reduceTransparency).toBe(true);
+  expect(screen.getByRole("radiogroup", { name: "Text size" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("radio", { name: "Large" }));
+  expect(useSettings.getState().theme.textSize).toBe("large");
+  expect(document.documentElement.dataset.text).toBe("large");
+  expect(screen.queryByText("Contrast")).not.toBeInTheDocument();
+  expect(screen.queryByText("Reduce transparency")).not.toBeInTheDocument();
 });
 
 it("shows a page loader until account settings finish loading", () => {

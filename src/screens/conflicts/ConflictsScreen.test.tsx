@@ -168,7 +168,7 @@ it("enables Mark resolved & commit only when no files remain, then continues and
   await userEvent.click(finish);
 
   await waitFor(() => expect(conflictContinue).toHaveBeenCalledWith(WT));
-  await waitFor(() => expect(useStage.getState().go).toHaveBeenCalledWith("graph"));
+  await waitFor(() => expect(useStage.getState().go).toHaveBeenCalledWith("history"));
 });
 
 // Regression: any failed save re-read the file and wiped the user's choices.

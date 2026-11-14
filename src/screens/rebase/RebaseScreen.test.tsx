@@ -13,6 +13,8 @@ import { useGitBusy } from "../../state/gitActions";
 import { useStage } from "../../state/stage";
 import { useWorktrees } from "../../state/worktrees";
 import { ask } from "../../ui/dialog";
+import { useRepos } from "../../state/repos";
+import { readGraphPage } from "../../ipc/graph";
 import { useConflicts } from "../conflicts/conflictsState";
 import { conflictList } from "../../ipc/conflicts";
 import { RebaseView } from "./RebaseScreen";
@@ -26,6 +28,7 @@ vi.mock("../../ipc/rebase", () => ({
   gitPushForceWithLease: vi.fn(),
   onRebaseProgress: vi.fn(async () => () => {}),
 }));
+vi.mock("../../ipc/graph", () => ({ readGraphPage: vi.fn() }));
 vi.mock("../conflicts/conflictsState", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../conflicts/conflictsState")>();
   return actual;
@@ -55,7 +58,12 @@ const plan = (overrides: Partial<RebasePlan> = {}): RebasePlan => ({
 
 async function setup(loaded = plan()) {
   vi.mocked(rebasePlan).mockResolvedValue(loaded);
+  vi.mocked(readGraphPage).mockResolvedValue({ page:0, pageSize:50, totalCommits:2, hasMore:false, userEmail:null, wip:{} as never, commits:[
+    { sha:"h", shortSha:"head", parents:[BASE], lane:0, nodes:[], edges:[], parentLanes:[], refs:[], worktreeHeads:[], authorName:"Me", authorEmail:null, message:"HEAD", timestamp:1, timezoneOffsetMinutes:0 },
+    { sha:BASE, shortSha:BASE.slice(0,7), parents:[], lane:0, nodes:[], edges:[], parentLanes:[], refs:[], worktreeHeads:[], authorName:"Me", authorEmail:null, message:"base commit", timestamp:0, timezoneOffsetMinutes:0 },
+  ] });
   act(() => {
+    useRepos.setState({ activeProjectId:"project-1", projects:[{id:"project-1", owner:null, name:"repo", localPath:"/repos/main", groupId:null}] });
     useWorktrees.setState({ activePath: WT, worktrees: [{ path: WT, branch: "main", head: "h", ahead: 0, behind: 0, dirtyCount: 0, state: "clean" }] });
     useRebaseUi.setState({ base: { worktree: WT, sha: BASE }, pushed: {}, needsLeasePush: {} });
   });
@@ -156,7 +164,8 @@ it("offers a confirmed force-with-lease push after rebasing a pushed branch", as
   await waitFor(() => expect(gitPushForceWithLease).toHaveBeenCalledWith(WT));
   expect(ask).toHaveBeenLastCalledWith(expect.objectContaining({ danger: true }));
   // The base is cleared, so the old plan isn't shown again.
-  expect(await screen.findByText("Pick a commit in Graph and choose Rebase from here.")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name:"Choose a base commit" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name:/Set bbbbbbb · base commit as rebase base/ })).toBeInTheDocument();
 });
 
 it("runs Start → conflict → in-progress panel → Continue → done with the lease offer", async () => {

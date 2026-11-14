@@ -40,7 +40,6 @@ beforeEach(() => {
 it("lists all WIP groups and opens staged and unstaged file requests in Graph", async () => {
   render(
     <WipInspector
-      worktreePath="/repos/main"
       wip={wip}
       onOpenChanges={vi.fn()}
       onOpenDiff={onOpenDiff}
@@ -56,18 +55,17 @@ it("lists all WIP groups and opens staged and unstaged file requests in Graph", 
   expect(onOpenDiff).toHaveBeenNthCalledWith(2, "src/app.ts", "unstaged");
 });
 
-it("dispatches quick stage and unstage actions through Changes", async () => {
+it("keeps staging in Changes and opens Changes beside", async () => {
+  const onOpenChanges = vi.fn();
   render(
     <WipInspector
-      worktreePath="/repos/main"
       wip={wip}
-      onOpenChanges={vi.fn()}
+      onOpenChanges={onOpenChanges}
       onOpenDiff={onOpenDiff}
     />,
   );
-
-  await userEvent.click(screen.getByRole("button", { name: "Stage new.ts" }));
-  await userEvent.click(screen.getByRole("button", { name: "Unstage src/app.ts" }));
-  expect(dispatch).toHaveBeenNthCalledWith(1, { type: "stage-paths", paths: ["new.ts"] });
-  expect(dispatch).toHaveBeenNthCalledWith(2, { type: "unstage-paths", paths: ["src/app.ts"] });
+  expect(screen.queryByRole("button", { name: "Stage new.ts" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Unstage src/app.ts" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: /Commit…/ }));
+  expect(onOpenChanges).toHaveBeenCalledOnce();
 });

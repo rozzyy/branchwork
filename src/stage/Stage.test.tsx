@@ -14,23 +14,21 @@ beforeEach(() => {
   useSessions.setState({ loaded: true, sessions: [] });
 });
 
-it("opens a split from the ⊞ menu and closes it from the pane", async () => {
+it("opens a split from Open beside and closes it from the pane", async () => {
   render(<Stage />);
-  await userEvent.click(screen.getByRole("button", { name: /Split with/ }));
-  await userEvent.click(screen.getByRole("menuitem", { name: /Changes/ }));
-  expect(screen.getByRole("heading", { level: 1, name: /^Launchpad/ })).toBeInTheDocument();
-  expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([expect.stringMatching(/Good (morning|afternoon|evening)/), "Changes"]);
+  await userEvent.click(screen.getByRole("button", { name: /Open beside/ }));
+  await userEvent.click(screen.getAllByRole("menuitem").find((item) => item.querySelector(".menu-label")?.textContent === "Changes")!);
+  expect(screen.getByRole("heading", { level: 1, name: /^Home/ })).toBeInTheDocument();
   expect(screen.getByRole("separator")).toBeInTheDocument();
   await userEvent.click(screen.getAllByRole("button", { name: "Close pane" })[1]);
-  expect(screen.getByRole("heading", { level: 1, name: /^Launchpad/ })).toBeInTheDocument();
-  expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([expect.stringMatching(/Good (morning|afternoon|evening)/)]);
+  expect(screen.getByRole("heading", { level: 1, name: /^Home/ })).toBeInTheDocument();
 });
 
 it("opens a bottom split from the direction icon", async () => {
   render(<Stage />);
-  await userEvent.click(screen.getByRole("button", { name: /Split with/ }));
-  const item = screen.getByRole("menuitem", { name: /Graph/ });
+  await userEvent.click(screen.getByRole("button", { name: /Open beside/ }));
+  const item = screen.getAllByRole("menuitem").find((entry) => entry.querySelector(".menu-label")?.textContent === "History")!;
   await userEvent.click(item.querySelector('[title="Split bottom"]')!);
-  expect(useStage.getState().panes).toEqual(["launchpad", "graph"]);
+  expect(useStage.getState().panes).toEqual(["home", "history"]);
   expect(useStage.getState().dir).toBe("v");
 });

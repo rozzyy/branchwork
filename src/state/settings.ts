@@ -11,6 +11,7 @@ interface SettingsStore {
   agentTokenSaver: boolean;
   /** Commands the RTK-style saver never rewrites (`git diff`, `pytest`, …). */
   agentSaverProtected: string[];
+  singleKeyShortcuts: boolean;
   loaded: boolean;
   setTheme(patch: Partial<ThemeSettings>): void;
   /** Flip between dark and light, resolving `system` against the OS preference. */
@@ -18,6 +19,7 @@ interface SettingsStore {
   setAgentAutoSwitch(on: boolean): void;
   setAgentTokenSaver(on: boolean): void;
   setAgentSaverProtected(list: string[]): void;
+  setSingleKeyShortcuts(on: boolean): void;
   load(): Promise<void>;
 }
 
@@ -26,6 +28,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
   agentAutoSwitch: true,
   agentTokenSaver: true,
   agentSaverProtected: [],
+  singleKeyShortcuts: false,
   loaded: false,
   setTheme(patch) {
     const theme = { ...get().theme, ...patch };
@@ -54,14 +57,26 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     set({ agentSaverProtected: clean });
     void saveSetting("agentSaverProtected", clean);
   },
+  setSingleKeyShortcuts(on) {
+    set({ singleKeyShortcuts: on });
+    void saveSetting("singleKeyShortcuts", on);
+  },
   async load() {
-    const [savedTheme, savedAutoSwitch, savedSaver, savedProtected] = await Promise.all([
+    const [savedTheme, savedAutoSwitch, savedSaver, savedProtected, savedSingleKeys] = await Promise.all([
       loadSetting<Partial<ThemeSettings>>("theme"),
       loadSetting<boolean>("agentAutoSwitch"),
       loadSetting<boolean>("agentTokenSaver"),
       loadSetting<unknown>("agentSaverProtected"),
+      loadSetting<boolean>("singleKeyShortcuts"),
     ]);
-    const theme = { ...DEFAULT_THEME, ...(savedTheme ?? {}) };
+    const saved = savedTheme ?? {};
+    const theme: ThemeSettings = {
+      mode: saved.mode ?? DEFAULT_THEME.mode,
+      accentHue: saved.accentHue ?? DEFAULT_THEME.accentHue,
+      baseHue: saved.baseHue ?? DEFAULT_THEME.baseHue,
+      textSize: saved.textSize ?? DEFAULT_THEME.textSize,
+      density: saved.density ?? DEFAULT_THEME.density,
+    };
     const protectedList = Array.isArray(savedProtected)
       ? savedProtected.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "")
       : [];
@@ -70,6 +85,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
       agentAutoSwitch: savedAutoSwitch ?? true,
       agentTokenSaver: typeof savedSaver === "boolean" ? savedSaver : true,
       agentSaverProtected: protectedList,
+      singleKeyShortcuts: savedSingleKeys === true,
       loaded: true,
     });
     applyTheme(theme);

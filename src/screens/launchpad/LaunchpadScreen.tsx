@@ -123,7 +123,7 @@ export function LaunchpadToolbar() {
   return (
     <>
       <h1 className="pane-title">
-        {t("nav.launchpad")}
+        {t("nav.home")}
         <span className="launchpad-toolbar-subtitle">{allGroups ? t("launchpad.allGroups") : activeGroupName} · {scopeProjectsCount}</span>
       </h1>
       <div className="launchpad-toolbar-actions pane-actions">

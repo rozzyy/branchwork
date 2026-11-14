@@ -12,6 +12,8 @@ import { FileIcon } from "../../ui/fileIcon";
 import { ScreenLoader } from "../../ui/ScreenLoader";
 import { useGraphUi } from "../graph/graphState";
 import { useBlameUi } from "./blameState";
+import { openHistory } from "../../state/history";
+import { useHistory } from "../../state/history";
 import "./blame.css";
 
 /** Age heat stripe color per Task 12 `age_bucket`. There is no orange token, so `hours`
@@ -206,6 +208,7 @@ export function BlameView() {
   const go = useStage((s) => s.go);
   const selectedLine = useBlameUi((s) => s.selectedLine);
   const selectLine = useBlameUi((s) => s.selectLine);
+  const requestedFile = useHistory((s) => s.file);
   const [blame, setBlame] = useState<BlameResult | null>(null);
   const [history, setHistory] = useState<FileHistoryEntry[]>([]);
   const [codeLines, setCodeLines] = useState<string[]>([]);
@@ -236,7 +239,8 @@ export function BlameView() {
             ? new TextDecoder().decode(new Uint8Array(file.bytes)).split("\n")
             : [],
         );
-        selectLine(result.lines[0]?.line ?? null);
+        const requestedLine = requestedFile?.path === current ? requestedFile.line : undefined;
+        selectLine(requestedLine && result.lines.some((line) => line.line === requestedLine) ? requestedLine : result.lines[0]?.line ?? null);
       } catch (err) {
         if (!cancelled) { setBlame(null); setHistory([]); setError(errorMessage(err)); }
       } finally {
@@ -244,7 +248,12 @@ export function BlameView() {
       }
     })();
     return () => { cancelled = true; };
-  }, [activePath, current, selectLine]);
+  }, [activePath, current, selectLine, requestedFile]);
+
+  useEffect(() => {
+    if (selectedLine == null) return;
+    document.querySelector(`[data-blame-line="${selectedLine}"]`)?.scrollIntoView({ block: "center" });
+  }, [selectedLine, blame]);
 
   if (!activePath && worktreesLoading) {
     return <ScreenLoader>{t("blame.loading")}</ScreenLoader>;
@@ -271,7 +280,7 @@ export function BlameView() {
 
   const viewCommit = (sha: string) => {
     useGraphUi.getState().select({ kind: "commit", sha });
-    go("graph");
+    openHistory("graph");
   };
 
   const jumpToHistory = (entry: FileHistoryEntry) => {

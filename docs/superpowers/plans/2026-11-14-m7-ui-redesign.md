@@ -12,6 +12,8 @@
 
 ## Global Constraints
 
+- The approved design spec is normative. The prototype is a visual aid; when a prototype detail conflicts with `docs/superpowers/specs/2026-11-14-ui-redesign-design-system-design.md`, follow the spec.
+
 - The terminal dock (bottom / right / float / max, tabs, split) and **Ctrl+`** behave exactly as today. No task edits `src/terminal/dock*` behavior or the `Backquote` branch of `src/keys/globalKeys.ts`.
 - No feature becomes unreachable at the end of any task; every stage ends with `./init.sh` green.
 - All UI strings are English and live in `src/i18n/en.ts`.
@@ -41,7 +43,7 @@
 - Create: `src/theme/contrast.ts`, `src/theme/tokens.test.ts`
 
 **Interfaces:**
-- Produces: CSS custom properties from the spec table (`--bg --surface --raised --overlay --hover --selected --border --border-strong --text --text-2 --text-3 --accent --accent-strong --on-accent --success --warning --danger --info --agent`, the `-bg` tints, `--diff-add --diff-del`, `--fs-meta --fs-body --fs-title --fs-h2 --fs-h1`, `--s1..--s6`, `--r-control --r-panel --r-pill`, `--focus`). Old names stay as aliases so un-migrated CSS keeps working: `--surf: var(--surface)`, `--s2: var(--raised)`, `--s3: var(--overlay)`, `--s4: var(--border-strong)`, `--glass/--glass2: var(--surface)/var(--raised)`, `--line: var(--border)`, `--line2: var(--border-strong)`, `--fg: var(--text)`, `--fg2: var(--text-2)`, `--fg3: var(--text-3)`, `--acc: var(--accent)`, `--grn/--red/--yel/--blu/--pur` → success/danger/warning/info/agent.
+- Produces: CSS custom properties from the spec table (`--bg --surface --raised --overlay --hover --selected --border --border-strong --text --text-2 --text-3 --accent --accent-strong --on-accent --success --warning --danger --info --agent`, the `-bg` tints, `--diff-add --diff-del`, `--fs-meta --fs-body --fs-title --fs-h2 --fs-h1`, `--space-1..--space-6`, `--r-control --r-panel --r-pill`, `--focus`). Old names stay as aliases so un-migrated CSS keeps working: `--surf: var(--surface)`, `--s2: var(--raised)`, `--s3: var(--overlay)`, `--s4: var(--border-strong)`, `--glass/--glass2: var(--surface)/var(--raised)`, `--line: var(--border)`, `--line2: var(--border-strong)`, `--fg: var(--text)`, `--fg2: var(--text-2)`, `--fg3: var(--text-3)`, `--acc: var(--accent)`, `--grn/--red/--yel/--blu/--pur` → success/danger/warning/info/agent.
 - Produces: `contrastRatio(a: string, b: string): number` in `src/theme/contrast.ts` for `oklch(L C H)` strings with `var(--ah)`/`var(--bh)` substituted (OKLCH → linear sRGB → WCAG relative luminance).
 - Produces: utility classes `.flush` (square, no gap) used by Task 12.
 

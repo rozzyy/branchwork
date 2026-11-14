@@ -23,6 +23,7 @@ import { runGitAction } from "../../state/gitActions";
 import { gitBranchCreate, gitCheckout, gitCherryPick, gitRevert } from "../../ipc/gitops";
 import { ghRepoRemote, openGithubCommit } from "../../ipc/repo";
 import { useFiles } from "../../state/files";
+import { openHistory } from "../../state/history";
 import { ask } from "../../ui/dialog";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { ScreenLoader } from "../../ui/ScreenLoader";
@@ -31,6 +32,8 @@ import { useGraphUi, type GraphFilter } from "./graphState";
 import { GraphEditorTabs } from "./GraphEditorTabs";
 import { WipInspector } from "./WipInspector";
 import "./graph.css";
+import { graphAncestry } from "./graphUtils";
+export { graphAncestry } from "./graphUtils";
 
 const ROW_HEIGHT = 38;
 const OVERSCAN = 8;
@@ -131,20 +134,6 @@ interface GraphLaneRow {
 
 /** Full ancestry (criterion 1) of `headSha` within the loaded `commits`, for the GitKraken-style
  * branch highlight. `null` means "no head" (empty repo, unborn branch): nothing fades. */
-export function graphAncestry(commits: GraphCommit[], headSha: string | null): Set<string> | null {
-  if (!headSha) return null;
-  const bySha = new Map(commits.map((commit) => [commit.sha, commit]));
-  const ancestry = new Set<string>();
-  const stack = [headSha];
-  while (stack.length > 0) {
-    const sha = stack.pop();
-    if (!sha || ancestry.has(sha)) continue;
-    ancestry.add(sha);
-    stack.push(...(bySha.get(sha)?.parents ?? []));
-  }
-  return ancestry;
-}
-
 export function graphLaneRows(commits: GraphCommit[]): Map<string, GraphLaneRow> {
   const activeLanes = new Map<number, string>();
   const rows = new Map<string, GraphLaneRow>();
@@ -352,7 +341,7 @@ function revertCommit(worktreePath: string, commit: GraphCommit) {
 /** "Rebase from here": the chosen commit becomes the rebase base. */
 function rebaseFrom(worktreePath: string, commit: GraphCommit) {
   useRebaseUi.getState().setBase(worktreePath, commit.sha);
-  useStage.getState().go("rebase");
+  openHistory("rewrite");
 }
 
 async function openCommitOnGithub(worktreePath: string, commit: GraphCommit) {
@@ -374,7 +363,7 @@ async function blameCommitFiles(projectId: string, worktreePath: string, commit:
       return;
     }
     useFiles.getState().openFile(path);
-    useStage.getState().go("blame");
+    openHistory("file", { path });
   } catch (error) {
     toast({ title: t("graph.blameFailed", { message: errorMessage(error) }), icon: "⚠" });
   }
@@ -742,9 +731,8 @@ export function GraphView() {
         <aside className="graph-inspector" aria-label={t("graph.inspector")}>
           {selection.kind === "wip" ? (
             <WipInspector
-              worktreePath={activePath}
               wip={wip}
-              onOpenChanges={() => useStage.getState().go("changes")}
+              onOpenChanges={() => useStage.getState().openSplit("changes", "right")}
               onOpenDiff={(path, area) => {
                 setMenu(null);
                 openDiff(path, area);

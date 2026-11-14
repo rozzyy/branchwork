@@ -1275,3 +1275,41 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Agent usage follow-up (user request): `cb7ed59` fast-forwarded into `m6-stage-4` — live Claude quota from the statusline `rate_limits` (sidecar `branchwork-saver statusline` → `<profile>/branchwork-quota.json`, installed only when the profile has no user statusline), newer-of live/cache reader, pane header always shows the 5h window (0% "reset" after its reset time) plus the tightest other window. `./init.sh` green on `m6-stage-4` (Vitest 664; Rust 308 passed / 3 ignored).
 - M7 plan written (`docs/superpowers/plans/2026-11-14-m7-ui-redesign.md`, 12 tasks / 4 stages); user approved it with subagent-driven execution, starting after Checkpoint M6.4.
 - **Checkpoint M6.4 approved** by the user (2026-11-14; manual M6-S4-01..09 not reported, recorded as unverified). Stage 4 committed on `m6-stage-4` and fast-forwarded into `main`; then M7 docs committed on `main` and M7 Stage 1 started on `m7-stage-1`.
+
+## 2026-11-14: Resume M7 Stage 1 Task 03 handover
+
+- Continued from `.branchwork/handover.md` on `m7-stage-1`. Fixed the reported Task 03 review issues in `src/ui/ui.css`: count/kbd and small metadata text now meet the 12px floor; interactive switch, chips, and `.ib2` buttons meet the 24px hit target; segmented controls use an inset focus-visible ring so `.seg` overflow does not clip it.
+- `git diff --check` passed. `./init.sh`: TypeScript passed; Vitest 78 files / 677 tests passed; Clippy passed; Rust 298 passed / 10 failed / 3 ignored. Every Rust failure was an existing worktree test unable to start a macOS FSEvent stream. No IPC or Rust code changed.
+- Task 03 requires independent re-review, then Stage 1 code review and manual E2E spec review. Native `pnpm tauri dev` visual check remains unrun. Stop at Checkpoint M7.1; no commit or push.
+
+## 2026-11-14: M7 Stage 1 re-review and accessibility fixes
+
+- Stage 1 code review PASS after multiple fix/re-review rounds; report: `.agent/reviews/m7-stage-1-code-review.md`. Fixed the segmented focus-ring mismatch, Large text sizing on sidebar/worktree/pane-header/Changes/Settings surfaces, input and shadowed-control focus rings, and CountBadge accessible role/name. Added targeted CSS regression assertions.
+- Final targeted gate: `pnpm vitest run src/ui` → 7 files / 15 tests passed; `pnpm typecheck` and `git diff --check` passed.
+- Final `RUST_TEST_THREADS=1 ./init.sh`: TypeScript passed; Vitest 78 files / 679 tests passed; Clippy passed; Rust 298 passed / 10 failed / 3 ignored. All 10 failures are existing worktree tests reporting `unable to start FSEvent stream`, and persist with serialized tests. Full init gate remains red for this macOS environment limitation.
+- Native `pnpm tauri dev` visual verification is still unrun; `docs/testing/m7-manual-e2e.md` remains unchecked. Stage 1 is not at a completed checkpoint; no commit or push.
+
+## 2026-11-14: M7 Stage 1 environment follow-up
+
+- Retried a failing watcher test with `TMPDIR=/private/tmp`; it still failed with `unable to start FSEvent stream`, confirming the issue is not specific to the default `/private/var/...` temp directory. No product Rust changes made.
+- `pnpm tauri dev` compiled and started the app successfully. Cua Driver `permissions status` reported that its app did not answer, so native window inspection could not be performed. The dev session started for this check was stopped cleanly.
+- M7.1 remains pending native visual/manual checks and an accepted or resolved full-init Rust gate. No commit/push; Stage 2 not started.
+
+## 2026-11-14: Recheck M7 against the approved design spec
+
+- Re-read `docs/superpowers/specs/2026-11-14-ui-redesign-design-system-design.md` as the normative source (the plan/prototype are subordinate implementation aids). The current branch is still only M7 Stage 1 Tasks 01–03; the navigation/shell/Home/History/split redesign from the full spec is not yet implemented and remains in later stages.
+- Found a direct Stage 1 component mismatch: `.input` used a 10px panel radius and raised fill. Updated it to the spec's 6px control radius, `--bg` fill and strong border; the global focus ring remains. Added regression assertions. `pnpm vitest run src/ui`: 7 files / 15 tests passed; `git diff --check` passed.
+- Full spec constraints such as the app-wide 12px floor and remaining screen migration are not yet complete at this intermediate stage. M7.1 remains pending the full verification/environment issue and manual native UI checks; no commit/push or Stage 2 work.
+
+## 2026-11-14: M7 Stage 1 gate recovered; Task 04 started by user order
+
+- `./init.sh` was rerun outside the sandbox after the earlier FSEvent startup failures. Exact result: `=== Verification Complete ===`; Vitest 78 files / 679 tests; Rust 308 passed / 3 ignored; typecheck and Clippy clean.
+- User explicitly ordered continuing through all M7 spec tasks, authorizing progression past manual stage checkpoints. Stage 1 code review is PASS; native/manual UI checks remain unverified due Cua Driver not responding. No stage commit or push was ordered.
+- Stage 1 Tasks 01–03 recorded done. M7 Task 04 (screen registry, migration and container screens) is now active. Stage 2+ work remains serialized by plan/dependencies.
+
+## 2026-11-14: M7 full spec implementation completed
+
+- Completed M7 Tasks 04–12 against `docs/superpowers/specs/2026-11-14-ui-redesign-design-system-design.md`: screen migration and History/Home containers; worktree-first sidebar and project picker; breadcrumb/status bar; navigation shortcuts; Home attention feed; History base/commit/blame workflows; contextual operation banner; Open beside and per-worktree layouts; flush panes and app-wide typography restyle. Updated `feature_list.json` to mark M7 Tasks 04–12 done.
+- Final `./init.sh` exit 0 (`=== Verification Complete ===`): Vitest 78 files / 679 tests passed; Rust 308 passed / 3 ignored; TypeScript and Clippy clean. `git diff --check` passed.
+- Performance bounds: per-worktree saved layouts capped at 200, pane IDs sanitized/deduplicated and capped at 32, BasePicker ancestry list capped at 50. No M7 Rust/IPC changes.
+- Native visual/manual checks in `docs/testing/m7-manual-e2e.md` remain unchecked because Cua Driver did not answer during the earlier attempt. Do not claim native appearance, navigation, or terminal regression checks passed. No commit or push.

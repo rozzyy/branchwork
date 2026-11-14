@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useConflicts } from "../screens/conflicts/conflictsState";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./Sidebar";
 import { useStage } from "../state/stage";
@@ -59,31 +58,22 @@ beforeEach(() => {
 it("⌘-click opens a right split, ⌥-click a bottom split", async () => {
   render(<Sidebar />);
   fireEvent.click(screen.getByRole("button", { name: /Changes/ }), { metaKey: true });
-  expect(useStage.getState().panes).toEqual(["launchpad", "changes"]);
+  expect(useStage.getState().panes).toEqual(["home", "changes"]);
   useStage.setState({ ...initialStage });
-  fireEvent.click(screen.getByRole("button", { name: /Graph/ }), { altKey: true });
-  expect(useStage.getState()).toMatchObject({ panes: ["launchpad", "graph"], dir: "v" });
+  fireEvent.click(screen.getByRole("button", { name: /History/ }), { altKey: true });
+  expect(useStage.getState()).toMatchObject({ panes: ["home", "history"], dir: "v" });
 });
 
 it("context menu offers split directions", async () => {
   render(<Sidebar />);
   fireEvent.contextMenu(screen.getByRole("button", { name: /Agents/ }));
   await userEvent.click(screen.getByRole("menuitem", { name: /Split left/ }));
-  expect(useStage.getState().panes).toEqual(["agents", "launchpad"]);
+  expect(useStage.getState().panes).toEqual(["agents", "home"]);
 });
 
-it("badges the Conflicts nav with the conflicted-file count", async () => {
-  useConflicts.setState({
-    worktree: useWorktrees.getState().activePath,
-    list: {
-      operation: "merge",
-      truncated: false,
-      files: [{ path: "a.ts", kind: "bothModified" }, { path: "b.ts", kind: "bothAdded" }],
-    },
-  });
+it("keeps Conflicts out of the screen navigation", async () => {
   render(<Sidebar />);
-
-  expect(await screen.findByRole("status", { name: "2 conflicted files" })).toHaveTextContent("2");
+  expect(screen.queryByRole("button", { name: "Conflicts" })).not.toBeInTheDocument();
 });
 
 it("badges the Agents nav while a session waits", () => {

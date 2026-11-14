@@ -15,7 +15,7 @@
 .rebase-who, .rebase-sha { color: var(--fg3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rebase-move { display: flex; gap: 2px; }
 .rebase-side { padding: 14px 16px; border-left: 1px solid var(--line); overflow: auto; display: grid; align-content: start; gap: 8px; }
-.rebase-side h4 { margin: 6px 0 0; font-size: 11px; letter-spacing: .06em; color: var(--fg3); text-transform: uppercase; }
+.rebase-side h4 { margin: 6px 0 0; font-size: var(--fs-meta); letter-spacing: .06em; color: var(--fg3); text-transform: uppercase; }
 .rebase-count { font-size: 24px; font-weight: 700; }
 .rebase-preview { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
 .rebase-preview li::before { content: "● "; color: var(--grn); }

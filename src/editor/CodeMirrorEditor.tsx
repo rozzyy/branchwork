@@ -5,7 +5,7 @@ import { keymap } from "@codemirror/view";
 import { t } from "../i18n/t";
 import { useFiles, bufferKey } from "../state/files";
 import { useWorktrees } from "../state/worktrees";
-import { useStage } from "../state/stage";
+import { openHistory } from "../state/history";
 import { fsRead, fsWrite, type FsEol } from "../ipc/fs";
 import { readDiff } from "../ipc/diff";
 import { readStatus } from "../ipc/status";
@@ -67,7 +67,6 @@ export function CodeMirrorEditor() {
   const setBuffer = useFiles((s) => s.setBuffer);
   const updateBufferContent = useFiles((s) => s.updateBufferContent);
   const dropBuffer = useFiles((s) => s.dropBuffer);
-  const go = useStage((s) => s.go);
 
   // R5/R6: buffers live in the files store (keyed by worktree+path), not in a component ref, so
   // they outlive this component's unmount and are shared by every editor instance on the file.
@@ -600,8 +599,8 @@ export function CodeMirrorEditor() {
               {mdPreview ? t("files.mdSource") : t("files.mdPreview")}
             </Button>
           )}
-          <Button onClick={() => go("blame")} size="sm" variant="ghost">
-            ≡ {t("files.blame")}
+          <Button onClick={() => openHistory("file", { path: current })} size="sm" variant="ghost">
+            ≡ {t("files.whoChanged")}
           </Button>
           <Button disabled size="sm" title={t("ui.deferred_m3")} variant="ghost">
             ✦ {t("files.askAgent")}

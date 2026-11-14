@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { TitleBar } from "./TitleBar";
 import { useRepos } from "../state/repos";
 import { useSettings } from "../state/settings";
-import { useSidebar } from "../state/sidebar";
 import { DEFAULT_THEME } from "../theme/theme";
 import type { Group, Project } from "../ipc/catalog";
 
@@ -14,7 +13,6 @@ const projects: Project[] = [
 
 beforeEach(() => {
   useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, openProjectIds: [], status: "idle", error: null });
-  useSidebar.setState({ collapsed: false, projectRailOpen: true });
 });
 
 it("shows the theme-adaptive brand mark next to the app name", () => {
@@ -37,12 +35,9 @@ it("shows an empty context when no project is selected", () => {
   expect(screen.getByText("No project selected")).toBeInTheDocument();
 });
 
-it("toggles the project sidebar", () => {
+it("does not show the removed project rail toggle", () => {
   render(<TitleBar />);
-  const toggle = screen.getByRole("button", { name: "Toggle project sidebar" });
-  fireEvent.click(toggle);
-  expect(useSidebar.getState().projectRailOpen).toBe(false);
-  expect(toggle).toHaveAttribute("aria-pressed", "false");
+  expect(screen.queryByRole("button", { name: "Toggle project sidebar" })).not.toBeInTheDocument();
 });
 
 it("toggles the theme from the title bar", () => {

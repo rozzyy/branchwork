@@ -46,9 +46,9 @@ it("filters commands and runs the selected one with Enter", async () => {
 
 it("moves the selection with arrow keys", async () => {
   render(<Palette />);
-  await userEvent.type(screen.getByRole("combobox"), "split bottom graph");
+  await userEvent.type(screen.getByRole("combobox"), "split bottom history");
   await userEvent.keyboard("{ArrowDown}{ArrowUp}{Enter}");
-  expect(useStage.getState()).toMatchObject({ panes: ["launchpad", "graph"], dir: "v" });
+  expect(useStage.getState()).toMatchObject({ panes: ["home", "history"], dir: "v" });
 });
 
 it("turns a trailing ? into an Ask Claude command", async () => {
@@ -75,13 +75,14 @@ it("registers undo.last_action for the active worktree", async () => {
 it.each([
   { query: "open changes", title: "Open Changes", screenId: "changes" as const },
   { query: "open files", title: "Open Files", screenId: "files" as const },
-  { query: "open blame", title: "Open Blame", screenId: "blame" as const },
+  { query: "open blame", title: "Open Blame", screenId: "history" as const },
 ])("renders and runs $query", async ({ query, title, screenId }) => {
   render(<Palette />);
   await userEvent.type(screen.getByRole("combobox"), query);
   expect(screen.getByRole("option")).toHaveTextContent(title);
   await userEvent.keyboard("{Enter}");
   expect(useStage.getState().panes).toEqual([screenId]);
+  if (query === "open blame") expect((await import("../state/history")).useHistory.getState().mode).toBe("file");
 });
 
 it("toggles the selected file between staged and unstaged diffs", async () => {

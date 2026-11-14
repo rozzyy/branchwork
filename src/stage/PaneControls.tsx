@@ -14,14 +14,14 @@ export function PaneControls({ index }: { index: number }) {
     return (
       <div className="pane-ctl">
         <button
-          className="icon-btn"
-          aria-label={t("split.menuTitle")}
-          title={`${t("split.menuTitle")} (⌘\\)`}
+          className="open-beside"
+          aria-label={t("split.openBeside")}
+          title={`${t("split.openBeside")} (⌘\\)`}
           onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 320, y: r.bottom + 6 }); }}
         >
-          ⊞
+          ◨ {t("split.openBeside")}
         </button>
-        {menu && <Menu x={menu.x} y={menu.y} width={310} onClose={() => setMenu(null)} items={splitMenuItems(panes, openSplit)} />}
+        {menu && <Menu x={menu.x} y={menu.y} width={310} onClose={() => setMenu(null)} items={splitMenuItems(panes, openSplit, (next) => { useStage.getState().setLayout(next); setMenu(null); })} />}
       </div>
     );
   }

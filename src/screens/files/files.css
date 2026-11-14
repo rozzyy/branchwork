@@ -7,7 +7,7 @@
 .files-top { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
 .files-worktree-select, .files-search { padding: 6px 10px; }
 
-.files-section-label { padding: 10px 12px 2px; color: var(--fg3); font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.files-section-label { padding: 10px 12px 2px; color: var(--fg3); font-size: var(--fs-meta); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
 .files-tree-label { display: flex; align-items: center; }
 .files-tree-actions { display: flex; gap: 6px; margin-left: auto; font-weight: 400; }
 .files-open-editors { padding: 0 6px; }
@@ -18,10 +18,10 @@
 .files-tree-node.on { background: var(--accs); color: var(--fg); }
 .files-tree-arrow { width: 10px; flex: none; text-align: center; }
 .files-tree-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.files-tree-dir { flex: none; color: var(--fg3); font-size: 11px; }
+.files-tree-dir { flex: none; color: var(--fg3); font-size: var(--fs-meta); }
 .files-tree-status { flex: none; font: 700 10px var(--font-mono); }
 .files-dirty-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--fg2); }
-.files-tree-folder-dot { flex: none; color: var(--yel); font-size: 10px; }
+.files-tree-folder-dot { flex: none; color: var(--yel); font-size: var(--fs-meta); }
 .files-status-M { color: var(--yel); }
 .files-status-A, .files-status-U, .files-status-R { color: var(--grn); }
 .files-status-D { color: var(--red); }

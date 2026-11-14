@@ -55,7 +55,7 @@ import { Button } from "../../ui/Button";
 import { BusyButton } from "../../ui/BusyButton";
 import { toast } from "../../ui/toast";
 import { ask } from "../../ui/dialog";
-import type { Density, ThemeMode } from "../../theme/theme";
+import type { Density, TextSize, ThemeMode } from "../../theme/theme";
 
 const SWATCHES = [250, 300, 350, 25, 60, 155, 200];
 
@@ -375,6 +375,8 @@ export function SettingsView() {
   const setAgentAutoSwitch = useSettings((s) => s.setAgentAutoSwitch);
   const agentTokenSaver = useSettings((s) => s.agentTokenSaver);
   const setAgentTokenSaver = useSettings((s) => s.setAgentTokenSaver);
+  const singleKeyShortcuts = useSettings((s) => s.singleKeyShortcuts);
+  const setSingleKeyShortcuts = useSettings((s) => s.setSingleKeyShortcuts);
   const profilesLoaded = useProfiles((s) => s.loaded);
   const profileLoadError = useProfiles((s) => s.loadError);
   const loadProfiles = useProfiles((s) => s.load);
@@ -442,11 +444,16 @@ export function SettingsView() {
         <Row label={t("settings.baseTint")}>
           <input type="range" min={0} max={360} value={theme.baseHue} aria-label={t("settings.baseTint")} onChange={(e) => setTheme({ baseHue: Number(e.target.value) })} />
         </Row>
-        <Row label={t("settings.contrast")}>
-          <input type="range" min={0.6} max={1.8} step={0.05} value={theme.contrast} aria-label={t("settings.contrast")} onChange={(e) => setTheme({ contrast: Number(e.target.value) })} />
-        </Row>
-        <Row label={t("settings.reduceTransparency")}>
-          <Switch label={t("settings.reduceTransparency")} checked={theme.reduceTransparency} onChange={(reduceTransparency) => setTheme({ reduceTransparency })} />
+        <Row label={t("settings.textSize")}>
+          <Segmented<TextSize>
+            label={t("settings.textSize")}
+            value={theme.textSize}
+            onChange={(textSize) => setTheme({ textSize })}
+            options={[
+              { value: "default", label: t("settings.textSize.default") },
+              { value: "large", label: t("settings.textSize.large") },
+            ]}
+          />
         </Row>
         <Row label={t("settings.density")}>
           <Segmented<Density>
@@ -460,6 +467,14 @@ export function SettingsView() {
             ]}
           />
         </Row>
+      </div>
+
+      <h3>{t("settings.keyboard")}</h3>
+      <div className="card">
+        <Row label={t("settings.singleKeyShortcuts")}>
+          <Switch label={t("settings.singleKeyShortcuts")} checked={singleKeyShortcuts} onChange={setSingleKeyShortcuts} />
+        </Row>
+        <Row label={t("settings.terminalShortcut")}><kbd>Ctrl+`</kbd></Row>
       </div>
 
       <h3>{t("settings.agents")}</h3>

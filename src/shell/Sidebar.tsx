@@ -12,6 +12,8 @@ import { onGitChanged, type Worktree } from "../ipc/worktrees";
 import { useDock } from "../terminal/dock";
 import { toast } from "../ui/toast";
 import { useSessions } from "../agents/sessions";
+import { GroupSwitcherPopover, projectLabel, useSwitcher } from "./GroupSwitcher";
+import { StatusLabel } from "../ui/StatusLabel";
 
 // Deterministic color stripe/dot per worktree path, picked from a small token palette.
 // Ordered so adjacent hashes don't land on near-identical hues (--acc and --blu are both blue-ish).
@@ -44,6 +46,12 @@ function statusLabel(worktree: Worktree): string {
     default:
       return t("sidebar.clean");
   }
+}
+
+function WorktreeStatus({ worktree }: { worktree: Worktree }) {
+  const tone = worktree.state === "conflict" ? "bad" : worktree.state === "dirty" ? "warn" : worktree.state === "rebasing" ? "info" : "ok";
+  const icon = worktree.state === "conflict" ? "⚠" : worktree.state === "dirty" ? "●" : worktree.state === "rebasing" ? "↻" : "✓";
+  return <StatusLabel tone={tone} icon={icon}>{statusLabel(worktree)}</StatusLabel>;
 }
 
 function WorktreePicker({
@@ -149,7 +157,7 @@ function WorktreePicker({
               {active ? (
                 <span className="worktree-picker-active">{t("sidebar.active")}</span>
               ) : (
-                <span className="worktree-status-chip" data-state={worktree.state}>{statusLabel(worktree)}</span>
+                <span className="worktree-status-chip" data-state={worktree.state}><WorktreeStatus worktree={worktree} /></span>
               )}
             </div>
           );
@@ -288,7 +296,7 @@ function WorktreeSection() {
                       </span>
                     </span>
                   </button>
-                  <span className="worktree-status-chip" data-state={worktree.state} aria-hidden>{statusLabel(worktree)}</span>
+                  {worktree.state === "conflict" ? <button className="worktree-status-chip wt-conflict-action" data-state={worktree.state} aria-label={t("operation.resolve") + ` · ${branch}`} onClick={(event) => { event.stopPropagation(); useWorktrees.getState().select(worktree.path); useStage.getState().go("conflicts"); }}><WorktreeStatus worktree={worktree} /></button> : <span className="worktree-status-chip" data-state={worktree.state}><WorktreeStatus worktree={worktree} /></span>}
                   <span className="worktree-row-actions">
                     <button
                       type="button"
@@ -347,6 +355,16 @@ export function Sidebar() {
   const focus = useStage((s) => s.focus);
   const dir = useStage((s) => s.dir);
   const [ctx, setCtx] = useState<{ x: number; y: number; id: ScreenId } | null>(null);
+  const [projectAnchor, setProjectAnchor] = useState<HTMLElement | null>(null);
+  const projectTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const wasProjectOpen = useRef(false);
+  const projectOpen = useSwitcher((s) => s.open);
+  const activeProject = useRepos((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
+  const activeGroup = useRepos((s) => s.groups.find((g) => g.id === s.activeGroupId) ?? null);
+  useEffect(() => {
+    if (!projectOpen && wasProjectOpen.current && document.activeElement === document.body) projectTriggerRef.current?.focus();
+    wasProjectOpen.current = projectOpen;
+  }, [projectOpen]);
   const { go, openSplit, closePane } = useStage.getState();
 
   const glyph = (id: ScreenId) => {
@@ -406,15 +424,17 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <nav className="side-scroll">
+        <button ref={projectTriggerRef} className="project-picker-trigger group-pop-trigger" type="button" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().toggle(); }}>
+          <span aria-hidden>◫</span><span className="project-picker-copy"><strong>{activeProject ? projectLabel(activeProject) : t("groups.noProjectSelected")}</strong><small>{activeGroup?.name ?? t("groups.ungrouped")}</small></span><span aria-hidden>▾</span>
+        </button>
+        {projectOpen && projectAnchor && <GroupSwitcherPopover anchorEl={projectAnchor} />}
+        <WorktreeSection />
         {NAV_SECTIONS.map((section) => (
           <Fragment key={section.id}>
             <div className="side-h">{t(section.label)}</div>
             {SCREENS.filter((s) => s.section === section.id).map(item)}
           </Fragment>
         ))}
-        <WorktreeSection />
-        <div className="side-h">{t("sidebar.tools")}</div>
-        {SCREENS.filter((s) => s.section === "tools").map(item)}
       </nav>
       <div className="side-foot">{item(screenById("settings"))}</div>
       {ctx && <Menu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)} items={menuItems(ctx.id)} />}

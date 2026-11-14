@@ -18,7 +18,10 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    css: false,
+    // Side-effect `import "*.css"` stays stubbed (no jsdom styling needed in
+    // tests), but `import css from "*.css?raw"` (tokens.test.ts reads the
+    // token values straight out of tokens.css) needs the real file content.
+    css: { include: [/\.css\?raw$/] },
     exclude: ["e2e/**", "node_modules/**"],
   },
 });

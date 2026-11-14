@@ -1,16 +1,17 @@
 .stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; position: relative; }
-.pane { display: grid; grid-template-rows: 52px minmax(0, 1fr); min-width: 0; min-height: 0; border-radius: 16px; background: var(--surf); box-shadow: var(--spec), 0 0 0 .5px var(--line2); overflow: hidden; container-type: inline-size; transition: box-shadow .2s; }
-.pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 0 0 16px; border-bottom: 1px solid var(--line); }
-.pane-title { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
+.pane { display: grid; grid-template-rows: 40px minmax(0, 1fr); min-width: 0; min-height: 0; border-radius: 0; background: var(--surface); box-shadow: none; overflow: hidden; container-type: inline-size; transition: box-shadow .15s; }
+.pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 8px; border-bottom: 1px solid var(--border); }
+.pane-title { margin: 0; font-size: var(--fs-title); font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
 .pane-view { min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
 @keyframes pane-in { from { opacity: 0; transform: translateY(6px); } }
 .placeholder { height: 100%; display: grid; place-content: center; text-align: center; color: var(--fg3); gap: 6px; }
 .placeholder-icon { font-size: 34px; color: var(--acc); }
 .placeholder h2 { margin: 0; color: var(--fg); font-size: 18px; }
 .placeholder p { margin: 0; }
-.stage.split-h { grid-template-columns: minmax(0, calc((100% - var(--section-gap, 4px)) * var(--r))) var(--section-gap, 4px) minmax(0, 1fr); }
-.stage.split-v { grid-template-rows: minmax(0, calc((100% - var(--section-gap, 4px)) * var(--r))) var(--section-gap, 4px) minmax(0, 1fr); }
-.pane.focus { box-shadow: var(--spec), 0 0 0 1.5px color-mix(in oklch, var(--acc) 70%, transparent), 0 10px 40px -20px var(--acc); }
+.stage.split-h { grid-template-columns: minmax(0, calc((100% - 1px) * var(--r))) 1px minmax(0, 1fr); }
+.stage.split-v { grid-template-rows: minmax(0, calc((100% - 1px) * var(--r))) 1px minmax(0, 1fr); }
+.stage.split-h > .pane, .stage.split-v > .pane { border-radius:0; }
+.pane.focus { box-shadow: inset 0 2px var(--accent); }
 .pane-ctl { display: flex; gap: 2px; margin-left: auto; padding-left: 8px; }
 /* When the toolbar already has its own right-aligned action group (prototype's `.acts`), that
  * group's own auto margin does the push — giving pane-ctl auto margin too would split the free
@@ -22,15 +23,16 @@
 .split-v .divider { cursor: row-resize; }
 .divider::after { content: ""; position: absolute; inset: 0; margin: auto; width: 3px; height: 44px; border-radius: 2px; background: var(--line2); transition: all .2s var(--spring); }
 .split-v .divider::after { width: 44px; height: 3px; }
+.divider { background:var(--border); }
 .divider:hover::after, .resizing .divider::after { background: var(--acc); height: 90px; }
 .split-v .divider:hover::after, .split-v.resizing .divider::after { width: 90px; height: 3px; }
 .stage.resizing { user-select: none; }
-.dropzone { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: 16px; background: oklch(0 0 0 / .18); backdrop-filter: blur(3px); animation: fade .15s; }
+.dropzone { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: 0; background: oklch(0 0 0 / .18); animation: fade .15s; }
 .dz-hl { position: absolute; inset: 6px 50% 6px 6px; display: grid; place-items: center; border: 2px dashed var(--acc); border-radius: 14px; background: var(--accs); color: var(--acc); font-size: 15px; font-weight: 650; transition: inset .25s var(--spring); }
 .dropzone[data-side="right"] .dz-hl { inset: 6px 6px 6px 50%; }
 .dropzone[data-side="top"] .dz-hl { inset: 6px 6px 50% 6px; }
 .dropzone[data-side="bottom"] .dz-hl { inset: 50% 6px 6px 6px; }
-.dz-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; background: var(--glass2); color: var(--fg2); font-size: 11.5px; }
+.dz-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; background: var(--glass2); color: var(--fg2); font-size: var(--fs-meta); }
 .dirs { display: flex; gap: 2px; margin-left: 8px; }
 .dir { width: 22px; height: 20px; display: grid; place-items: center; border-radius: 5px; opacity: .65; }
 .dir:hover { opacity: 1; background: oklch(1 0 0 / .25); }

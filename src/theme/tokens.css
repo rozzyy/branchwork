@@ -1,103 +1,174 @@
-:root { --ah: 250; --bh: 265; --k: 1; color-scheme: dark; }
+/* ============================================================
+ * Branchwork design system (M7 redesign).
+ * Solid surfaces, AA contrast. Reference: docs/superpowers/specs/
+ * 2026-11-14-ui-redesign-design-system-design.md, "Design system".
+ * ============================================================ */
 :root {
-  --glass: oklch(.22 .014 var(--bh) / .42);
-  --glass2: oklch(.30 .016 var(--bh) / .62);
-  --surf: oklch(.155 .009 var(--bh) / .94);
-  --s2: oklch(.21 .011 var(--bh));
-  --s3: oklch(.27 .013 var(--bh));
-  --s4: oklch(.33 .015 var(--bh));
-  --line: oklch(1 0 0 / calc(.07 * var(--k)));
-  --line2: oklch(1 0 0 / calc(.13 * var(--k)));
-  --spec: inset 0 1px 0 oklch(1 0 0 / .14), inset 0 -1px 0 oklch(0 0 0 / .25);
-  --fg: oklch(.97 .004 var(--bh));
-  --fg2: oklch(calc(.62 + .1 * var(--k)) .012 var(--bh));
-  --fg3: oklch(calc(.60 + .08 * var(--k)) .014 var(--bh));
-  --acc: oklch(.68 .19 var(--ah));
-  --accs: oklch(.68 .19 var(--ah) / .16);
-  --on-acc: #fff;
-  --grn: oklch(.77 .16 155);
-  --red: oklch(.68 .2 22);
-  --yel: oklch(.83 .15 85);
-  --blu: oklch(.72 .14 245);
-  --pur: oklch(.71 .17 300);
-  --shadow-pop: 0 24px 60px -16px oklch(0 0 0 / .6);
-  --spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ah: 250; /* accent hue (user setting, "accent hue") */
+  --bh: 265; /* neutral tint (user setting, "base tint") */
+  color-scheme: dark;
+
+  /* Neutrals */
+  --bg: oklch(.17 .010 var(--bh));
+  --surface: oklch(.205 .011 var(--bh));
+  --raised: oklch(.245 .012 var(--bh));
+  --overlay: oklch(.27 .013 var(--bh));
+  --hover: oklch(1 0 0 / .06);
+  --selected: oklch(.68 .17 var(--ah) / .18);
+  --border: oklch(1 0 0 / .11);
+  --border-strong: oklch(1 0 0 / .2);
+  --text: oklch(.96 .004 var(--bh));
+  --text-2: oklch(.80 .010 var(--bh));
+  --text-3: oklch(.70 .012 var(--bh));
+
+  /* Accent + semantic */
+  --accent: oklch(.70 .16 var(--ah));
+  --accent-strong: oklch(.62 .18 var(--ah));
+  --on-accent: oklch(.16 .02 var(--ah));
+  --success: oklch(.76 .15 155);
+  --warning: oklch(.82 .14 80);
+  --danger: oklch(.72 .17 25);
+  --info: oklch(.76 .12 230);
+  --agent: oklch(.76 .14 300);
+  --success-bg: oklch(.76 .15 155 / .14);
+  --warning-bg: oklch(.82 .14 80 / .14);
+  --danger-bg: oklch(.72 .17 25 / .14);
+  --agent-bg: oklch(.76 .14 300 / .14);
+  --info-bg: oklch(.76 .12 230 / .14);
+  --diff-add: oklch(.76 .15 155 / .14);
+  --diff-del: oklch(.72 .17 25 / .14);
+
+  /* Type (System font / SF Pro, mono SF Mono) */
+  --fs-meta: 12px;
+  --fs-body: 13px;
+  --fs-title: 15px;
+  --fs-h2: 18px;
+  --fs-h1: 24px;
+
+  /* Space (4px grid). Named --space-* rather than the prototype's --s1..
+   * --s6, because --s2/--s3/--s4 are already taken below as legacy surface
+   * color aliases (un-migrated component CSS reads them as colors, e.g.
+   * `background: var(--s2)`); reusing those names for spacing would
+   * collide with ~20 files that still depend on the color meaning. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Shape */
+  --r-control: 6px;
+  --r-panel: 10px;
+  --r-pill: 999px;
   --row-h: 30px;
+
+  /* Focus ring (never remove an outline without this replacement) */
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+
+  /* Overlay shadow (menus, popovers, dialogs, toasts) and motion duration. */
+  --shadow: 0 12px 32px -8px oklch(0 0 0 / .5);
+  --dur: 150ms;
+
+  /* Structural tokens with no new canonical name in the spec; kept as-is
+   * for shadows/easing/fonts used across (not-yet-migrated) component CSS. */
+  --spec: inset 0 1px 0 oklch(1 0 0 / .08), inset 0 -1px 0 oklch(0 0 0 / .22);
+  --shadow-pop: 0 24px 60px -16px oklch(0 0 0 / .5);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
-}
-:root[data-theme="light"] {
-  color-scheme: light;
-  --glass: oklch(.98 .005 var(--bh) / .45);
-  --glass2: oklch(1 0 0 / .7);
-  --surf: oklch(.99 .003 var(--bh) / .96);
-  --s2: oklch(.955 .006 var(--bh));
-  --s3: oklch(.92 .008 var(--bh));
-  --s4: oklch(.88 .01 var(--bh));
-  --line: oklch(0 0 0 / calc(.07 * var(--k)));
-  --line2: oklch(0 0 0 / calc(.12 * var(--k)));
-  --spec: inset 0 1px 0 oklch(1 0 0 / .9), inset 0 -1px 0 oklch(0 0 0 / .06);
-  --fg: oklch(.2 .012 var(--bh));
-  --fg2: oklch(calc(.47 - .08 * var(--k)) .014 var(--bh));
-  --fg3: oklch(calc(.55 - .07 * var(--k)) .014 var(--bh));
-  --acc: oklch(.58 .2 var(--ah));
-  --accs: oklch(.58 .2 var(--ah) / .12);
-  --grn: oklch(.6 .16 155);
-  --red: oklch(.58 .21 22);
-  --yel: oklch(.68 .15 75);
-  --blu: oklch(.58 .17 245);
-  --pur: oklch(.56 .2 300);
-  --shadow-pop: 0 24px 60px -20px oklch(0 0 0 / .35);
-}
-:root[data-density="compact"] { --row-h: 26px; }
-:root[data-density="comfy"] { --row-h: 34px; }
-:root[data-solid] { --glass: oklch(.2 .012 var(--bh)); --glass2: oklch(.26 .014 var(--bh)); }
-:root[data-solid][data-theme="light"] { --glass: oklch(.95 .006 var(--bh)); --glass2: oklch(.985 .004 var(--bh)); }
-@media (prefers-reduced-transparency: reduce) {
-  :root { --glass: oklch(.2 .012 var(--bh)); --glass2: oklch(.26 .014 var(--bh)); }
-  :root[data-theme="light"] { --glass: oklch(.95 .006 var(--bh)); --glass2: oklch(.985 .004 var(--bh)); }
+
+  /* Old names kept as aliases so un-migrated component CSS keeps
+   * rendering. These resolve dynamically, so they stay correct under
+   * `:root[data-theme="light"]` without being redeclared there. */
+  --surf: var(--surface);
+  --s2: var(--raised);
+  --s3: var(--overlay);
+  --s4: var(--border-strong);
+  --glass: var(--surface);
+  --glass2: var(--raised);
+  --line: var(--border);
+  --line2: var(--border-strong);
+  --fg: var(--text);
+  --fg2: var(--text-2);
+  --fg3: var(--text-3);
+  --acc: var(--accent);
+  --accs: var(--selected);
+  --on-acc: var(--on-accent);
+  --grn: var(--success);
+  --red: var(--danger);
+  --yel: var(--warning);
+  --blu: var(--info);
+  --pur: var(--agent);
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: oklch(.975 .004 var(--bh));
+  --surface: oklch(1 0 0);
+  --raised: oklch(.965 .005 var(--bh));
+  --overlay: oklch(1 0 0);
+  --hover: oklch(0 0 0 / .045);
+  --selected: oklch(.55 .18 var(--ah) / .12);
+  --border: oklch(0 0 0 / .11);
+  --border-strong: oklch(0 0 0 / .2);
+  --text: oklch(.22 .012 var(--bh));
+  --text-2: oklch(.40 .014 var(--bh));
+  --text-3: oklch(.49 .014 var(--bh));
+
+  --accent: oklch(.53 .19 var(--ah));
+  --accent-strong: oklch(.47 .19 var(--ah));
+  --on-accent: #fff;
+  --success: oklch(.50 .14 155);
+  --warning: oklch(.55 .13 70);
+  --danger: oklch(.53 .19 25);
+  --info: oklch(.50 .13 240);
+  --agent: oklch(.50 .17 300);
+  --success-bg: oklch(.50 .14 155 / .14);
+  --warning-bg: oklch(.55 .13 70 / .14);
+  --danger-bg: oklch(.53 .19 25 / .14);
+  --agent-bg: oklch(.50 .17 300 / .14);
+  --info-bg: oklch(.50 .13 240 / .14);
+  --diff-add: oklch(.50 .14 155 / .14);
+  --diff-del: oklch(.53 .19 25 / .14);
+
+  --shadow: 0 12px 32px -10px oklch(0 0 0 / .22);
+
+  --spec: inset 0 1px 0 oklch(1 0 0 / .9), inset 0 -1px 0 oklch(0 0 0 / .06);
+  --shadow-pop: 0 24px 60px -20px oklch(0 0 0 / .35);
+}
+
+:root[data-density="compact"] { --row-h: 26px; }
+:root[data-density="comfy"] { --row-h: 34px; }
+:root[data-text="large"] { --fs-meta: 13px; --fs-body: 14.5px; --fs-title: 16.5px; --fs-h2: 20px; --fs-h1: 26px; }
+
 * { box-sizing: border-box; }
-/* Keep scroll behavior while removing visible browser scrollbars throughout the app. */
-* {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-*::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-/* Square inner UI (user order): section cards and terminal meet at right
- * angles. Controls keep their shape per UI best practice — buttons/chips
- * stay pill-shaped, glyphs stay round, small icon controls keep a hint of
- * radius, and modals/toasts/icon tiles stay rounded. These selectors
- * outrank the blanket rule. */
-* { border-radius: 0 !important; }
-.btn, .seg, .seg button, .chip, .switch, .group-chip, .search,
-.term-screen-broadcast { border-radius: 999px !important; }
-.switch::after, .spin, .swatch, .worktree-dot, .files-dirty-dot, .etab .dd,
-.repo-account-avatar, .blame-avatar, .term-dock-dot, .term-screen-dot,
-.agent-dot { border-radius: 50% !important; }
-.icon-btn, .ib2, .kbd, .project-tab, .project-tab-close,
-.project-sidebar-add, .project-sidebar-group-menu, .project-sidebar-collapse,
-.project-sidebar-project-mark, .repo-account, .agent-grp,
-.agent-grp button { border-radius: 7px !important; }
-.file-icon, .etab .x { border-radius: 3px !important; }
-.dlg { border-radius: 22px !important; }
-.dlg-ic { border-radius: 13px !important; }
-.dlg-meta { border-radius: 10px !important; }
-.toast { border-radius: 14px !important; }
-.toast-ic { border-radius: 8px !important; }
 html, body, #root { height: 100%; margin: 0; }
-html, body { background: transparent; }
-/* In a plain browser (no native vibrancy) show a backdrop so glass is visible. */
-html:not(.tauri) body { background: radial-gradient(60% 60% at 20% 10%, oklch(.45 .15 280), transparent 70%), radial-gradient(50% 60% at 90% 90%, oklch(.5 .12 200), transparent 70%), oklch(.2 .03 270); }
-body { color: var(--fg); font: 13px/1.45 var(--font-ui); -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; }
-button { font: inherit; color: inherit; }
+/* Solid surfaces only — no glass, no backdrop-filter behind text. */
+html, body { background: var(--bg); }
+body { color: var(--text); font: var(--fs-body)/1.45 var(--font-ui); -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
 input, textarea { user-select: text; }
-:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Visible, thin scrollbars (never hidden). */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; border: 2px solid var(--bg); }
+
+/* Focus ring on every interactive element. The ring is a box-shadow, which
+ * already follows the element's own border-radius; forcing a 6px radius
+ * here (as a previous version did) made the ring look wrong on pill-shaped
+ * controls (chips, count badges, segmented pills) by squaring them off
+ * while focused. Each component keeps its own radius under focus. */
+:focus-visible { outline: none; box-shadow: var(--focus); }
+
+/* Flush-pane exception (spec "Space, shape and size"): split panes, agent
+ * panes and terminals are square with no gap or outer padding. Task 12
+ * applies this alongside the existing pane/split layout classes. */
+.flush { gap: 0; padding: 0; border-radius: 0; }
+.flush > * { border-radius: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }

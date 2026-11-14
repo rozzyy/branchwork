@@ -14,6 +14,7 @@ import {
 import { undoLast } from "../../ipc/undo";
 import { beginGitWrite, endGitWrite, reloadWorktreesFor, runGitAction, showGitError } from "../../state/gitActions";
 import { useStage } from "../../state/stage";
+import { openHistory } from "../../state/history";
 import { useWorktrees } from "../../state/worktrees";
 import { ask } from "../../ui/dialog";
 import { ScreenLoader } from "../../ui/ScreenLoader";
@@ -31,6 +32,7 @@ import {
   type StartBlock,
 } from "./rebaseState";
 import "./rebase.css";
+import { BasePicker } from "./BasePicker";
 
 const ACTIONS: RowAction[] = ["pick", "reword", "squash", "fixup", "drop"];
 /** Only our own row drags reorder (text dragged in from elsewhere is ignored). */
@@ -44,7 +46,7 @@ const blockKeys: Record<StartBlock, `rebase.block.${StartBlock}`> = {
 };
 
 /** Toasts and state for a Start or Continue outcome. Returns whether the rebase finished. */
-function announce(worktree: string, outcome: RebaseOutcome): boolean {
+export function announce(worktree: string, outcome: RebaseOutcome): boolean {
   if (outcome.status === "conflict") {
     toast({
       title: t("rebase.conflictToast"),
@@ -202,12 +204,12 @@ export function RebaseView() {
         <p className="rebase-muted">{t("rebase.pushedAfter")}</p>
         <div className="rebase-actions">
           <button className="btn primary" onClick={() => void pushLease()}>{t("rebase.leaseOk")}</button>
-          <button className="btn" onClick={() => { useRebaseUi.getState().clearLeasePush(worktree); useStage.getState().go("graph"); }}>{t("rebase.openGraph")}</button>
+          <button className="btn" onClick={() => { useRebaseUi.getState().clearLeasePush(worktree); openHistory("graph"); }}>{t("rebase.openGraph")}</button>
         </div>
       </div>
     );
   }
-  if (!base) return <div className="rebase-state"><p>{t("rebase.pickBase")}</p></div>;
+  if (!base) return <BasePicker worktree={worktree} />;
   if (error) return <div className="rebase-state" role="alert"><p>{error}</p></div>;
   if (!plan) return <ScreenLoader>{t("rebase.loading")}</ScreenLoader>;
 

@@ -3,16 +3,13 @@ import { SCREENS, screenById, type ScreenId } from "./registry";
 import { t } from "../i18n/t";
 import { ScreenLoader } from "../ui/ScreenLoader";
 import { SettingsToolbar, SettingsView } from "./settings/SettingsScreen";
-import { GraphToolbar, GraphView } from "./graph/GraphScreen";
 import { ChangesToolbar, ChangesView } from "./changes/ChangesScreen";
 import { FilesToolbar, FilesView } from "./files/FilesScreen";
-import { BlameToolbar, BlameView } from "./blame/BlameScreen";
 import { TerminalScreen, TerminalToolbar } from "../terminal/TerminalScreen";
 import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
-import { InboxToolbar, InboxView } from "./inbox/InboxScreen";
-import { LaunchpadToolbar, LaunchpadView } from "./launchpad/LaunchpadScreen";
 import { ConflictsToolbar, ConflictsView } from "./conflicts/ConflictsScreen";
-import { RebaseToolbar, RebaseView } from "./rebase/RebaseScreen";
+import { HistoryToolbar, HistoryView } from "./history/HistoryScreen";
+import { HomeToolbar, HomeView } from "./home/HomeScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -22,7 +19,7 @@ export interface ScreenView {
 const RepoView = lazy(() => import("./repo/RepoScreen").then((module) => ({ default: module.RepoView })));
 
 function RepoToolbar() {
-  return <h1 className="pane-title">{t("nav.repo")}</h1>;
+  return <h1 className="pane-title">{t("nav.github")}</h1>;
 }
 
 function RepoViewBoundary() {
@@ -58,14 +55,11 @@ function placeholder(id: ScreenId): ScreenView {
 export const VIEWS = Object.fromEntries(SCREENS.map((s) => [s.id, placeholder(s.id)])) as Record<ScreenId, ScreenView>;
 
 VIEWS.settings = { Toolbar: SettingsToolbar, View: SettingsView };
-VIEWS.graph = { Toolbar: GraphToolbar, View: GraphView };
+VIEWS.history = { Toolbar: HistoryToolbar, View: HistoryView };
 VIEWS.changes = { Toolbar: ChangesToolbar, View: ChangesView };
 VIEWS.files = { Toolbar: FilesToolbar, View: FilesView };
-VIEWS.blame = { Toolbar: BlameToolbar, View: BlameView };
 VIEWS.terminal = { Toolbar: TerminalToolbar, View: TerminalScreen };
 VIEWS.agents = { Toolbar: AgentsToolbar, View: AgentsView };
-VIEWS.repo = { Toolbar: RepoToolbar, View: RepoViewBoundary };
-VIEWS.inbox = { Toolbar: InboxToolbar, View: InboxView };
-VIEWS.launchpad = { Toolbar: LaunchpadToolbar, View: LaunchpadView };
+VIEWS.github = { Toolbar: RepoToolbar, View: RepoViewBoundary };
+VIEWS.home = { Toolbar: HomeToolbar, View: HomeView };
 VIEWS.conflicts = { Toolbar: ConflictsToolbar, View: ConflictsView };
-VIEWS.rebase = { Toolbar: RebaseToolbar, View: RebaseView };

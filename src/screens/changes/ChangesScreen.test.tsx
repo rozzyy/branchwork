@@ -63,7 +63,7 @@ function statusSummary(overrides: Partial<StatusSummary> = {}): StatusSummary {
   return { staged: [staged], unstaged: [modified, deleted], ...overrides };
 }
 
-async function setup(summary = statusSummary(), stashes: StashEntry[] = []) {
+async function setup(summary = statusSummary(), stashes: StashEntry[] = [], expectClean = false) {
   vi.mocked(readStatus).mockResolvedValue(summary);
   vi.mocked(readDiff).mockResolvedValue({ hunks: [], binary: false, truncated: false, bytes: 0 });
   vi.mocked(commit).mockResolvedValue(false);
@@ -96,12 +96,19 @@ async function setup(summary = statusSummary(), stashes: StashEntry[] = []) {
     useStage.setState({ go: vi.fn() });
   });
   render(<ChangesView />);
-  await screen.findByText("callback.ts");
+  if (expectClean) await screen.findByRole("button", { name: "Open History" });
+  else await screen.findByText("callback.ts");
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+});
+
+it("offers History when the working tree is clean", async () => {
+  await setup({ staged: [], unstaged: [] }, [], true);
+  await userEvent.click(screen.getByRole("button", { name: "Open History" }));
+  expect(useStage.getState().go).toHaveBeenCalledWith("history");
 });
 
 afterEach(() => {

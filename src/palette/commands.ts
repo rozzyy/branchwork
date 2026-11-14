@@ -1,6 +1,6 @@
 import type { MsgKey } from "../i18n/en";
 import { t } from "../i18n/t";
-import { NUMBER_KEYS, SCREENS } from "../screens/registry";
+import { NAV_SCREENS, SCREENS } from "../screens/registry";
 import { useStage } from "../state/stage";
 import { useSettings } from "../state/settings";
 import { toast } from "../ui/toast";
@@ -11,6 +11,8 @@ import { useTerminalScreen } from "../terminal/screen";
 import { undoLast } from "../ipc/undo";
 import { useChanges } from "../state/changes";
 import { ask } from "../ui/dialog";
+import { openHistory } from "../state/history";
+import { useConflicts } from "../screens/conflicts/conflictsState";
 
 export interface Command {
   id: string;
@@ -58,8 +60,8 @@ async function discardAllChanges(): Promise<void> {
 }
 
 export function buildCommands(): Command[] {
-  const nav: Command[] = SCREENS.map((s) => {
-    const n = NUMBER_KEYS.indexOf(s.id);
+  const nav: Command[] = SCREENS.filter((s) => s.section !== "tools").map((s) => {
+    const n = NAV_SCREENS.indexOf(s.id);
     return {
       id: "go:" + s.id,
       group: "palette.group.navigate",
@@ -100,8 +102,13 @@ export function buildCommands(): Command[] {
   const open: Command[] = [
     { id: "open.changes", group: "palette.group.navigate", icon: "±", title: t("palette.openChanges"), run: () => stage().go("changes") },
     { id: "open.files", group: "palette.group.navigate", icon: "▤", title: t("palette.openFiles"), run: () => stage().go("files") },
-    { id: "open.blame", group: "palette.group.navigate", icon: "≡", title: t("palette.openBlame"), run: () => stage().go("blame") },
+    { id: "open.blame", group: "palette.group.navigate", icon: "≡", title: t("palette.openBlame"), run: () => openHistory("file") },
   ];
+  const active = useWorktrees.getState().activePath;
+  const conflictList = useConflicts.getState();
+  if (active && conflictList.worktree === active && conflictList.list?.operation !== "none" && conflictList.list) {
+    open.push({ id:"open.conflicts", group:"palette.group.navigate", icon:"⚠", title:t("operation.resolve"), run:() => stage().go("conflicts") });
+  }
   const terminal: Command[] = [
     { id: "terminal.toggle", group: "palette.group.navigate", icon: "❯_", title: t("palette.toggleTerminal"), kbd: "⌃`", run: () => useDock.getState().toggle() },
     { id: "terminal.newTab", group: "palette.group.navigate", icon: "＋", title: t("palette.newTerminalTab"), run: () => { void useDock.getState().newTab(); } },

@@ -1,51 +1,48 @@
+import { useState } from "react";
 import { t } from "../i18n/t";
 import { useSettings } from "../state/settings";
 import { useSidebar } from "../state/sidebar";
 import { useDock } from "../terminal/dock";
-import { projectLabel } from "./GroupSwitcher";
+import { useWorktrees } from "../state/worktrees";
+import { GroupSwitcherPopover, projectLabel, useSwitcher } from "./GroupSwitcher";
 import { useRepos } from "../state/repos";
-
-function ProjectContext() {
-  const activeProjectId = useRepos((s) => s.activeProjectId);
-  const activeGroupId = useRepos((s) => s.activeGroupId);
-  const project = useRepos((s) => s.projects.find((item) => item.id === activeProjectId) ?? null);
-  const group = useRepos((s) => s.groups.find((item) => item.id === activeGroupId) ?? null);
-
-  return (
-    <div className="title-project-context" title={project ? projectLabel(project) : t("groups.noProjectSelected")}>
-      <span className="title-project-group-mark" aria-hidden style={{ background: group?.color ?? "var(--s3)" }} />
-      <span className="title-project-group">{group?.name ?? t("groups.ungrouped")}</span>
-      <span className="title-project-separator" aria-hidden>/</span>
-      <span className="title-project-name">{project ? projectLabel(project) : t("groups.noProjectSelected")}</span>
-    </div>
-  );
-}
+import { Menu } from "../ui/Menu";
+import { useShortcutSheet } from "./ShortcutSheet";
 
 export function TitleBar() {
   const dockOpen = useDock((s) => s.open);
-  const projectRailOpen = useSidebar((s) => s.projectRailOpen);
+  const activePath = useWorktrees((s) => s.activePath);
+  const worktrees = useWorktrees((s) => s.worktrees);
+  const pinnedPaths = useWorktrees((s) => s.pinnedPaths);
+  const [projectAnchor, setProjectAnchor] = useState<HTMLElement | null>(null);
+  const [worktreeMenu, setWorktreeMenu] = useState<{x:number;y:number} | null>(null);
+  const projectOpen = useSwitcher((s) => s.open);
+  const activeProjectId = useRepos((s) => s.activeProjectId);
+  const activeGroupId = useRepos((s) => s.activeGroupId);
+  const project = useRepos((s) => s.projects.find((p) => p.id === activeProjectId) ?? null);
+  const group = useRepos((s) => s.groups.find((g) => g.id === activeGroupId) ?? null);
+  const activeWorktree = worktrees.find((w) => w.path === activePath);
   return (
     <header className="titlebar" data-tauri-drag-region>
       <div className="traffic-space" data-tauri-drag-region />
       <button className="icon-btn side-toggle" aria-label={t("sidebar.toggle")} title={t("sidebar.toggle")} onClick={() => useSidebar.getState().toggle()}>◧</button>
       <span className="app-mark" aria-hidden data-tauri-drag-region />
       <span className="app-name" data-tauri-drag-region>{t("app.name")}</span>
-      <ProjectContext />
+      <div className="title-breadcrumb" aria-label={t("shell.location")}>
+        <button className="breadcrumb-segment" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().show(); }}>{group?.name ?? t("groups.ungrouped")}</button>
+        <span aria-hidden>›</span>
+        <button className="breadcrumb-segment" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().show(); }}>{project ? projectLabel(project) : t("groups.noProjectSelected")}</button>
+        <span aria-hidden>›</span>
+        <button className="breadcrumb-segment worktree-crumb" onClick={(e) => { const r=e.currentTarget.getBoundingClientRect(); setWorktreeMenu({x:r.left,y:r.bottom+5}); }}>{activeWorktree?.branch ?? t("sidebar.noWorktree") } ▾</button>
+      </div>
+      {projectOpen && projectAnchor && <GroupSwitcherPopover anchorEl={projectAnchor} />}
+      {worktreeMenu && <Menu x={worktreeMenu.x} y={worktreeMenu.y} onClose={() => setWorktreeMenu(null)} items={worktrees.filter((w) => pinnedPaths.includes(w.path) || w.path === activePath).map((w) => ({ kind:"item" as const, label:w.branch ?? w.path, onSelect:() => useWorktrees.getState().select(w.path) }))} />}
       <button className="search" onClick={() => window.dispatchEvent(new CustomEvent("bw:palette"))}>
         <span aria-hidden>⌕</span>
         <span className="search-label">{t("search.placeholder")}</span>
         <kbd className="kbd">⌘K</kbd>
       </button>
       <div className="title-right" data-tauri-drag-region>
-        <button
-          className={"icon-btn project-rail-toggle" + (projectRailOpen ? " on" : "")}
-          aria-label={t("groups.toggleProjectSidebar")}
-          aria-pressed={projectRailOpen ? "true" : "false"}
-          title={t("groups.toggleProjectSidebar")}
-          onClick={() => useSidebar.getState().toggleProjectRail()}
-        >
-          ▤
-        </button>
         <button
           className={"icon-btn dock-toggle" + (dockOpen ? " on" : "")}
           aria-label={t("dock.toggle")}
@@ -63,6 +60,7 @@ export function TitleBar() {
         >
           ◐
         </button>
+        <button className="icon-btn help-toggle" aria-label={t("shortcuts.open")} title={t("shortcuts.open")} onClick={() => useShortcutSheet.getState().show()}>?</button>
       </div>
     </header>
   );

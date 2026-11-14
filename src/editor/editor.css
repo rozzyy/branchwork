@@ -39,7 +39,7 @@
 .ed-container { flex: 1; min-height: 0; overflow: hidden; position: relative; }
 .ed-container .cm-editor { height: 100%; outline: none; }
 
-.estat { display: flex; gap: 16px; padding: 4px 12px; border-top: 1px solid var(--line); font: 11px "JetBrains Mono", monospace; color: var(--fg3); white-space: nowrap; overflow: hidden; }
+.estat { display: flex; gap: 16px; padding: 4px 12px; border-top: 1px solid var(--line); font: var(--fs-meta) "JetBrains Mono", monospace; color: var(--fg3); white-space: nowrap; overflow: hidden; }
 .estat .g { color: var(--grn); }
 
 .cm-gutter.cm-gutter-git { width: 8px; }

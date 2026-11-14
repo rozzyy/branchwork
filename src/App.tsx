@@ -3,7 +3,8 @@ import { ConflictWatcher } from "./screens/conflicts/ConflictsScreen";
 import { PublishDialogHost } from "./screens/repo/PublishDialog";
 import { TitleBar } from "./shell/TitleBar";
 import { Sidebar } from "./shell/Sidebar";
-import { ProjectSidebar } from "./shell/ProjectSidebar";
+import { StatusBar } from "./shell/StatusBar";
+import { ShortcutSheet } from "./shell/ShortcutSheet";
 import { Stage } from "./stage/Stage";
 import { useSettings } from "./state/settings";
 import { useStage } from "./state/stage";
@@ -26,7 +27,6 @@ import { toast } from "./ui/toast";
 export default function App() {
   useGlobalKeys();
   const collapsed = useSidebar((s) => s.collapsed);
-  const projectRailOpen = useSidebar((s) => s.projectRailOpen);
   const dockMode = useDock((s) => s.mode);
   const dockOpen = useDock((s) => s.open);
   useEffect(() => {
@@ -67,7 +67,6 @@ export default function App() {
     <div
       className="app"
       data-sidebar={collapsed ? "collapsed" : "expanded"}
-      data-project-rail={projectRailOpen ? "open" : "closed"}
       data-dock={dockFlow}
     >
       <TitleBar />
@@ -77,8 +76,9 @@ export default function App() {
           <Stage />
           <TerminalDock />
         </div>
-        <ProjectSidebar />
       </div>
+      <StatusBar />
+      <ShortcutSheet />
       <ConflictWatcher />
       <PublishDialogHost />
       <Toaster />

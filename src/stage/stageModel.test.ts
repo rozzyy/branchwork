@@ -6,7 +6,7 @@ const one: StageState = { panes: ["agents"], focus: 0, dir: "h", ratio: 0.5 };
 
 describe("navigate", () => {
   it("replaces the focused pane's screen", () => {
-    expect(navigate(initialStage, "graph").panes).toEqual(["graph"]);
+    expect(navigate(initialStage, "history").panes).toEqual(["history"]);
   });
   it("focuses the other pane if it already shows that screen", () => {
     const s = navigate(two, "changes");
@@ -39,7 +39,7 @@ describe("openSplit", () => {
     expect(openSplit(one, "agents", "right")).toBe(one);
   });
   it("replaces the target side when already split", () => {
-    expect(openSplit(two, "graph", "right").panes).toEqual(["agents", "graph"]);
+    expect(openSplit(two, "history", "right").panes).toEqual(["agents", "history"]);
   });
   it("swaps instead of duplicating when the screen is on the other side", () => {
     expect(openSplit(two, "agents", "right").panes).toEqual(["changes", "agents"]);

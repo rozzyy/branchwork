@@ -5,7 +5,7 @@ import { useWorktrees } from "../../state/worktrees";
 import { useRepos } from "../../state/repos";
 import { useFiles } from "../../state/files";
 import type { FilesIntent } from "../../state/filesIntents";
-import { useStage } from "../../state/stage";
+import { openHistory } from "../../state/history";
 import {
   fsCreate,
   fsDelete,
@@ -695,7 +695,7 @@ export function FilesView() {
 
   const goToBlame = (path: string) => {
     openFileAction(path);
-    useStage.getState().go("blame");
+    openHistory("file", { path });
   };
 
   const contextMenuItems = (path: string, isDir: boolean): MenuItem[] => {
@@ -732,7 +732,7 @@ export function FilesView() {
     items.push({ kind: "item", label: t("files.copyPath"), icon: "⧉", onSelect: () => handleCopyPath(path) });
     items.push({ kind: "separator" });
     if (!isDir) {
-      items.push({ kind: "item", label: t("files.blame"), icon: "≡", onSelect: () => goToBlame(path) });
+      items.push({ kind: "item", label: t("files.whoChanged"), icon: "≡", onSelect: () => goToBlame(path) });
       items.push({ kind: "item", label: t("files.fileHistory"), icon: "⟲", onSelect: () => goToBlame(path) });
       if (entryStatus(path)) {
         items.push({ kind: "item", label: t("files.discardChanges"), icon: "↶", onSelect: () => void handleDiscard(path) });

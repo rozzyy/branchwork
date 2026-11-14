@@ -11,7 +11,7 @@ import {
   type RegionChoice,
 } from "../../ipc/conflicts";
 import { runGitAction } from "../../state/gitActions";
-import { useStage } from "../../state/stage";
+import { openHistory } from "../../state/history";
 import { useWorktrees } from "../../state/worktrees";
 import { useDock } from "../../terminal/dock";
 import { ask } from "../../ui/dialog";
@@ -260,7 +260,7 @@ export function ConflictsView() {
   const finish = () =>
     void runGitAction(activePath, t("conflicts.commitAction"), () => conflictContinue(activePath)).then((ok) => {
       void useConflicts.getState().load(activePath);
-      if (ok) useStage.getState().go("graph");
+      if (ok) openHistory("graph");
     });
   const footer = (
     <div className="conf-footer">

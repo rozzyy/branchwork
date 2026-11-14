@@ -10,15 +10,9 @@ it("toggles and restores the collapsed state", async () => {
   expect(useSidebar.getState().collapsed).toBe(true);
 });
 
-it("persists right project rail visibility without changing sidebar collapse", async () => {
+it("ignores legacy project rail visibility and keeps sidebar collapse", async () => {
   localStorage.clear();
-  useSidebar.setState({ collapsed: false, projectRailOpen: true });
-  useSidebar.getState().toggleProjectRail();
-  expect(useSidebar.getState().projectRailOpen).toBe(false);
-  expect(useSidebar.getState().collapsed).toBe(false);
-
-  useSidebar.setState({ projectRailOpen: true });
+  localStorage.setItem("bw:sidebar", JSON.stringify({ collapsed: false, projectRailOpen: false }));
   await useSidebar.getState().load();
-  expect(useSidebar.getState().projectRailOpen).toBe(false);
   expect(useSidebar.getState().collapsed).toBe(false);
 });

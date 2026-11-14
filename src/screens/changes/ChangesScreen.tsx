@@ -684,7 +684,7 @@ export function ChangesView() {
             <span className="spin" aria-hidden="true" /> {t("changes.loading")}
           </div>
         ) : empty ? (
-          <div className="changes-empty">{t("changes.empty")}</div>
+          <div className="changes-empty"><p>{t("changes.empty")}</p><button className="btn sm" onClick={() => useStage.getState().go("history")}>{t("changes.openHistory")}</button></div>
         ) : diff && selection ? (
           <DiffRenderer
             area={selection.area}

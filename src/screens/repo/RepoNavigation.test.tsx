@@ -53,7 +53,7 @@ beforeEach(() => {
   vi.mocked(ghRepoRemote).mockReset().mockImplementation(() => new Promise(() => {}));
 });
 
-it("paints the Repository destination before starting its pending remote request", async () => {
+it("paints the GitHub destination before starting its pending remote request", async () => {
   render(
     <>
       <Sidebar />
@@ -61,9 +61,9 @@ it("paints the Repository destination before starting its pending remote request
     </>,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Repository" }));
+  fireEvent.click(screen.getByRole("button", { name: "GitHub" }));
 
-  expect(screen.getByRole("heading", { level: 1, name: "Repository" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: "GitHub" })).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Loading repository…");
   expect(ghRepoRemote).not.toHaveBeenCalled();
 

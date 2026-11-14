@@ -5,9 +5,9 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: 16px;
-  background: var(--surf);
-  box-shadow: var(--spec), 0 0 0 .5px var(--line2);
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .term-dock-bottom {

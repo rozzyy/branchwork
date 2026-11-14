@@ -1,15 +1,19 @@
-import { useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from "react";
 import { useStage } from "../state/stage";
 import { Pane } from "./Pane";
 import { nearestSide, type Side } from "./stageModel";
 import { SCREEN_MIME, sideLabel } from "./dnd";
 import type { ScreenId } from "../screens/registry";
 import { t } from "../i18n/t";
+import { OperationBanner } from "../shell/OperationBanner";
+import { useWorktrees } from "../state/worktrees";
 
 export function Stage() {
   const panes = useStage((s) => s.panes);
   const dir = useStage((s) => s.dir);
   const ratio = useStage((s) => s.ratio);
+  const activePath = useWorktrees((s) => s.activePath);
+  useEffect(() => { useStage.getState().switchWorktree(activePath); }, [activePath]);
   const ref = useRef<HTMLDivElement>(null);
   const [drop, setDrop] = useState<Side | null>(null);
   const two = panes.length > 1;
@@ -36,6 +40,8 @@ export function Stage() {
   };
 
   return (
+    <div className="stage-stack">
+    <OperationBanner />
     <div
       ref={ref}
       className={"stage" + (two ? " split-" + dir : "")}
@@ -72,6 +78,7 @@ export function Stage() {
           <span className="dz-hint">{t("split.dropHint")}</span>
         </div>
       )}
+    </div>
     </div>
   );
 }

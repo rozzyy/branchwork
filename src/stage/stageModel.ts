@@ -11,7 +11,7 @@ export interface StageState {
   ratio: number; // size of pane 0, 0.2–0.8
 }
 
-export const initialStage: StageState = { panes: ["launchpad"], focus: 0, dir: "h", ratio: 0.5 };
+export const initialStage: StageState = { panes: ["home"], focus: 0, dir: "h", ratio: 0.5 };
 
 export function navigate(s: StageState, id: ScreenId): StageState {
   const j = s.panes.indexOf(id);

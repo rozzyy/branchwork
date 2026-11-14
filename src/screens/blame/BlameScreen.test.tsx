@@ -100,7 +100,7 @@ it("fires the Graph deep-link with the selected commit SHA", async () => {
   await userEvent.click(document.querySelector('[data-blame-line="3"]') as HTMLElement);
   await userEvent.click(screen.getByRole("button", { name: "View commit" }));
   expect(useGraphUi.getState().selection).toEqual({ kind: "commit", sha: "b".repeat(40) });
-  expect(go).toHaveBeenCalledWith("graph");
+  expect(go).toHaveBeenCalledWith("history");
 });
 
 it("scrolls the code column to a history item's first group line", async () => {

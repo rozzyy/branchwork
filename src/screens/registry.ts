@@ -1,44 +1,71 @@
 import type { MsgKey } from "../i18n/en";
 
 export type ScreenId =
-  | "launchpad" | "graph" | "files" | "changes" | "agents" | "terminal" | "repo" | "inbox"
-  | "conflicts" | "rebase" | "blame" | "compare" | "settings";
+  | "home" | "changes" | "history" | "files" | "agents" | "terminal" | "github"
+  | "settings" | "conflicts";
+export type HistoryMode = "graph" | "file" | "rewrite";
 
-/** Sidebar categories above the worktree list, in display order (header key + member screens). */
-export type NavSection = "workspace" | "code" | "ai" | "github";
-export const NAV_SECTIONS: { id: NavSection; label: MsgKey }[] = [
-  { id: "workspace", label: "sidebar.sectionWorkspace" },
-  { id: "code", label: "sidebar.sectionCode" },
-  { id: "ai", label: "sidebar.sectionAi" },
-  { id: "github", label: "sidebar.sectionGithub" },
-];
+export type NavSection = "screens" | "tools" | "footer";
 
 export interface ScreenDef {
   id: ScreenId;
   icon: string;
   label: MsgKey;
-  section: NavSection | "tools" | "footer";
+  section: NavSection;
 }
 
+/** The seven primary destinations, in their permanent ⌘1–⌘7 order. */
+export const NAV_SCREENS: ScreenId[] = ["home", "changes", "history", "files", "agents", "terminal", "github"];
+
+/** All screens currently addressable by panes, palette, or a contextual route. */
 export const SCREENS: ScreenDef[] = [
-  { id: "launchpad", icon: "⌂", label: "nav.launchpad", section: "workspace" },
-  { id: "inbox", icon: "◉", label: "nav.inbox", section: "workspace" },
-  { id: "graph", icon: "⎇", label: "nav.graph", section: "code" },
-  { id: "files", icon: "▤", label: "nav.files", section: "code" },
-  { id: "changes", icon: "±", label: "nav.changes", section: "code" },
-  { id: "agents", icon: "✦", label: "nav.agents", section: "ai" },
-  { id: "terminal", icon: "❯_", label: "nav.terminal", section: "ai" },
-  { id: "repo", icon: "◫", label: "nav.repo", section: "github" },
+  { id: "home", icon: "⌂", label: "nav.home", section: "screens" },
+  { id: "changes", icon: "±", label: "nav.changes", section: "screens" },
+  { id: "history", icon: "⎇", label: "nav.history", section: "screens" },
+  { id: "files", icon: "▤", label: "nav.files", section: "screens" },
+  { id: "agents", icon: "✦", label: "nav.agents", section: "screens" },
+  { id: "terminal", icon: "❯_", label: "nav.terminal", section: "screens" },
+  { id: "github", icon: "◫", label: "nav.github", section: "screens" },
   { id: "conflicts", icon: "⚠", label: "tools.conflicts", section: "tools" },
-  { id: "rebase", icon: "↕", label: "tools.rebase", section: "tools" },
-  { id: "blame", icon: "≡", label: "tools.blame", section: "tools" },
-  { id: "compare", icon: "⇆", label: "tools.compare", section: "tools" },
   { id: "settings", icon: "⚙", label: "nav.settings", section: "footer" },
 ];
+export const NAV_SECTIONS: { id: NavSection; label: MsgKey }[] = [
+  { id: "screens", label: "sidebar.sectionScreens" },
+];
 
-export const SCREEN_IDS = SCREENS.map((s) => s.id);
+export const SCREEN_IDS: ScreenId[] = [...NAV_SCREENS, "settings", "conflicts"];
 
 export const screenById = (id: ScreenId): ScreenDef => SCREENS.find((s) => s.id === id)!;
 
-/** Screens reachable with the number keys 1–9 (spec §6.1.6). */
-export const NUMBER_KEYS: ScreenId[] = ["launchpad", "graph", "files", "changes", "agents", "terminal", "repo", "inbox"];
+/** Compatibility alias while the existing global-key handler is migrated in Task 07. */
+export const NUMBER_KEYS = NAV_SCREENS;
+
+/** Map persisted pane ids and old internal routes into the M7 screen model. */
+export function migrateScreenId(id: string): { screen: ScreenId; historyMode?: HistoryMode } {
+  switch (id) {
+    case "launchpad":
+    case "inbox":
+    case "compare":
+      return { screen: "home" };
+    case "graph":
+      return { screen: "history", historyMode: "graph" };
+    case "blame":
+      return { screen: "history", historyMode: "file" };
+    case "rebase":
+      return { screen: "history", historyMode: "rewrite" };
+    case "repo":
+      return { screen: "github" };
+    case "home":
+    case "changes":
+    case "history":
+    case "files":
+    case "agents":
+    case "terminal":
+    case "github":
+    case "conflicts":
+    case "settings":
+      return { screen: id };
+    default:
+      return { screen: "home" };
+  }
+}

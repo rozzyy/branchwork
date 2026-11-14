@@ -535,6 +535,19 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
         <button
           type="button"
           className="agent-phb"
+          title={t("agents.reviewBeside")}
+          aria-label={t("agents.reviewBeside")}
+          onClick={() => {
+            useWorktrees.getState().select(session.worktreePath);
+            useStage.getState().go("agents");
+            useStage.getState().openSplit("changes", "right");
+          }}
+        >
+          ±
+        </button>
+        <button
+          type="button"
+          className="agent-phb"
           title={t("agents.moveToDock")}
           aria-label={t("agents.moveToDock")}
           onClick={() => store.moveToDock(session.id)}

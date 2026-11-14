@@ -1,6 +1,6 @@
 {
-  "milestone": "M6 Advanced Git",
-  "plan": "docs/superpowers/plans/2026-11-12-m6-advanced-git.md",
+  "milestone": "M7 UI/UX Redesign",
+  "plan": "docs/superpowers/plans/2026-11-14-m7-ui-redesign.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -1338,7 +1338,139 @@
         "m6-task-11-rebase-execute"
       ],
       "status": "done",
-      "evidence": "Done 2026-11-13. Spec review FAIL (Continue \u2192 done skipped the lease offer and left the stale plan; missing truncated and Start \u2192 conflict \u2192 Continue tests) then PASS (.agent/reviews/m6-task-12-spec.md); fixed with done handling shared by Start and Continue via useRebaseUi (per-worktree base and pushed flag, needsLeasePush), autosquash edge cases (no target, nested prefixes, dropped rows), custom drag type. ./init.sh: === Verification Complete === (Vitest 72 files / 645 tests; Rust 289 passed / 3 ignored)."
+      "evidence": "Done 2026-11-13. Spec review FAIL (Continue → done skipped the lease offer and left the stale plan; missing truncated and Start → conflict → Continue tests) then PASS (.agent/reviews/m6-task-12-spec.md); fixed with done handling shared by Start and Continue via useRebaseUi (per-worktree base and pushed flag, needsLeasePush), autosquash edge cases (no target, nested prefixes, dropped rows), custom drag type. ./init.sh: === Verification Complete === (Vitest 72 files / 645 tests; Rust 289 passed / 3 ignored)."
+    },
+    {
+      "id": "m7-task-01-tokens-global-rules",
+      "stage": 30,
+      "name": "Tokens and global rules",
+      "description": "docs/superpowers/plans/2026-11-14-m7-ui-redesign.md#task-01-tokens-and-global-rules",
+      "dependencies": [
+        "m6-task-12-rebase-screen"
+      ],
+      "status": "done",
+      "evidence": "Implemented OKLCH contrast checks, new theme tokens and aliases, visible scrollbars, focus ring, text/density scales, and flush utility. Covered by src/theme/tokens.test.ts; full Vitest phase in ./init.sh passed (78 files / 677 tests)."
+    },
+    {
+      "id": "m7-task-02-theme-settings",
+      "stage": 30,
+      "name": "Theme settings — Text size replaces contrast and transparency",
+      "description": "docs/superpowers/plans/2026-11-14-m7-ui-redesign.md#task-02-theme-settings--text-size-replaces-contrast-and-transparency",
+      "dependencies": [
+        "m7-task-01-tokens-global-rules"
+      ],
+      "status": "done",
+      "evidence": "Implemented persisted default/large text setting and legacy-key tolerance; removed contrast and transparency settings. Covered by theme/settings/state tests; full Vitest phase in ./init.sh passed (78 files / 677 tests)."
+    },
+    {
+      "id": "m7-task-03-base-components",
+      "stage": 30,
+      "name": "Base components",
+      "description": "docs/superpowers/plans/2026-11-14-m7-ui-redesign.md#task-03-base-components",
+      "dependencies": [
+        "m7-task-02-theme-settings"
+      ],
+      "status": "done",
+      "evidence": "Implemented StatusLabel, CountBadge, Banner, and base UI restyle. Reviewer re-review PASS (.agent/reviews/m7-stage-1-code-review.md) after fixing 12px text floor, 24px targets, clipped/global focus rings, fixed-size text in Stage 1 surfaces, and CountBadge accessible role/name. pnpm vitest run src/ui: 7 files / 15 tests passed; pnpm typecheck and git diff --check passed. RUST_TEST_THREADS=1 ./init.sh: Vitest 78 files / 679 tests and Clippy passed; Rust 298 passed / 10 failed / 3 ignored, all failures unable to start macOS FSEvent streams. Full gate is not green; native pnpm tauri dev visual verification is unrun. Stage 1 remains in progress; no commit/push. Follow-up: TMPDIR=/private/tmp did not fix one FSEvent test (same failure). pnpm tauri dev compiled and launched, but Cua Driver permissions status returned \"the app didn't answer\", so native window inspection could not be completed. Spec recheck: approved design spec is normative; corrected .input from 10px/raised to 6px control radius, --bg fill, and strong border, with regression assertions. Final focused UI run: 7 files / 15 tests passed; git diff --check passed. Baseline retry outside the sandbox passed: ./init.sh → === Verification Complete ===; Vitest 78 files/679 tests; Rust 308 passed/3 ignored; TypeScript and Clippy clean. User authorized continuing across manual stage checkpoints; no commit/push."
+    },
+    {
+      "id": "m7-task-04-screen-registry-history-container",
+      "stage": 31,
+      "name": "Screen registry, migration and container screens",
+      "description": ".agent/tasks/m7-task-04-screen-registry-history-container.md",
+      "dependencies": [
+        "m7-task-03-base-components"
+      ],
+      "status": "done",
+      "evidence": "Implemented screen ID migration, History modes, Home container, and legacy pane migration. Covered in full Vitest suite; final ./init.sh passed (78 files / 679 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean)."
+    },
+    {
+      "id": "m7-task-05-sidebar-project-picker",
+      "stage": 31,
+      "name": "Sidebar with project picker; right rail removed",
+      "description": ".agent/tasks/m7-task-05-sidebar-project-picker.md",
+      "dependencies": [
+        "m7-task-04-screen-registry-history-container"
+      ],
+      "status": "done",
+      "evidence": "Implemented worktree-first sidebar, integrated project picker, removed right rail, and contextual conflict route. Covered in full Vitest suite; final ./init.sh passed."
+    },
+    {
+      "id": "m7-task-06-breadcrumb-status-bar",
+      "stage": 31,
+      "name": "Breadcrumb title bar and status bar",
+      "description": ".agent/tasks/m7-task-06-breadcrumb-status-bar.md",
+      "dependencies": [
+        "m7-task-05-sidebar-project-picker"
+      ],
+      "status": "done",
+      "evidence": "Implemented project/worktree breadcrumb and live status bar for worktree, changes, agents, and terminal dock. Covered in full Vitest suite; final ./init.sh passed."
+    },
+    {
+      "id": "m7-task-07-keyboard-shortcuts-sheet",
+      "stage": 31,
+      "name": "Keyboard shortcuts and shortcut sheet",
+      "description": ".agent/tasks/m7-task-07-keyboard-shortcuts-sheet.md",
+      "dependencies": [
+        "m7-task-06-breadcrumb-status-bar"
+      ],
+      "status": "done",
+      "evidence": "Implemented Cmd/Ctrl+1–7 navigation, opt-in bare digits, shortcut sheet, and preserved Ctrl+` behavior. Covered in full Vitest suite; final ./init.sh passed."
+    },
+    {
+      "id": "m7-task-08-home-launchpad-inbox",
+      "stage": 32,
+      "name": "Home = Launchpad + Inbox",
+      "description": ".agent/tasks/m7-task-08-home-launchpad-inbox.md",
+      "dependencies": [
+        "m7-task-07-keyboard-shortcuts-sheet"
+      ],
+      "status": "done",
+      "evidence": "Combined Inbox attention actions and Launchpad KPIs/issues/CI on Home; completed-agent review switches to Agents + Changes. Covered in full Vitest suite; final ./init.sh passed."
+    },
+    {
+      "id": "m7-task-09-history-completion",
+      "stage": 32,
+      "name": "History completion: base picker, commit beside, line blame",
+      "description": ".agent/tasks/m7-task-09-history-completion.md",
+      "dependencies": [
+        "m7-task-08-home-launchpad-inbox"
+      ],
+      "status": "done",
+      "evidence": "Implemented ancestor BasePicker (max 50), Commit… beside, and line-specific blame navigation. Covered in full Vitest suite; final ./init.sh passed."
+    },
+    {
+      "id": "m7-task-10-operation-banner",
+      "stage": 33,
+      "name": "Operation banner replaces Conflicts menu item",
+      "description": ".agent/tasks/m7-task-10-operation-banner.md",
+      "dependencies": [
+        "m7-task-09-history-completion"
+      ],
+      "status": "done",
+      "evidence": "Implemented active-worktree operation banner, contextual conflict routing, safe continue/abort and confirmation. Covered in full Vitest suite; final ./init.sh passed."
+    },
+    {
+      "id": "m7-task-11-open-beside-layouts",
+      "stage": 33,
+      "name": "Open beside and per-worktree layouts",
+      "description": ".agent/tasks/m7-task-11-open-beside-layouts.md",
+      "dependencies": [
+        "m7-task-10-operation-banner"
+      ],
+      "status": "done",
+      "evidence": "Implemented Open beside, layout presets, agent review beside, and bounded per-worktree layouts with legacy migration. Covered in full Vitest suite; final ./init.sh passed."
+    },
+    {
+      "id": "m7-task-12-flush-panes-screen-restyle",
+      "stage": 33,
+      "name": "Flush panes and screen restyle",
+      "description": ".agent/tasks/m7-task-12-flush-panes-screen-restyle.md",
+      "dependencies": [
+        "m7-task-11-open-beside-layouts"
+      ],
+      "status": "done",
+      "evidence": "Applied spec typography floor, solid surfaces, square flush panes, visible scrollbars and clean Changes History action. CSS regression tests and final ./init.sh passed."
     }
   ]
 }

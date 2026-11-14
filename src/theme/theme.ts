@@ -1,12 +1,12 @@
 export type ThemeMode = "system" | "light" | "dark";
 export type Density = "compact" | "default" | "comfy";
+export type TextSize = "default" | "large";
 
 export interface ThemeSettings {
   mode: ThemeMode;
   accentHue: number;
   baseHue: number;
-  contrast: number;
-  reduceTransparency: boolean;
+  textSize: TextSize;
   density: Density;
 }
 
@@ -14,8 +14,7 @@ export const DEFAULT_THEME: ThemeSettings = {
   mode: "dark",
   accentHue: 250,
   baseHue: 265,
-  contrast: 1,
-  reduceTransparency: false,
+  textSize: "default",
   density: "default",
 };
 
@@ -32,7 +31,7 @@ export function applyTheme(s: ThemeSettings, root: HTMLElement = document.docume
   root.dataset.theme = resolveMode(s.mode, systemDark);
   root.style.setProperty("--ah", String(s.accentHue));
   root.style.setProperty("--bh", String(s.baseHue));
-  root.style.setProperty("--k", String(s.contrast));
   root.dataset.density = s.density;
-  root.toggleAttribute("data-solid", s.reduceTransparency);
+  if (s.textSize === "large") root.dataset.text = "large";
+  else delete root.dataset.text;
 }

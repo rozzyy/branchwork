@@ -13,6 +13,8 @@ import { useGithubAccounts } from "../../github/store";
 import { useSessions, type AgentSession } from "../../agents/sessions";
 import { CLI_REGISTRY } from "../../agents/registry";
 import { useStage } from "../../state/stage";
+import { useWorktrees } from "../../state/worktrees";
+import { useRepos } from "../../state/repos";
 import { Button } from "../../ui/Button";
 import { toast } from "../../ui/toast";
 import { errorMessage } from "../../ipc/errors";
@@ -23,6 +25,7 @@ import {
   type InboxState,
 } from "./inboxState";
 import "./inbox.css";
+import { attentionItems, type InboxAttention } from "../home/attention";
 
 type InboxFilter = "all" | "review" | "mention" | "ci" | "agents";
 type AgentEvent = { kind: "agent"; key: string; session: AgentSession; event: "waiting" | "done"; updatedAt: number };
@@ -182,6 +185,12 @@ export function InboxView() {
   ].filter((item) => !dismissedKeys.has(item.key) && (state.snoozedUntil[item.key] ?? 0) <= Date.now())
     .sort((left, right) => right.updatedAt - left.updatedAt),
   [agentEvents, batch.notifications, dismissedKeys, snoozeClock, state.snoozedUntil]);
+  const attentionOrder = useMemo(() => {
+    const inbox: InboxAttention[] = allItems.map((item) => item.kind === "agent"
+      ? { id:item.key, kind:"agent", title:t(item.event === "waiting" ? "inbox.agentWaiting" : "inbox.agentDone", {agent:CLI_REGISTRY[item.session.cliId].name}), meta:item.session.worktreePath, at:item.updatedAt }
+      : { id:item.key, kind:item.notification.reason === "review_requested" ? "review" : item.notification.reason === "mention" || item.notification.reason === "team_mention" ? "mention" : item.notification.reason === "ci_activity" ? "ci" : "review", title:item.notification.title, meta:`${item.notification.owner}/${item.notification.repo}`, at:item.updatedAt });
+    return new Map(attentionItems(inbox, []).map((item, index) => [item.id, index]));
+  }, [allItems]);
 
   const visibleItems = useMemo(() => allItems.filter((item) => {
     if (filter === "agents") return item.kind === "agent";
@@ -190,7 +199,7 @@ export function InboxView() {
     if (filter === "mention") return item.notification.reason === "mention" || item.notification.reason === "team_mention";
     if (filter === "ci") return item.notification.reason === "ci_activity";
     return true;
-  }), [allItems, filter]);
+  }).sort((a,b) => (attentionOrder.get(a.key) ?? 0) - (attentionOrder.get(b.key) ?? 0)), [allItems, filter, attentionOrder]);
   const selectedItem = useMemo(
     () => visibleItems.find((item) => item.key === selectedKey) ?? visibleItems[0] ?? null,
     [visibleItems, selectedKey],
@@ -250,6 +259,31 @@ export function InboxView() {
       ).catch((failure: unknown) => toast({ title: errorMessage(failure), icon: "⚠" }));
       return;
     }
+    if (item.event === "done") {
+      void (async () => {
+        const path = item.session.worktreePath;
+        const repos = useRepos.getState();
+        const project = [...repos.projects].filter((candidate) => path === candidate.localPath || path.startsWith(candidate.localPath.replace(/\/$/, "") + "/"))
+          .sort((a,b) => b.localPath.length-a.localPath.length)[0];
+        if (project && project.id !== repos.activeProjectId) {
+          repos.selectProject(project.id);
+          if (useRepos.getState().activeProjectId !== project.id) return;
+          await new Promise<void>((resolve) => {
+            const timer = window.setTimeout(() => { stop(); resolve(); }, 5000);
+            const stop = useWorktrees.subscribe((state) => {
+              if (state.projectId !== project.id || state.loading) return;
+              window.clearTimeout(timer);
+              stop();
+              resolve();
+            });
+          });
+        }
+        useWorktrees.getState().select(path);
+        if (useWorktrees.getState().activePath !== path) return;
+        useStage.getState().setLayout(["agents", "changes"]);
+      })();
+      return;
+    }
     const session = useSessions.getState().sessions.find((candidate) => candidate.id === item.session.id);
     if (session && session.slot !== "full") useSessions.getState().toggleSlot(session.id, "full");
     go("agents");
@@ -295,7 +329,7 @@ export function InboxView() {
             <h2>{selectedItem.kind === "github" ? selectedItem.notification.title : t(selectedItem.event === "waiting" ? "inbox.agentWaiting" : "inbox.agentDone", { agent: CLI_REGISTRY[selectedItem.session.cliId].name })}</h2>
             <p>{selectedItem.kind === "github" ? `${selectedItem.notification.owner}/${selectedItem.notification.repo} · ${selectedItem.notification.reason.replaceAll("_", " ")}` : `${selectedItem.session.profile.slug} · ${selectedItem.session.worktreePath}`}</p>
             <small>{selectedItem.kind === "github" ? relativeTime(selectedItem.notification.updatedAt) : t("inbox.agentSource")}</small>
-            <div className="inbox-detail-actions"><Button size="sm" onClick={() => openItem(selectedItem)}>{selectedItem.kind === "agent" ? t("inbox.replyAgent") : selectedItem.notification.page === "pull" || selectedItem.notification.page === "pulls" ? t("inbox.reviewNow") : selectedItem.notification.page === "actions" ? t("inbox.viewWorkflow") : t("inbox.openThread")}</Button>{(selectedItem.kind === "agent" || selectedItem.notification.unread) && <Button size="sm" variant="ghost" onClick={() => void markDone(selectedItem)}>{t("inbox.markDone")}</Button>}</div>
+            <div className="inbox-detail-actions"><Button size="sm" onClick={() => openItem(selectedItem)}>{selectedItem.kind === "agent" ? selectedItem.event === "done" ? t("inbox.reviewChanges") : t("inbox.replyAgent") : selectedItem.notification.page === "pull" || selectedItem.notification.page === "pulls" ? t("inbox.reviewNow") : selectedItem.notification.page === "actions" ? t("inbox.viewWorkflow") : t("inbox.openThread")}</Button>{(selectedItem.kind === "agent" || selectedItem.notification.unread) && <Button size="sm" variant="ghost" onClick={() => void markDone(selectedItem)}>{t("inbox.markDone")}</Button>}</div>
           </> : <div className="inbox-empty"><span aria-hidden="true">◉</span><p>{t("inbox.empty")}</p></div>}
         </article>
       </div>
