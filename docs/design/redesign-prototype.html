@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branchwork Redesign Prototype v3</title>
+<style>
+/* ============================================================
+   Branchwork design system v0.1 (prototype)
+   Tokens → semantic roles → components. Solid surfaces, AA contrast.
+   ============================================================ */
+:root {
+  --hue: 250;              /* accent hue, kept from the current app */
+  --tint: 265;             /* neutral tint */
+  /* Neutrals (dark) */
+  --bg:        oklch(.17 .010 var(--tint));
+  --surface:   oklch(.205 .011 var(--tint));
+  --raised:    oklch(.245 .012 var(--tint));
+  --overlay:   oklch(.27 .013 var(--tint));
+  --hover:     oklch(1 0 0 / .06);
+  --selected:  oklch(.68 .17 var(--hue) / .18);
+  --border:    oklch(1 0 0 / .11);
+  --border-strong: oklch(1 0 0 / .2);
+  --text:      oklch(.96 .004 var(--tint));
+  --text-2:    oklch(.80 .010 var(--tint));
+  --text-3:    oklch(.70 .012 var(--tint));
+  /* Accent + semantic */
+  --accent:    oklch(.70 .16 var(--hue));
+  --accent-strong: oklch(.62 .18 var(--hue));
+  --on-accent: oklch(.16 .02 var(--hue));
+  --success:   oklch(.76 .15 155);
+  --warning:   oklch(.82 .14 80);
+  --danger:    oklch(.72 .17 25);
+  --info:      oklch(.76 .12 230);
+  --agent:     oklch(.76 .14 300);
+  --success-bg: oklch(.76 .15 155 / .14);
+  --warning-bg: oklch(.82 .14 80 / .14);
+  --danger-bg:  oklch(.72 .17 25 / .14);
+  --agent-bg:   oklch(.76 .14 300 / .14);
+  --diff-add:  oklch(.76 .15 155 / .14);
+  --diff-del:  oklch(.72 .17 25 / .14);
+  /* Type */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --fs-meta: 12px; --fs-body: 13px; --fs-title: 15px; --fs-h2: 18px; --fs-h1: 24px;
+  --lh: 1.45;
+  /* Space (4px grid) */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  /* Shape */
+  --r-control: 6px; --r-panel: 10px; --r-pill: 999px;
+  --row: 30px;
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --shadow: 0 12px 32px -8px oklch(0 0 0 / .5);
+  --dur: 150ms;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg:        oklch(.975 .004 var(--tint));
+  --surface:   oklch(1 0 0);
+  --raised:    oklch(.965 .005 var(--tint));
+  --overlay:   oklch(1 0 0);
+  --hover:     oklch(0 0 0 / .045);
+  --selected:  oklch(.55 .18 var(--hue) / .12);
+  --border:    oklch(0 0 0 / .11);
+  --border-strong: oklch(0 0 0 / .2);
+  --text:      oklch(.22 .012 var(--tint));
+  --text-2:    oklch(.40 .014 var(--tint));
+  --text-3:    oklch(.49 .014 var(--tint));
+  --accent:    oklch(.53 .19 var(--hue));
+  --accent-strong: oklch(.47 .19 var(--hue));
+  --on-accent: #fff;
+  --success:   oklch(.50 .14 155);
+  --warning:   oklch(.55 .13 70);
+  --danger:    oklch(.53 .19 25);
+  --info:      oklch(.50 .13 240);
+  --agent:     oklch(.50 .17 300);
+  --shadow: 0 12px 32px -10px oklch(0 0 0 / .22);
+  color-scheme: light;
+}
+:root[data-density="compact"] { --row: 26px; }
+:root[data-density="comfy"] { --row: 34px; }
+:root[data-text="large"] { --fs-meta: 13px; --fs-body: 14.5px; --fs-title: 16.5px; --fs-h2: 20px; --fs-h1: 26px; }
+@media (prefers-reduced-motion: reduce) { :root { --dur: 0ms; } }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: var(--fs-body)/var(--lh) var(--font); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: none; box-shadow: var(--focus); border-radius: var(--r-control); }
+/* Visible, thin scrollbars (never hidden) */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; border: 2px solid var(--bg); }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+kbd { font: 500 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--text-2); background: var(--raised); }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+.muted { color: var(--text-2); } .faint { color: var(--text-3); }
+h1, h2, h3 { margin: 0; line-height: 1.25; }
+
+/* ---------- Components ---------- */
+.btn { display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 12px; border-radius:var(--r-control); border:1px solid var(--border-strong); background:var(--raised); cursor:pointer; white-space:nowrap; transition: background var(--dur); }
+.btn:hover { background: var(--overlay); }
+.btn.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:600; }
+.btn.primary:hover { background:var(--accent-strong); border-color:var(--accent-strong); }
+.btn.ghost { background:transparent; border-color:transparent; }
+.btn.ghost:hover { background:var(--hover); }
+.btn.danger { color: var(--danger); }
+.btn.sm { height:24px; padding:0 8px; font-size:var(--fs-meta); }
+.btn[disabled] { opacity:.45; cursor:not-allowed; }
+.icon-btn { width:28px; height:28px; display:inline-grid; place-items:center; border-radius:var(--r-control); border:1px solid transparent; background:transparent; cursor:pointer; color:var(--text-2); }
+.icon-btn:hover { background:var(--hover); color:var(--text); }
+.chip { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:var(--r-pill); font-size:var(--fs-meta); border:1px solid var(--border); color:var(--text-2); white-space:nowrap; }
+.status { display:inline-flex; align-items:center; gap:5px; font-size:var(--fs-meta); font-weight:600; white-space:nowrap; }
+.status.ok { color:var(--success); } .status.warn { color:var(--warning); } .status.bad { color:var(--danger); } .status.agent { color:var(--agent); } .status.info { color:var(--info); }
+.count { min-width:20px; height:18px; padding:0 6px; border-radius:var(--r-pill); font-size:11px; font-weight:700; display:inline-grid; place-items:center; background:var(--raised); color:var(--text-2); border:1px solid var(--border); }
+.count.bad { background:var(--danger); color:#fff; border-color:transparent; }
+.count.warn { background:var(--warning); color:oklch(.2 .03 80); border-color:transparent; }
+.count.agent { background:var(--agent); color:#fff; border-color:transparent; }
+.input { height:30px; padding:0 10px; border-radius:var(--r-control); border:1px solid var(--border-strong); background:var(--bg); width:100%; }
+.input::placeholder { color: var(--text-3); }
+textarea.input { height:auto; padding:8px 10px; resize:vertical; }
+.seg { display:inline-flex; border:1px solid var(--border-strong); border-radius:var(--r-control); overflow:hidden; }
+.seg button { border:0; background:transparent; height:26px; padding:0 10px; cursor:pointer; color:var(--text-2); }
+.seg button[aria-pressed="true"] { background:var(--selected); color:var(--text); font-weight:600; }
+.switch { position:relative; width:34px; height:20px; border-radius:999px; background:var(--border-strong); border:0; cursor:pointer; flex:none; }
+.switch::after { content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left var(--dur); }
+.switch[aria-checked="true"] { background:var(--accent); }
+.switch[aria-checked="true"]::after { left:16px; }
+.panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-panel); }
+.meter { display:inline-block; width:44px; height:6px; border-radius:6px; background:var(--border-strong); overflow:hidden; vertical-align:middle; }
+.meter > i { display:block; height:100%; border-radius:6px; background:var(--success); }
+.tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); }
+.tab { border:0; background:transparent; padding:8px 12px; cursor:pointer; color:var(--text-2); border-bottom:2px solid transparent; margin-bottom:-1px; display:inline-flex; gap:6px; align-items:center; }
+.tab[aria-selected="true"] { color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
+.empty { display:grid; place-items:center; text-align:center; color:var(--text-2); padding:var(--s6); gap:var(--s2); }
+
+/* ---------- App shell ---------- */
+.app { display:grid; grid-template-rows:44px 1fr auto; height:calc(100vh - 34px); }
+.titlebar { display:flex; align-items:center; gap:var(--s2); padding:0 var(--s3); border-bottom:1px solid var(--border); background:var(--surface); }
+.traffic { display:flex; gap:7px; margin-right:var(--s2); }
+.traffic i { width:12px; height:12px; border-radius:50%; background:var(--border-strong); }
+.crumb { display:flex; align-items:center; gap:4px; }
+.crumb button { border:0; background:transparent; padding:4px 6px; border-radius:var(--r-control); cursor:pointer; color:var(--text-2); }
+.crumb button:hover { background:var(--hover); color:var(--text); }
+.crumb button.cur { color:var(--text); font-weight:600; }
+.crumb .sep { color:var(--text-3); }
+.search { flex:0 1 380px; margin:0 auto; display:flex; align-items:center; gap:8px; height:30px; padding:0 10px; border:1px solid var(--border-strong); border-radius:var(--r-control); background:var(--bg); color:var(--text-3); cursor:pointer; }
+.search span { flex:1; text-align:left; }
+.body { display:grid; grid-template-columns:232px 1fr; min-height:0; }
+.app[data-sidebar="hidden"] .body { grid-template-columns:0 1fr; }
+.app[data-sidebar="hidden"] .sidebar { visibility:hidden; }
+.sidebar { border-right:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+.side-scroll { overflow:auto; padding:var(--s3) var(--s2); display:flex; flex-direction:column; gap:2px; flex:1; }
+.project-btn { display:flex; align-items:center; gap:10px; width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--r-panel); background:var(--raised); cursor:pointer; text-align:left; }
+.project-btn:hover { border-color:var(--border-strong); }
+.mark { width:22px; height:22px; border-radius:6px; display:grid; place-items:center; font-weight:700; font-size:12px; color:#fff; flex:none; }
+.project-btn .pn { font-weight:600; display:block; }
+.project-btn .pg { font-size:var(--fs-meta); color:var(--text-2); }
+.side-h { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--text-3); padding:var(--s3) 10px var(--s1); display:flex; justify-content:space-between; align-items:center; }
+.row { display:flex; align-items:center; gap:8px; min-height:var(--row); padding:0 10px; border-radius:var(--r-control); border:0; background:transparent; cursor:pointer; text-align:left; width:100%; color:var(--text); }
+.row:hover { background:var(--hover); }
+.row[aria-current="page"], .row[aria-current="true"] { background:var(--selected); font-weight:600; }
+.row .ic { width:18px; text-align:center; color:var(--text-2); flex:none; }
+.row .grow { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row .k { font-size:11px; color:var(--text-3); }
+.wt-sub { font-size:11.5px; color:var(--text-2); font-weight:400; }
+.side-foot { border-top:1px solid var(--border); padding:var(--s2); display:flex; gap:4px; }
+.main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+.banner { display:flex; align-items:center; gap:var(--s2); margin:var(--s3) var(--s3) 0; padding:10px var(--s3); border-radius:var(--r-panel); background:var(--warning-bg); border:1px solid color-mix(in oklch, var(--warning) 45%, transparent); }
+.banner .grow { flex:1; }
+.stage { flex:1; display:grid; grid-template-columns:1fr; gap:var(--s3); padding:var(--s3); min-height:0; }
+.stage.split { grid-template-columns:1fr 1fr; }
+.pane { display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-panel); overflow:hidden; }
+.pane.focus { border-color: color-mix(in oklch, var(--accent) 55%, var(--border)); }
+.pane-head { display:flex; align-items:center; gap:var(--s2); padding:0 var(--s2) 0 var(--s3); height:44px; border-bottom:1px solid var(--border); flex:none; }
+.pane-head h1 { font-size:var(--fs-title); font-weight:650; }
+.pane-head .grow { flex:1; }
+.pane-body { flex:1; overflow:auto; min-height:0; }
+.dock { border-top:1px solid var(--border); background:var(--surface); display:none; flex-direction:column; height:220px; }
+.dock.open { display:flex; }
+.dock-head { display:flex; align-items:center; gap:var(--s2); padding:0 var(--s2) 0 var(--s3); height:34px; border-bottom:1px solid var(--border); }
+.term { flex:1; overflow:auto; background:oklch(.13 .008 var(--tint)); color:oklch(.9 .01 var(--tint)); font:12.5px/1.55 var(--mono); padding:10px 12px; white-space:pre-wrap; }
+:root[data-theme="light"] .term { background:oklch(.2 .01 var(--tint)); }
+.term .p { color:oklch(.78 .14 155); } .term .d { color:oklch(.7 .02 var(--tint)); } .term .a { color:oklch(.8 .12 300); }
+.statusbar { display:flex; align-items:center; gap:var(--s3); height:26px; padding:0 var(--s3); border-top:1px solid var(--border); background:var(--surface); font-size:var(--fs-meta); color:var(--text-2); }
+.statusbar .grow { flex:1; }
+
+/* ---------- Screens ---------- */
+.home { padding:var(--s5); display:grid; gap:var(--s4); max-width:1100px; }
+.home-top { display:flex; align-items:flex-end; gap:var(--s4); }
+.home-top h2 { font-size:var(--fs-h1); font-weight:700; }
+.kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s3); }
+.kpi { padding:var(--s4); }
+.kpi b { font-size:22px; display:block; }
+.att-item { display:grid; grid-template-columns:28px 1fr auto; gap:var(--s3); align-items:center; padding:var(--s3) var(--s4); border-top:1px solid var(--border); }
+.att-item:first-child { border-top:0; }
+.att-ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; }
+.att-actions { display:flex; gap:6px; }
+.cols2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--s3); }
+.list-row { display:flex; align-items:center; gap:var(--s2); padding:8px var(--s4); border-top:1px solid var(--border); }
+.list-row:first-of-type { border-top:0; }
+.section-h { display:flex; align-items:center; gap:var(--s2); padding:var(--s3) var(--s4); border-bottom:1px solid var(--border); font-weight:650; }
+.section-h .grow { flex:1; }
+/* Changes */
+.changes { display:grid; grid-template-columns:minmax(240px, 320px) 1fr; height:100%; }
+.changes-left { border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0; }
+.file-row { display:flex; align-items:center; gap:8px; min-height:var(--row); padding:0 var(--s3); cursor:pointer; border:0; background:transparent; width:100%; text-align:left; }
+.file-row:hover { background:var(--hover); }
+.file-row[aria-current="true"] { background:var(--selected); }
+.file-row .fn { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.st-letter { font:700 11px var(--mono); width:16px; text-align:center; }
+.st-M { color:var(--warning); } .st-A { color:var(--success); } .st-D { color:var(--danger); }
+.commit-box { margin-top:auto; border-top:1px solid var(--border); padding:var(--s3); display:grid; gap:var(--s2); }
+.commit-actions { display:flex; gap:6px; }
+.diff { font:12.5px/1.6 var(--mono); }
+.diff .ln { display:grid; grid-template-columns:44px 44px 1fr; }
+.diff .ln span:nth-child(-n+2) { color:var(--text-3); text-align:right; padding-right:10px; user-select:none; }
+.diff .add { background:var(--diff-add); } .diff .del { background:var(--diff-del); }
+.diff .hunk { color:var(--info); padding:4px 12px; background:var(--raised); }
+.diff-head { display:flex; align-items:center; gap:var(--s2); padding:8px var(--s3); border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); }
+/* History */
+.history { display:grid; grid-template-columns:1fr 300px; height:100%; }
+.commits { overflow:auto; }
+.commit { display:grid; grid-template-columns:56px 1fr auto auto; gap:var(--s3); align-items:center; min-height:34px; padding:0 var(--s3); border:0; border-bottom:1px solid var(--border); background:transparent; width:100%; text-align:left; cursor:pointer; }
+.commit:hover { background:var(--hover); }
+.commit[aria-current="true"] { background:var(--selected); }
+.lane { position:relative; height:34px; }
+.lane i { position:absolute; top:0; bottom:0; width:2px; }
+.lane b { position:absolute; top:12px; width:10px; height:10px; border-radius:50%; border:2px solid var(--surface); }
+.ref { font-size:11px; padding:1px 6px; border-radius:4px; border:1px solid var(--border-strong); margin-right:4px; }
+.ref.head { background:var(--selected); border-color:transparent; color:var(--text); font-weight:600; }
+.inspector { border-left:1px solid var(--border); padding:var(--s4); overflow:auto; display:grid; gap:var(--s3); align-content:start; }
+.blame-line { display:grid; grid-template-columns:150px 40px 1fr; font:12.5px/1.7 var(--mono); }
+.blame-line .who { color:var(--text-2); font-family:var(--font); font-size:12px; padding:0 8px; border-right:1px solid var(--border); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.blame-line .n { color:var(--text-3); text-align:right; padding-right:10px; }
+.rb-row { display:grid; grid-template-columns:28px 110px 70px 1fr 60px; gap:var(--s2); align-items:center; padding:6px var(--s3); border-bottom:1px solid var(--border); }
+/* Files */
+.files { display:grid; grid-template-columns:240px 1fr; height:100%; }
+.tree { border-right:1px solid var(--border); overflow:auto; padding:var(--s2) 0; }
+.code { font:12.5px/1.7 var(--mono); }
+.code .cl { display:grid; grid-template-columns:48px 1fr; }
+.code .cl:hover { background:var(--hover); }
+.code .cl span:first-child { color:var(--text-3); text-align:right; padding-right:12px; user-select:none; }
+.kw { color:var(--agent); } .str { color:var(--success); } .cm { color:var(--text-3); } .fnc { color:var(--info); }
+/* Agents */
+.agents { display:grid; grid-template-columns:1fr 1fr; gap:var(--s3); padding:var(--s3); height:100%; }
+.agents > .agent { display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--r-panel); overflow:hidden; min-height:0; }
+.agent-head { display:flex; align-items:center; gap:var(--s2); flex-wrap:wrap; padding:8px var(--s3); border-bottom:1px solid var(--border); background:var(--raised); }
+.dot { width:8px; height:8px; border-radius:50%; flex:none; }
+.saver { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:var(--r-control); border:1px solid var(--border-strong); font-size:11.5px; background:transparent; cursor:pointer; color:var(--text-2); }
+.saver i { width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.35; }
+.saver[data-on="true"] { color:var(--success); border-color:color-mix(in oklch, var(--success) 45%, transparent); }
+.saver[data-on="true"] i { opacity:1; }
+.quota { display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px; border-radius:var(--r-control); border:1px solid var(--border-strong); font-size:11.5px; background:transparent; cursor:pointer; color:var(--text-2); }
+.quota b { color:var(--text); }
+/* GitHub */
+.gh-row { display:grid; grid-template-columns:22px 1fr auto; gap:var(--s3); align-items:center; padding:10px var(--s4); border-bottom:1px solid var(--border); }
+/* Settings */
+.settings { padding:var(--s5); max-width:760px; display:grid; gap:var(--s4); }
+.set-row { display:flex; align-items:center; gap:var(--s4); padding:var(--s3) var(--s4); border-top:1px solid var(--border); }
+.set-row:first-of-type { border-top:0; }
+.set-row .grow { flex:1; }
+.set-row small { display:block; color:var(--text-2); }
+/* Conflicts */
+.conf { display:grid; grid-template-columns:1fr 1fr 1fr; height:100%; }
+.conf > div { border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0; }
+.conf h3 { font-size:var(--fs-meta); text-transform:uppercase; letter-spacing:.04em; color:var(--text-2); padding:8px var(--s3); border-bottom:1px solid var(--border); }
+.block { margin:var(--s2) var(--s3); border-radius:var(--r-control); padding:8px; font:12.5px/1.6 var(--mono); border:1px solid var(--border); cursor:pointer; }
+.block.ours { background:var(--diff-del); } .block.theirs { background:var(--diff-add); }
+.block.res { border-style:dashed; color:var(--text-2); font-family:var(--font); }
+
+/* ---------- Overlays ---------- */
+.scrim { position:fixed; inset:0; background:oklch(0 0 0 / .35); display:none; z-index:50; }
+.scrim.open { display:block; }
+.palette { position:fixed; top:12vh; left:50%; transform:translateX(-50%); width:min(620px, 92vw); background:var(--overlay); border:1px solid var(--border-strong); border-radius:12px; box-shadow:var(--shadow); z-index:60; display:none; overflow:hidden; }
+.palette.open { display:block; }
+.palette input { width:100%; border:0; border-bottom:1px solid var(--border); background:transparent; padding:14px 16px; font-size:15px; outline:none; }
+.pal-list { max-height:340px; overflow:auto; padding:6px; }
+.pal-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; cursor:pointer; }
+.pal-item[aria-selected="true"] { background:var(--selected); }
+.pal-item .g { margin-left:auto; color:var(--text-3); font-size:var(--fs-meta); }
+.pal-foot { display:flex; gap:var(--s4); padding:8px 14px; border-top:1px solid var(--border); font-size:var(--fs-meta); color:var(--text-2); }
+.sheet { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(560px, 92vw); max-height:80vh; overflow:auto; background:var(--overlay); border:1px solid var(--border-strong); border-radius:12px; box-shadow:var(--shadow); z-index:60; display:none; padding:var(--s5); }
+.sheet.open { display:block; }
+.sheet table { width:100%; border-collapse:collapse; margin-top:var(--s3); }
+.sheet td { padding:7px 4px; border-bottom:1px solid var(--border); }
+.sheet td:last-child { text-align:right; }
+.menu { position:fixed; z-index:70; min-width:240px; background:var(--overlay); border:1px solid var(--border-strong); border-radius:10px; box-shadow:var(--shadow); padding:6px; display:none; }
+.menu.open { display:block; }
+.menu .mh { font-size:11px; text-transform:uppercase; color:var(--text-3); padding:6px 8px 4px; letter-spacing:.04em; }
+.menu button { display:flex; width:100%; gap:8px; align-items:center; border:0; background:transparent; padding:7px 8px; border-radius:6px; cursor:pointer; text-align:left; }
+.menu button:hover, .menu button:focus-visible { background:var(--hover); }
+.menu hr { border:0; border-top:1px solid var(--border); margin:4px 0; }
+.toast { position:fixed; bottom:var(--s5); left:50%; transform:translateX(-50%); background:var(--overlay); border:1px solid var(--border-strong); box-shadow:var(--shadow); border-radius:10px; padding:10px 14px; display:none; gap:var(--s3); align-items:center; z-index:80; }
+.toast.open { display:flex; }
+
+/* ---------- Mode switch (prototype chrome) ---------- */
+.proto-bar { height:34px; display:flex; align-items:center; justify-content:center; gap:6px; background:var(--raised); border-bottom:1px solid var(--border); font-size:var(--fs-meta); }
+.proto-bar .lbl { color:var(--text-3); margin-right:6px; }
+.proto-bar button { border:0; background:transparent; border-radius:999px; padding:5px 12px; cursor:pointer; color:var(--text-2); }
+.proto-bar button[aria-pressed="true"] { background:var(--accent); color:var(--on-accent); font-weight:600; }
+
+/* ---------- Design system page ---------- */
+.ds { display:none; height:calc(100vh - 34px); overflow:auto; }
+body[data-mode="ds"] .ds { display:block; }
+body[data-mode="ds"] .app { display:none; }
+.ds-wrap { max-width:1080px; margin:0 auto; padding:var(--s6) var(--s5) 120px; display:grid; gap:var(--s6); }
+.ds h1 { font-size:30px; }
+.ds h2 { font-size:var(--fs-h2); margin-bottom:var(--s3); }
+.ds p.lead { color:var(--text-2); max-width:70ch; margin:8px 0 0; }
+.swatches { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:var(--s3); }
+.sw { border:1px solid var(--border); border-radius:var(--r-panel); overflow:hidden; background:var(--surface); }
+.sw .c { height:56px; display:grid; place-items:center; font-weight:600; }
+.sw .m { padding:8px 10px; font-size:var(--fs-meta); }
+.sw .m code { font-family:var(--mono); color:var(--text-2); }
+.type-row { display:grid; grid-template-columns:140px 1fr; gap:var(--s4); align-items:baseline; padding:10px 0; border-bottom:1px solid var(--border); }
+.spaces { display:flex; gap:var(--s4); align-items:flex-end; }
+.spaces div { background:var(--accent); opacity:.7; border-radius:3px; }
+.comp-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:var(--s3); }
+.comp { padding:var(--s4); display:grid; gap:var(--s3); align-content:start; }
+.comp h3 { font-size:var(--fs-meta); text-transform:uppercase; letter-spacing:.05em; color:var(--text-3); }
+.comp .demo { display:flex; flex-wrap:wrap; gap:var(--s2); align-items:center; }
+.rules { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:var(--s3); }
+.rule { padding:var(--s4); }
+.rule b { display:block; margin-bottom:4px; }
+.do { color:var(--success); font-weight:600; } .dont { color:var(--danger); font-weight:600; }
+.fake-focus { box-shadow: var(--focus); }
+
+/* ---------- v2: flush, square split panes for agents & terminal (user request) ---------- */
+.stage.split { gap:0; padding:0; }
+.stage.split .pane { border-radius:0; border:0; border-right:1px solid var(--border); }
+.stage.split .pane:last-child { border-right:0; }
+.stage.split .pane.focus { box-shadow: inset 0 2px 0 var(--accent); }
+.stage:has(.pane[aria-label="Agents"]:only-child), .stage:has(.pane[aria-label="Terminal"]:only-child) { padding:0; }
+.stage:has(.pane[aria-label="Agents"]:only-child) .pane, .stage:has(.pane[aria-label="Terminal"]:only-child) .pane { border-radius:0; border:0; }
+.agents { gap:0; padding:0; }
+.agents > .agent { border-radius:0; border:0; border-right:1px solid var(--border); }
+.agents > .agent:last-child { border-right:0; }
+.agent-head { padding:4px 8px; gap:6px; }
+.agents > .agent .term, .pane .term { padding:6px 8px; }
+.term-split { display:grid; grid-template-columns:1fr 1fr; flex:1; min-height:0; }
+.term-split .term { border-right:1px solid var(--border); }
+.term-split .term:last-child { border-right:0; }
+.dock .term { padding:6px 8px; }
+button.chip { background:transparent; cursor:pointer; }
+button.chip:hover { background:var(--hover); color:var(--text); }
+</style>
+</head>
+<body data-mode="app">
+<div class="proto-bar" role="group" aria-label="Prototype view"><span class="lbl">Branchwork redesign · throwaway prototype · v3</span>
+  <button id="modeApp" aria-pressed="true">App prototype</button>
+  <button id="modeDs" aria-pressed="false">Design system</button>
+  <button id="themeBtn2">☾ / ☀</button>
+</div>
+
+<!-- ======================= DESIGN SYSTEM ======================= -->
+<main class="ds" aria-label="Design system">
+  <div class="ds-wrap">
+    <header>
+      <span class="chip">Branchwork design system · v0.1 · prototype</span>
+      <h1 style="margin-top:12px">Calm, readable, reachable</h1>
+      <p class="lead">Three principles: <b>one place for context</b> (always clear where you are), <b>show tools when they're needed</b> (banners, not hidden menus), and <b>accessible by default</b> (WCAG 2.2 AA contrast, visible focus, keyboard everywhere, status never by color alone). Switch the theme (☾ / ☀ in the top bar) to test both modes.</p>
+    </header>
+
+    <section>
+      <h2>Color: surfaces &amp; text</h2>
+      <div class="swatches" id="sw-neutral"></div>
+      <p class="faint" style="margin-top:8px">Surfaces are solid (no glass). The contrast ratio is computed live in the browser against <code>--surface</code>; text must be ≥ 4.5:1.</p>
+    </section>
+
+    <section>
+      <h2>Color: accent &amp; status</h2>
+      <div class="swatches" id="sw-semantic"></div>
+      <p class="faint" style="margin-top:8px">The accent keeps the current app's blue (hue 250). <span style="color:var(--agent)">Purple</span> is reserved for anything AI/agent.</p>
+    </section>
+
+    <section>
+      <h2>Typography</h2>
+      <div class="type-row"><span class="faint">H1 · 24 / 700</span><span style="font-size:var(--fs-h1);font-weight:700">Good afternoon, Rozzy</span></div>
+      <div class="type-row"><span class="faint">H2 · 18 / 650</span><span style="font-size:var(--fs-h2);font-weight:650">Needs your attention</span></div>
+      <div class="type-row"><span class="faint">Title · 15 / 650</span><span style="font-size:var(--fs-title);font-weight:650">Changes · main</span></div>
+      <div class="type-row"><span class="faint">Body · 13 / 400</span><span>Stage files, write a message, then commit. This is the minimum size for reading.</span></div>
+      <div class="type-row"><span class="faint">Meta · 12 / 400</span><span style="font-size:var(--fs-meta)" class="muted">Updated 12m ago · 4 files · ↑1 ahead</span></div>
+      <div class="type-row"><span class="faint">Mono · 12.5</span><span class="mono">git commit -m "feat: quota meter"</span></div>
+      <p class="faint" style="margin-top:8px">No text below 12px (today: 9–11px in ~90 places). Settings → Text size "Large" raises the whole scale.</p>
+    </section>
+
+    <section>
+      <h2>Spacing, shape &amp; size</h2>
+      <div class="spaces">
+        <div style="width:4px;height:4px"></div><div style="width:8px;height:8px"></div><div style="width:12px;height:12px"></div><div style="width:16px;height:16px"></div><div style="width:24px;height:24px"></div><div style="width:32px;height:32px"></div>
+        <span class="faint">4 · 8 · 12 · 16 · 24 · 32 px</span>
+      </div>
+      <p class="muted" style="margin-top:12px">Radius: <b>6px</b> controls, <b>10px</b> panels/cards, <b>pill</b> only for chips. <b>Exception:</b> split panes, agent panes and terminals are <b>flush &amp; square</b>: no radius, no gap, separated by a 1px line, with thin headers (4–8px padding) so there is more room for content. Click targets at least <b>24×24px</b> (WCAG 2.5.8), buttons 28px, list rows 30px (26/34 for compact/comfy).</p>
+    </section>
+
+    <section>
+      <h2>Components</h2>
+      <div class="comp-grid">
+        <div class="panel comp"><h3>Buttons</h3><div class="demo"><button class="btn primary">Commit 4 files</button><button class="btn">Sync</button><button class="btn ghost">Cancel</button><button class="btn danger">Discard</button><button class="btn" disabled>Disabled</button></div><div class="demo"><button class="btn fake-focus">Keyboard focus</button><span class="faint">2px ring + offset, always visible</span></div></div>
+        <div class="panel comp"><h3>Status: icon + text, not just color</h3><div class="demo"><span class="status ok">✓ Clean</span><span class="status warn">● 4 changes</span><span class="status bad">⚠ 2 conflicts</span><span class="status agent">✦ Agent running</span><span class="status info">↑1 ahead</span></div><div class="demo"><span class="count">4</span><span class="count warn">3</span><span class="count bad">2</span><span class="count agent">1</span></div></div>
+        <div class="panel comp"><h3>Inputs</h3><input class="input" placeholder="Commit message (⌘↵ to commit)"><div class="demo"><div class="seg"><button aria-pressed="true">Inline</button><button aria-pressed="false">Side by side</button></div><button class="switch" role="switch" aria-checked="true" aria-label="Example switch"></button></div></div>
+        <div class="panel comp"><h3>Contextual banner</h3><div class="banner" style="margin:0">⚠ <b>Rebase paused at 3/7</b><span class="grow"></span><button class="btn sm primary">Resolve</button></div><span class="faint">Appears on every screen while an operation is in progress.</span></div>
+        <div class="panel comp"><h3>Agent: quota &amp; savers</h3><div class="demo"><button class="quota"><b>5h</b> 42% <span class="meter"><i style="width:42%"></i></span> · 2h 5m</button></div><div class="demo"><button class="saver" data-on="true"><i></i>RTK on</button><button class="saver" data-on="false"><i></i>Caveman off</button><button class="saver"><i></i>RTK n/a</button></div></div>
+        <div class="panel comp"><h3>Tabs &amp; keyboard</h3><div class="tabs" role="tablist"><button class="tab" role="tab" aria-selected="true">Graph</button><button class="tab" role="tab" aria-selected="false">File history</button><button class="tab" role="tab" aria-selected="false">Rewrite</button></div><div class="demo"><kbd>⌘K</kbd><kbd>⌘1</kbd>–<kbd>⌘7</kbd><kbd>Ctrl+`</kbd><kbd>?</kbd></div></div>
+        <div class="panel comp"><h3>Empty state</h3><div class="empty" style="padding:12px"><div style="font-size:22px">✓</div><b>Working tree clean</b><span>Nothing to commit. Agents can keep working here.</span></div></div>
+        <div class="panel comp"><h3>List row</h3><button class="row" aria-current="true"><span class="ic">⎇</span><span class="grow">main <span class="wt-sub">· 4 changed</span></span><span class="count warn">4</span></button><button class="row"><span class="ic">⎇</span><span class="grow">feat/agent-session <span class="wt-sub">· clean</span></span><span class="status agent">✦</span></button></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Accessibility rules</h2>
+      <div class="rules">
+        <div class="panel rule"><b>Contrast</b><span class="do">Do</span> body text ≥ 4.5:1, icons/borders that carry meaning ≥ 3:1. <span class="dont">Don't</span> put text on transparent glass.</div>
+        <div class="panel rule"><b>Keyboard</b><span class="do">Do</span> make everything reachable with Tab, focus visible, Esc closes overlays. <span class="dont">Don't</span> use single-key shortcuts without a modifier (WCAG 2.1.4); 1–9 → ⌘1–⌘7.</div>
+        <div class="panel rule"><b>Status</b><span class="do">Do</span> pair color with an icon and text ("⚠ 2 conflicts"). <span class="dont">Don't</span> rely on a colored dot alone.</div>
+        <div class="panel rule"><b>Scroll &amp; size</b><span class="do">Do</span> keep scrollbars visible and support "Large" text and density. <span class="dont">Don't</span> hide scrollbars or use text below 12px.</div>
+        <div class="panel rule"><b>Labels</b><span class="do">Do</span> give icon buttons an aria-label + tooltip, and announce banners and statuses (role=status). </div>
+        <div class="panel rule"><b>Motion</b><span class="do">Do</span> keep animations short (150ms) and turn them off under prefers-reduced-motion.</div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- ======================= APP PROTOTYPE ======================= -->
+<div class="app" id="app" data-sidebar="shown">
+  <header class="titlebar">
+    <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+    <button class="icon-btn" id="toggleSidebar" aria-label="Toggle sidebar (⌘B)" title="Toggle sidebar (⌘B)">◧</button>
+    <nav class="crumb" aria-label="Location">
+      <button id="crumbGroup" title="Switch group">Work</button><span class="sep">›</span>
+      <button id="crumbProject" title="Switch project">branchwork</button><span class="sep">›</span>
+      <button id="crumbWt" class="cur" title="Switch worktree">main ▾</button>
+    </nav>
+    <button class="search" id="openPalette" aria-label="Search or ask (⌘K)"><span>⌕ Search or ask… (end with ?)</span><kbd>⌘K</kbd></button>
+    <button class="icon-btn" id="themeBtn" aria-label="Toggle theme" title="Toggle theme">☾</button>
+    <button class="icon-btn" id="helpBtn" aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)">?</button>
+  </header>
+
+  <div class="body">
+    <aside class="sidebar" aria-label="Sidebar">
+      <div class="side-scroll">
+        <button class="project-btn" id="projectBtn" aria-haspopup="menu">
+          <span class="mark" style="background:oklch(.6 .16 250)">B</span>
+          <span style="flex:1;min-width:0"><span class="pn">branchwork</span><span class="pg">Work · 3 projects</span></span>
+          <span class="faint">▾</span>
+        </button>
+        <div class="side-h"><span>Worktrees</span><button class="icon-btn" style="width:22px;height:22px" aria-label="New worktree" title="New worktree" data-toast="Create a worktree: name the branch (e.g. feature/my-change)">＋</button></div>
+        <div id="wtList" role="list"></div>
+        <div class="side-h"><span>For this worktree</span></div>
+        <nav id="navList" aria-label="Screens"></nav>
+      </div>
+      <div class="side-foot">
+        <button class="row" data-go="settings" id="navSettings"><span class="ic">⚙</span><span class="grow">Settings</span></button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div id="bannerSlot" role="status" aria-live="polite"></div>
+      <div class="stage" id="stage"></div>
+      <section class="dock" id="dock" aria-label="Terminal dock">
+        <div class="dock-head"><b>❯ Terminal</b><span class="chip">main</span><span class="chip">+ tab</span><span style="flex:1"></span><span class="faint">unchanged · toggle with</span><kbd>Ctrl+`</kbd><button class="icon-btn" aria-label="Hide terminal dock" data-dock-close>✕</button></div>
+        <div class="term"><span class="p">rozzy@mac branchwork (main) $</span> git status -sb
+<span class="d">## main...origin/main [ahead 1]
+ M src/agents/quota.ts
+ M src/screens/agents/AgentsScreen.tsx
+ M src/i18n/en.ts
+?? src/agents/quota.test.ts</span>
+<span class="p">rozzy@mac branchwork (main) $</span> ▍</div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="statusbar">
+    <span id="sbWt">⎇ main</span><span class="status warn">● 4 changes</span><span>↑1 ↓0</span><span class="grow"></span>
+    <span class="status agent">✦ 2 agents · 1 waiting</span><button class="btn ghost sm" id="dockBtn">❯ Terminal <kbd>Ctrl+`</kbd></button>
+  </footer>
+</div>
+
+<!-- Overlays -->
+<div class="scrim" id="scrim"></div>
+<div class="palette" id="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+  <input id="palInput" role="combobox" aria-expanded="true" aria-controls="palList" placeholder="Type a command, screen, or worktree… end with ? to ask Claude" autocomplete="off">
+  <div class="pal-list" id="palList" role="listbox"></div>
+  <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> run</span><span><kbd>esc</kbd> close</span></div>
+</div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div style="display:flex;align-items:center"><h2 id="sheetTitle" style="font-size:var(--fs-h2)">Keyboard shortcuts</h2><span style="flex:1"></span><button class="icon-btn" aria-label="Close" data-close-sheet>✕</button></div>
+  <table>
+    <tr><td>Search / commands / ask Claude</td><td><kbd>⌘K</kbd></td></tr>
+    <tr><td>Go to Home … GitHub</td><td><kbd>⌘1</kbd> … <kbd>⌘7</kbd></td></tr>
+    <tr><td>Toggle terminal dock (unchanged)</td><td><kbd>Ctrl+`</kbd></td></tr>
+    <tr><td>Toggle sidebar</td><td><kbd>⌘B</kbd></td></tr>
+    <tr><td>Open beside (split)</td><td><kbd>⌘\</kbd></td></tr>
+    <tr><td>Changes</td><td><kbd>Ctrl+⇧G</kbd></td></tr>
+    <tr><td>Commit</td><td><kbd>⌘↵</kbd></td></tr>
+    <tr><td>This list</td><td><kbd>?</kbd></td></tr>
+  </table>
+  <p class="faint" style="margin-top:12px">Single-key shortcuts without a modifier are off by default (Settings → Keyboard).</p>
+</div>
+<div class="menu" id="menu" role="menu"></div>
+<div class="toast" id="toast" role="status"><span id="toastText"></span><button class="btn sm ghost" data-toast-close>Dismiss</button></div>
+
+
+
+<script>
+/* ---------------- Mock data ---------------- */
+const PROJECTS = [
+  { group:"Work", color:"oklch(.6 .16 250)", items:[{name:"branchwork", mark:"B"},{name:"api-gateway", mark:"A"},{name:"design-tokens", mark:"D"}] },
+  { group:"Personal", color:"oklch(.62 .15 155)", items:[{name:"dotfiles", mark:"D"}] },
+];
+const WORKTREES = [
+  { id:"main", branch:"main", state:"changes", changes:4, ahead:1, behind:0 },
+  { id:"saver", branch:"feat/agent-session-token-saver", state:"agent", changes:0, ahead:2, behind:0 },
+  { id:"m6", branch:"m6-stage-4", state:"rebase", changes:2, ahead:0, behind:3 },
+];
+const SCREENS = [
+  { id:"home", icon:"⌂", label:"Home", key:"⌘1" },
+  { id:"changes", icon:"±", label:"Changes", key:"⌘2" },
+  { id:"history", icon:"⎇", label:"History", key:"⌘3" },
+  { id:"files", icon:"▤", label:"Files", key:"⌘4" },
+  { id:"agents", icon:"✦", label:"Agents", key:"⌘5" },
+  { id:"terminal", icon:"❯_", label:"Terminal", key:"⌘6" },
+  { id:"github", icon:"◫", label:"GitHub", key:"⌘7" },
+];
+const state = { wt:"main", panes:["home"], focus:0, historyMode:"graph", homeFilter:"all", ghTab:"issues", diffMode:"inline", selFile:0, selCommit:1, conflictResolved:false };
+
+/* ---------------- Helpers ---------------- */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const wt = () => WORKTREES.find(w => w.id === state.wt);
+function wtStatus(w) {
+  if (w.state === "rebase") return state.conflictResolved ? `<span class="status warn">↻ rebase paused</span>` : `<span class="status bad">⚠ 2 conflicts</span>`;
+  if (w.state === "agent") return `<span class="status agent">✦ agent running</span>`;
+  if (w.changes) return `<span class="status warn">● ${w.changes} changes</span>`;
+  return `<span class="status ok">✓ clean</span>`;
+}
+function wtBadge(w) {
+  if (w.state === "rebase") return state.conflictResolved ? `<span class="count warn" aria-label="rebase paused">↻</span>` : `<span class="count bad" aria-label="2 conflicts">2</span>`;
+  if (w.state === "agent") return `<span class="count agent" aria-label="agent running">✦</span>`;
+  if (w.changes) return `<span class="count warn" aria-label="${w.changes} changes">${w.changes}</span>`;
+  return "";
+}
+function toast(text) { $("#toastText").textContent = text; $("#toast").classList.add("open"); clearTimeout(toast.t); toast.t = setTimeout(() => $("#toast").classList.remove("open"), 3200); }
+
+/* ---------------- Sidebar ---------------- */
+function renderSidebar() {
+  $("#wtList").innerHTML = WORKTREES.map(w => `
+    <button class="row" role="listitem" data-wt="${w.id}" ${w.id===state.wt?'aria-current="true"':''} aria-label="Worktree ${esc(w.branch)}, ${w.state==="rebase"?"rebase in progress":w.state==="agent"?"agent running":w.changes?w.changes+" changes":"clean"}">
+      <span class="ic">⎇</span><span class="grow">${esc(w.branch)}<br><span class="wt-sub">${wtStatus(w)}</span></span>${wtBadge(w)}
+    </button>`).join("");
+  const cur = state.panes[state.focus];
+  $("#navList").innerHTML = SCREENS.map(s => {
+    let badge = "";
+    if (s.id==="home") badge = `<span class="count bad" aria-label="5 items need attention">5</span>`;
+    if (s.id==="changes" && wt().changes) badge = `<span class="count">${wt().changes}</span>`;
+    if (s.id==="agents") badge = `<span class="count agent" aria-label="1 agent waiting">1</span>`;
+    return `<button class="row" data-go="${s.id}" ${cur===s.id?'aria-current="page"':''} title="${s.label} (${s.key}) · ⌘-click opens beside">
+      <span class="ic">${s.icon}</span><span class="grow">${s.label}</span>${badge}<span class="k">${s.key}</span></button>`;
+  }).join("");
+  $("#navSettings").toggleAttribute("aria-current", cur==="settings");
+  if (cur==="settings") $("#navSettings").setAttribute("aria-current","page");
+  $("#crumbWt").textContent = wt().branch + " ▾";
+  $("#sbWt").textContent = "⎇ " + wt().branch;
+}
+
+/* ---------------- Banner ---------------- */
+function renderBanner() {
+  const w = wt();
+  if (w.state !== "rebase") { $("#bannerSlot").innerHTML = ""; return; }
+  $("#bannerSlot").innerHTML = state.conflictResolved
+    ? `<div class="banner">↻ <b>Rebase paused at 3/7</b> · conflicts resolved<span class="grow"></span><button class="btn sm primary" data-act="continue">Continue rebase</button><button class="btn sm" data-act="abort">Abort</button></div>`
+    : `<div class="banner">⚠ <b>Rebase paused at 3/7</b> · 2 files in conflict<span class="grow"></span><button class="btn sm primary" data-go="conflicts">Resolve conflicts</button><button class="btn sm" disabled title="Resolve conflicts first">Continue</button><button class="btn sm" data-act="abort">Abort</button></div>`;
+}
+
+/* ---------------- Screens ---------------- */
+const V = {};
+V.home = () => ({ title:"Home", tools:`<div class="seg" role="group" aria-label="Scope"><button aria-pressed="true">This group</button><button aria-pressed="false">All groups</button></div><button class="btn sm">↻ Refresh</button>`, body:`
+  <div class="home">
+    <div class="home-top"><div><div class="faint">Your workspace · Work</div><h2>Good afternoon, Rozzy</h2></div><span style="flex:1"></span><button class="btn primary" data-toast="Create a worktree: name the branch">＋ New worktree</button></div>
+    <div class="kpis">
+      <div class="panel kpi"><span class="muted">Open pull requests</span><b>6</b><span class="faint">across 3 projects</span></div>
+      <div class="panel kpi"><span class="muted">Worktrees</span><b>9</b><span class="faint">2 with agents</span></div>
+      <div class="panel kpi"><span class="muted">CI passed · 24h</span><b>92%</b><span class="faint">23 of 25 runs</span></div>
+    </div>
+    <div class="panel">
+      <div class="section-h">Needs your attention <span class="count bad">5</span><span class="grow"></span>
+        <div class="tabs" role="tablist" aria-label="Filter" style="border:0">${["all:All","review:Review","mention:Mention","ci:CI","agents:Agents"].map(x=>{const[k,l]=x.split(":");return `<button class="tab" role="tab" data-filter="${k}" aria-selected="${state.homeFilter===k}">${l}</button>`}).join("")}</div>
+      </div>
+      ${[
+        {f:"agents", ic:"✦", bg:"var(--agent-bg)", c:"var(--agent)", t:"<b>Claude</b> is waiting for input on <b>feat/agent-session-token-saver</b>", m:"Agent · 2m ago", a:`<button class="btn sm primary" data-open-agent>Open agent</button>`},
+        {f:"agents", ic:"✓", bg:"var(--success-bg)", c:"var(--success)", t:"<b>Codex</b> finished on <b>main</b>: 4 files changed", m:"Agent · 9m ago", a:`<button class="btn sm primary" data-review-agent>Review changes</button>`},
+        {f:"ci", ic:"✕", bg:"var(--danger-bg)", c:"var(--danger)", t:"CI failed: <b>test (ubuntu)</b> on PR #14", m:"CI · api-gateway · 25m ago", a:`<button class="btn sm" data-toast="Opening workflow logs…">View logs</button>`},
+        {f:"review", ic:"⇄", bg:"var(--warning-bg)", c:"var(--warning)", t:"Review requested: <b>feat: Orca-style quota meter</b> #12", m:"Review · branchwork · 1h ago", a:`<button class="btn sm" data-go="github">Review now</button>`},
+        {f:"mention", ic:"@", bg:"var(--raised)", c:"var(--info)", t:"<b>@devhero</b> mentioned you in <i>Release checklist</i> #9", m:"Mention · 3h ago", a:`<button class="btn sm" data-toast="Opening thread…">Open thread</button>`},
+      ].filter(i => state.homeFilter==="all" || i.f===state.homeFilter).map(i => `
+        <div class="att-item"><span class="att-ic" style="background:${i.bg};color:${i.c}" aria-hidden="true">${i.ic}</span>
+          <div><div>${i.t}</div><div class="faint" style="font-size:var(--fs-meta)">${i.m}</div></div>
+          <div class="att-actions">${i.a}<button class="btn sm ghost" aria-label="Snooze" title="Snooze" data-toast="Snoozed for 1 hour">⏾</button><button class="btn sm ghost" aria-label="Mark done" title="Mark done" data-toast="Marked done">✓</button></div>
+        </div>`).join("")}
+    </div>
+    <div class="cols2">
+      <div class="panel"><div class="section-h">Issues for you</div>
+        <div class="list-row"><span class="status ok">●</span><span style="flex:1">#41 Terminal loses focus after split</span><button class="btn sm" data-start-issue>Start → worktree</button></div>
+        <div class="list-row"><span class="status ok">●</span><span style="flex:1">#38 Blame view: copy commit SHA</span><button class="btn sm" data-start-issue>Start → worktree</button></div>
+      </div>
+      <div class="panel"><div class="section-h">CI feed · 24h</div>
+        <div class="list-row"><span class="status ok">✓ passed</span><span style="flex:1">branchwork · main · build</span><span class="faint">4m</span></div>
+        <div class="list-row"><span class="status bad">✕ failed</span><span style="flex:1">api-gateway · PR #14 · test</span><span class="faint">25m</span></div>
+        <div class="list-row"><span class="status warn">● running</span><span style="flex:1">branchwork · feat/saver · e2e</span><span class="faint">now</span></div>
+      </div>
+    </div>
+  </div>`});
+
+const FILES = [
+  { s:"M", p:"src/agents/quota.ts", staged:true },
+  { s:"M", p:"src/screens/agents/AgentsScreen.tsx", staged:true },
+  { s:"M", p:"src/i18n/en.ts", staged:false },
+  { s:"A", p:"src/agents/quota.test.ts", staged:false },
+];
+V.changes = () => {
+  const w = wt();
+  if (!w.changes) return { title:"Changes", tools:"", body:`<div class="empty"><div style="font-size:28px">✓</div><b>Working tree clean</b><span>Nothing to commit on ${esc(w.branch)}.</span><button class="btn" data-go="history">View history</button></div>` };
+  const f = FILES[state.selFile] || FILES[0];
+  const group = (staged) => FILES.map((x,i)=>({...x,i})).filter(x=>x.staged===staged).map(x => `
+    <button class="file-row" data-file="${x.i}" ${x.i===state.selFile?'aria-current="true"':''}>
+      <input type="checkbox" ${x.staged?"checked":""} aria-label="${x.staged?"Unstage":"Stage"} ${esc(x.p)}" data-stage="${x.i}">
+      <span class="st-letter st-${x.s}" aria-label="${x.s==="M"?"modified":"added"}">${x.s}</span><span class="fn">${esc(x.p.split("/").pop())} <span class="faint">${esc(x.p.split("/").slice(0,-1).join("/"))}</span></span></button>`).join("");
+  return { title:"Changes", tools:`<div class="seg" role="group" aria-label="Diff view"><button aria-pressed="${state.diffMode==="inline"}" data-diff="inline">Inline</button><button aria-pressed="${state.diffMode==="split"}" data-diff="split">Side by side</button></div><button class="btn sm" data-toast="Synced with origin/main">⇅ Sync</button>`, body:`
+  <div class="changes">
+    <div class="changes-left">
+      <div class="side-h"><span>Staged · ${FILES.filter(x=>x.staged).length}</span><button class="btn sm ghost">Unstage all</button></div>${group(true)}
+      <div class="side-h"><span>Unstaged · ${FILES.filter(x=>!x.staged).length}</span><button class="btn sm ghost">Stage all</button></div>${group(false)}
+      <div class="commit-box">
+        <label class="sr-only" for="cmsg">Commit message</label>
+        <textarea class="input" id="cmsg" rows="3" placeholder="Message (⌘↵ to commit on ${esc(w.branch)})"></textarea>
+        <div class="commit-actions"><button class="btn sm" data-gen style="color:var(--agent)">✦ Generate</button><span style="flex:1"></span><button class="btn primary" data-commit>Commit ${FILES.filter(x=>x.staged).length} files</button><button class="btn" aria-label="Commit options" data-commit-menu>▾</button></div>
+      </div>
+    </div>
+    <div style="overflow:auto">
+      <div class="diff-head"><span class="st-letter st-${f.s}">${f.s}</span><b class="mono">${esc(f.p)}</b><span class="faint">+12 −3</span><span style="flex:1"></span><button class="btn sm ghost" data-go="files">Open file</button><button class="btn sm ghost danger">Discard</button></div>
+      <div class="diff">
+        <div class="hunk">@@ -84,9 +84,18 @@ export const useAgentMeters = create(…)</div>
+        <div class="ln"><span>84</span><span>84</span><span>  const refreshQuota = async (session) => {</span></div>
+        <div class="ln"><span>85</span><span>85</span><span>    const key = usageKey(session.profile);</span></div>
+        <div class="ln del"><span>86</span><span></span><span>-   const usage = await readSessionUsage(session);</span></div>
+        <div class="ln add"><span></span><span>86</span><span>+   const quota = await readProfileQuota(session.cliId, dir);</span></div>
+        <div class="ln add"><span></span><span>87</span><span>+   if (quota.state === "noData") return setQuota(key, { kind: "none" });</span></div>
+        <div class="ln add"><span></span><span>88</span><span>+   const tight = tightestWindow(quota.windows, Date.now());</span></div>
+        <div class="ln"><span>87</span><span>89</span><span>    setQuota(key, { kind: "ok", windows: quota.windows });</span></div>
+        <div class="ln"><span>88</span><span>90</span><span>  };</span></div>
+      </div>
+    </div>
+  </div>`};
+};
+
+const COMMITS = [
+  { sha:"wip", msg:"Working copy · 4 changed files", who:"you", when:"now", refs:[], lane:0, wip:true },
+  { sha:"3d3ec85", msg:"feat: Orca-style quota meter and labelled saver badges", who:"rozzyrahmanda", when:"1h", refs:["HEAD → main"], lane:0, agent:true },
+  { sha:"21feaad", msg:"feat: agent session usage meters and token saver", who:"rozzyrahmanda", when:"3h", refs:["feat/agent-session-token-saver"], lane:0, agent:true },
+  { sha:"3649feb", msg:"feat: M6 Stage 3 local project init and publish (issue #5)", who:"rozzyrahmanda", when:"1d", refs:["origin/main"], lane:0 },
+  { sha:"de62b34", msg:"feat: M6 Stage 2 conflict resolver", who:"rozzyrahmanda", when:"2d", refs:[], lane:1 },
+  { sha:"2fad157", msg:"feat: M6 Stage 1 Git write actions (sync, checkout, picks)", who:"rozzyrahmanda", when:"3d", refs:["v0.5.0"], lane:0 },
+  { sha:"142c243", msg:"fix(terminal): wait for shell readiness before typing", who:"rozzyrahmanda", when:"4d", refs:[], lane:0 },
+];
+V.history = () => {
+  const modes = `<div class="tabs" role="tablist" aria-label="History mode" style="border:0">${[["graph","Graph"],["file","File history · blame"],["rewrite","Rewrite history"]].map(([k,l])=>`<button class="tab" role="tab" data-hmode="${k}" aria-selected="${state.historyMode===k}">${l}</button>`).join("")}</div>`;
+  let body;
+  if (state.historyMode === "graph") {
+    const c = COMMITS[state.selCommit];
+    body = `<div class="history"><div class="commits" role="list" aria-label="Commits">
+      <div class="faint" style="padding:8px 12px;display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--border)">Show: <div class="seg"><button aria-pressed="true">All</button><button aria-pressed="false">Worktrees</button><button aria-pressed="false">Mine</button><button aria-pressed="false">✦ Agent</button></div><span style="flex:1"></span><button class="btn sm">Fetch</button><button class="btn sm">Pull</button><button class="btn sm">Push ↑1</button></div>
+      ${COMMITS.map((x,i)=>`<button class="commit" role="listitem" data-commit="${i}" ${i===state.selCommit?'aria-current="true"':''}>
+        <span class="lane" aria-hidden="true"><i style="left:14px;background:var(--accent)"></i>${x.lane===1?'<i style="left:32px;background:var(--agent)"></i>':''}<b style="left:${x.lane===1?28:10}px;background:${x.wip?'var(--warning)':x.lane===1?'var(--agent)':'var(--accent)'}"></b></span>
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.refs.map(r=>`<span class="ref ${r.startsWith("HEAD")?"head":""}">${esc(r)}</span>`).join("")}${x.wip?`<i>${esc(x.msg)}</i>`:esc(x.msg)} ${x.agent?'<span class="status agent" title="Agent co-authored">✦</span>':''}</span>
+        <span class="faint mono">${x.wip?"":x.sha}</span><span class="faint">${x.when}</span></button>`).join("")}
+    </div>
+    <aside class="inspector" aria-label="Commit details">${c.wip ? `
+      <b>Working copy</b><span class="muted">4 changed files on main. Committing happens in Changes.</span>
+      <button class="btn primary" data-open-beside="changes">Commit… (opens Changes beside)</button>` : `
+      <span class="faint mono">${c.sha}</span><b style="font-size:var(--fs-title)">${esc(c.msg)}</b>
+      <span class="muted">${esc(c.who)} · ${c.when} ago ${c.agent?'· <span class="status agent">✦ Claude co-authored</span>':''}</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px"><button class="btn sm">Checkout</button><button class="btn sm">Cherry-pick</button><button class="btn sm" data-toast="New worktree from ${c.sha}">＋ Worktree here</button><button class="btn sm" data-hmode="rewrite">Rewrite from here…</button></div>
+      <div class="side-h" style="padding-left:0">Files · 6</div>
+      <span class="mono">M src/agents/quota.ts</span><span class="mono">M src/screens/agents/AgentsScreen.tsx</span><span class="mono">A src/agents/quota.test.ts</span>`}
+    </aside></div>`;
+  } else if (state.historyMode === "file") {
+    const lines = [
+      ["rozzyrahmanda · 1h","3d3ec85","export function tightestWindow(windows, now) {"],
+      ["rozzyrahmanda · 1h","3d3ec85","  return windows"],
+      ["rozzyrahmanda · 1h","3d3ec85","    .filter((w) => !windowExpired(w, now))"],
+      ["Claude (agent) · 1h","3d3ec85","    .reduce((best, w) => (!best || w.percent > best.percent ? w : best), null);"],
+      ["rozzyrahmanda · 3h","21feaad","}"],
+    ];
+    body = `<div class="history"><div style="overflow:auto">
+      <div class="diff-head"><b class="mono">src/agents/quota.ts</b><span class="faint">blame · who changed each line</span><span style="flex:1"></span><button class="btn sm ghost" data-go="files">Open in Files</button></div>
+      ${lines.map((l,i)=>`<div class="blame-line"><span class="who" title="${l[1]}">${l[0].includes("agent")?'<span class="status agent">✦</span> ':''}${l[0]}</span><span class="n">${50+i}</span><span>${esc(l[2])}</span></div>`).join("")}
+    </div><aside class="inspector"><b>Line 53 last changed</b><span class="mono faint">3d3ec85</span><span>feat: Orca-style quota meter…</span><div style="display:flex;gap:6px"><button class="btn sm" data-hmode="graph">View commit</button><button class="btn sm" data-go="github">View PR #12</button></div>
+      <div class="side-h" style="padding-left:0">File history</div><span>3d3ec85 · quota meter · 1h</span><span>21feaad · token saver · 3h</span></aside></div>`;
+  } else {
+    body = `<div style="overflow:auto">
+      <div class="diff-head"><b>Rewrite history</b><span class="faint">base:</span><select class="input" style="width:auto;height:26px" aria-label="Base commit"><option>3649feb · M6 Stage 3 (origin/main)</option><option>2fad157 · v0.5.0</option></select><span style="flex:1"></span><button class="btn sm" style="color:var(--agent)">✦ Auto-squash</button><button class="btn sm primary" data-toast="Rebase started · a backup is kept under refs/branchwork/backup">Start rewrite</button></div>
+      <div class="faint" style="padding:8px 12px">Drag or use ↑↓ to reorder. Pick an action for each commit. No more dead end: the base is picked right here.</div>
+      ${COMMITS.slice(1,3).reverse().concat([{sha:"9c1d2e0",msg:"fixup! quota meter tone"}]).map(x=>`<div class="rb-row"><span class="faint" aria-hidden="true">⋮⋮</span><select class="input" style="height:26px" aria-label="Action for ${x.sha}"><option>pick</option><option>reword</option><option ${x.msg.startsWith("fixup")?"selected":""}>fixup</option><option>squash</option><option>drop</option></select><span class="mono faint">${x.sha}</span><span>${esc(x.msg)}</span><span class="faint">↑ ↓</span></div>`).join("")}
+      <div class="banner" style="margin:12px">ⓘ This branch is already pushed: after the rewrite, you'll need push --force-with-lease.</div>
+    </div>`;
+  }
+  return { title:"History", tools:modes, body };
+};
+
+V.files = () => ({ title:"Files", tools:`<input class="input" style="width:220px;height:26px" placeholder="⌕ Find file  ⌘P" aria-label="Find file"><button class="btn sm">↗ Open in ▾</button>`, body:`
+  <div class="files">
+    <div class="tree" role="tree" aria-label="Files">
+      ${["▾ src","  ▾ agents","     quota.ts ●","     quota.test.ts +","     sessions.ts","  ▸ screens","  ▸ ipc","▸ src-tauri","  package.json","  README.md"].map((t,i)=>`<button class="file-row" role="treeitem" ${i===2?'aria-current="true"':''} style="padding-left:${12+t.search(/\S/)*5}px">${esc(t.trim())}</button>`).join("")}
+    </div>
+    <div style="overflow:auto">
+      <div class="diff-head"><b class="mono">src/agents/quota.ts</b><span class="status warn">● modified</span><span style="flex:1"></span><div class="seg"><button aria-pressed="true">Editor</button><button aria-pressed="false">Diff vs HEAD</button></div><button class="btn sm ghost" data-hmode-go="file">Who changed this?</button><button class="btn sm ghost" style="color:var(--agent)" data-toast="Asking Claude about quota.ts…">✦ Ask agent</button></div>
+      <div class="code">
+        ${[`<span class="cm">// Orca-style account usage for agent panes.</span>`,`<span class="kw">export const</span> METER_POLL_MS = <span class="str">15_000</span>;`,`<span class="kw">export const</span> QUOTA_WARN_PERCENT = <span class="str">80</span>;`,``,`<span class="kw">export function</span> <span class="fnc">windowLabel</span>(window) {`,`  <span class="kw">if</span> (window.minutes === <span class="str">300</span>) <span class="kw">return</span> t(<span class="str">"usage.win5h"</span>);`,`  <span class="kw">if</span> (window.minutes === <span class="str">10_080</span>) <span class="kw">return</span> t(<span class="str">"usage.winWeekly"</span>);`,`  <span class="kw">return</span> \`\${Math.round(window.minutes / <span class="str">60</span>)}h\`;`,`}`].map((l,i)=>`<div class="cl"><span>${i+1}</span><span>${l||"&nbsp;"}</span></div>`).join("")}
+      </div>
+    </div>
+  </div>`});
+
+V.agents = () => ({ title:"Agents", tools:`<span class="faint">2 sessions · 1 waiting</span><button class="btn sm">⚑ Race</button><button class="btn sm primary" data-toast="New agent: choose a CLI, profile and worktree">＋ New agent</button>`, body:`
+  <div class="agents">
+    ${[
+      {cli:"Claude Code", wt:"feat/agent-session-token-saver", st:"waiting", c:"var(--warning)", prof:"Personal", q:"Weekly", qp:35, qr:"2d 2h", rtk:true, cav:true, out:`<span class="a">✦ Claude</span> I've updated quota.ts. Run the tests now?\n<span class="d">  1. Yes   2. No, keep editing</span>\n\n<span class="p">❯</span> ▍`},
+      {cli:"Codex", wt:"main", st:"running", c:"var(--accent)", prof:"Work", q:"5h", qp:84, qr:"38m", rtk:false, cav:false, na:true, out:`<span class="a">• Codex</span> reading src/screens/agents/AgentsScreen.tsx…\n<span class="d">  ✓ edited 2 files\n  ⠋ running pnpm vitest run src/agents</span>`},
+    ].map(a=>`<section class="agent" aria-label="${a.cli} in ${esc(a.wt)}">
+      <div class="agent-head">
+        <span class="dot" style="background:${a.c}" aria-hidden="true"></span><b>${a.cli}</b><span class="faint">· ${esc(a.wt)}</span>
+        <span class="status ${a.st==="waiting"?"warn":"info"}">${a.st==="waiting"?"● Waiting for you":"⠋ Running"}</span>
+        <span style="flex:1"></span>
+        <button class="chip" aria-haspopup="menu">◔ ${a.prof}</button>
+        <button class="quota" style="${a.qp>=80?'color:var(--warning);border-color:color-mix(in oklch, var(--warning) 50%, transparent)':''}" aria-label="Usage ${a.q} ${a.qp}%, resets in ${a.qr}"><b>${a.q}</b> ${a.qp}% <span class="meter"><i style="width:${a.qp}%;background:${a.qp>=80?'var(--warning)':'var(--success)'}"></i></span> · ${a.qr}</button>
+        <button class="saver" data-on="${a.rtk}" title="RTK-style compression"><i></i>RTK ${a.na?"n/a":a.rtk?"on":"off"}</button>
+        <button class="saver" data-on="${a.cav}" title="Caveman-style answers"><i></i>Caveman ${a.na?"n/a":a.cav?"on":"off"}</button>
+        <button class="btn sm ghost" data-open-beside="changes" title="Open Changes beside">± Review beside</button>
+      </div>
+      <div class="term" style="flex:1">${a.out}</div>
+    </section>`).join("")}
+  </div>`});
+
+V.terminal = () => ({ title:"Terminal", tools:`<button class="btn sm">⊟ Split right</button><button class="btn sm">⊞ Split down</button><button class="btn sm">Broadcast</button>`, body:`
+  <div style="display:flex;flex-direction:column;height:100%">
+    <div class="tabs" role="tablist" style="padding:0 8px"><button class="tab" role="tab" aria-selected="true">main · zsh</button><button class="tab" role="tab" aria-selected="false">dev server</button><button class="tab" aria-label="New terminal tab">＋</button></div>
+    <div class="term-split"><div class="term"><span class="p">rozzy@mac branchwork (main) $</span> pnpm dev
+<span class="d">  VITE v6.2.0  ready in 412 ms
+  ➜  Local:   http://localhost:1420/</span></div><div class="term"><span class="p">rozzy@mac branchwork (main) $</span> pnpm vitest
+<span class="d">  ✓ src/agents/quota.test.ts (7)
+  Test Files  1 passed</span>
+<span class="p">rozzy@mac branchwork (main) $</span> ▍</div></div>
+  </div>`});
+
+V.github = () => ({ title:"GitHub", tools:`<span class="chip">rozzyrahmanda/branchwork</span><button class="btn sm">☆ Star</button>`, body:`
+  <div class="tabs" role="tablist" style="padding:0 12px">${[["code","Code"],["issues","Issues · 12"],["pulls","Pull requests · 3"],["actions","Actions"]].map(([k,l])=>`<button class="tab" role="tab" data-gh="${k}" aria-selected="${state.ghTab===k}">${l}</button>`).join("")}</div>
+  ${state.ghTab==="issues" ? [
+    ["#41","Terminal loses focus after split","bug"],["#38","Blame view: copy commit SHA","enhancement"],["#35","Inbox: snooze until tomorrow 9am","inbox"]
+  ].map(i=>`<div class="gh-row"><span class="status ok">●</span><span><b>${i[1]}</b> <span class="chip">${i[2]}</span><br><span class="faint">${i[0]} opened 2d ago</span></span><button class="btn sm primary" data-start-issue>Start → worktree</button></div>`).join("")
+  : state.ghTab==="pulls" ? [["#12","feat: Orca-style quota meter","✓ checks passed","ok"],["#14","api: rate limit headers","✕ 1 failing","bad"]].map(p=>`<div class="gh-row"><span class="status info">⇄</span><span><b>${p[1]}</b><br><span class="faint">${p[0]} · <span class="status ${p[3]}">${p[2]}</span></span></span><button class="btn sm">Open</button></div>`).join("")
+  : state.ghTab==="actions" ? `<div class="gh-row"><span class="status bad">✕</span><span><b>test (ubuntu)</b><br><span class="faint">PR #14 · 25m ago</span></span><button class="btn sm">Re-run failed</button></div>`
+  : `<div style="padding:16px" class="muted">README.md · Branchwork: multi-worktree Git client with CLI agents.</div>`}
+  `});
+
+V.settings = () => ({ title:"Settings", tools:"", body:`
+  <div class="settings">
+    <div class="panel"><div class="section-h">Appearance</div>
+      <div class="set-row"><span class="grow">Theme<small>Follow macOS, or force light/dark</small></span><div class="seg"><button aria-pressed="false" data-set-theme="light">Light</button><button aria-pressed="true" data-set-theme="dark">Dark</button><button aria-pressed="false">System</button></div></div>
+      <div class="set-row"><span class="grow">Text size<small>Raises the whole type scale</small></span><div class="seg"><button aria-pressed="${!document.documentElement.dataset.text}" data-set-text="">Default</button><button aria-pressed="${document.documentElement.dataset.text==="large"}" data-set-text="large">Large</button></div></div>
+      <div class="set-row"><span class="grow">Density<small>Row height in lists</small></span><div class="seg">${["compact","default","comfy"].map(d=>`<button aria-pressed="${(document.documentElement.dataset.density||"default")===d}" data-set-density="${d}">${d[0].toUpperCase()+d.slice(1)}</button>`).join("")}</div></div>
+    </div>
+    <div class="panel"><div class="section-h">Keyboard</div>
+      <div class="set-row"><span class="grow">Single-key screen shortcuts (1–7)<small>Off by default so typing never switches screens by accident (WCAG 2.1.4)</small></span><button class="switch" role="switch" aria-checked="false" aria-label="Single-key shortcuts" data-toggle-switch></button></div>
+      <div class="set-row"><span class="grow">Terminal dock<small>Unchanged</small></span><kbd>Ctrl+&#96;</kbd></div>
+    </div>
+    <div class="panel"><div class="section-h">Agents</div>
+      <div class="set-row"><span class="grow">Auto-switch profile on limit</span><button class="switch" role="switch" aria-checked="true" aria-label="Auto-switch" data-toggle-switch></button></div>
+      <div class="set-row"><span class="grow">Token saver (RTK + Caveman)<small>On by default for supported CLIs</small></span><button class="switch" role="switch" aria-checked="true" aria-label="Token saver" data-toggle-switch></button></div>
+    </div>
+    <div class="panel"><div class="section-h">Accounts</div>
+      <div class="set-row"><span class="grow">Claude Code · Personal<small><span class="status ok">✓ Logged in</span> · Weekly 35%</small></span><button class="btn sm">Edit</button></div>
+      <div class="set-row"><span class="grow">GitHub · rozzyrahmanda<small><span class="status ok">✓ Default</span></small></span><button class="btn sm">Manage</button></div>
+    </div>
+  </div>`});
+
+V.conflicts = () => ({ title:"Resolve conflicts", tools:`<span class="chip">Rebase · 2 left</span><button class="btn sm" data-act="abort">Abort</button>`, body: state.conflictResolved
+  ? `<div class="empty"><div style="font-size:28px">✓</div><b>All conflicts are resolved</b><span>Continue the rebase from the banner above.</span></div>`
+  : `<div style="display:flex;flex-direction:column;height:100%">
+    <div class="diff-head"><b class="mono">src/i18n/en.ts</b><span class="faint">conflict 1 of 2</span><span style="flex:1"></span><span class="faint">Click a block in Ours or Theirs, or use the buttons</span></div>
+    <div class="conf">
+      <div><h3>Ours (upstream)</h3><div class="block ours" tabindex="0">"agents.title": "Agents",<br>"usage.win5h": "5h",</div></div>
+      <div><h3>Result</h3><div class="block res">Pick a side for conflict 1<div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm">← Ours</button><button class="btn sm">Both</button><button class="btn sm">Theirs →</button></div></div></div>
+      <div style="border-right:0"><h3>Theirs (your commit)</h3><div class="block theirs" tabindex="0">"agents.title": "Agents",<br>"rebase.title": "Interactive rebase",</div></div>
+    </div>
+    <div style="padding:12px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end"><button class="btn primary" data-resolve>Mark resolved (demo)</button></div>
+  </div>`});
+
+/* ---------------- Stage ---------------- */
+function renderStage() {
+  const st = $("#stage");
+  st.classList.toggle("split", state.panes.length > 1);
+  st.innerHTML = state.panes.map((id, i) => {
+    const v = V[id]();
+    return `<section class="pane ${state.panes.length>1 && i===state.focus?"focus":""}" data-pane="${i}" aria-label="${v.title}">
+      <div class="pane-head"><h1>${v.title}</h1>${state.panes.length>1?`<span class="faint">· ${esc(wt().branch)}</span>`:""}<span class="grow"></span>${v.tools}
+        ${state.panes.length<2 ? `<button class="btn sm ghost" data-beside-menu title="Open another screen beside (⌘\\)">◨ Open beside</button>` : `<button class="icon-btn" data-swap aria-label="Swap panes" title="Swap panes">⇄</button><button class="icon-btn" data-close-pane="${i}" aria-label="Close pane" title="Close pane">✕</button>`}
+      </div>
+      <div class="pane-body">${v.body}</div></section>`;
+  }).join("");
+}
+function render() { renderSidebar(); renderBanner(); renderStage(); }
+
+function go(id, beside=false) {
+  if (beside && id !== state.panes[0]) { state.panes = [state.panes[state.focus] || state.panes[0], id]; state.focus = 1; }
+  else if (state.panes.length > 1 && state.panes.includes(id)) state.focus = state.panes.indexOf(id);
+  else { state.panes[state.focus] = id; }
+  render();
+}
+
+/* ---------------- Menus ---------------- */
+function openMenu(x, y, html) { const m = $("#menu"); m.innerHTML = html; m.style.left = Math.min(x, innerWidth-260)+"px"; m.style.top = y+"px"; m.classList.add("open"); m.querySelector("button")?.focus(); }
+function closeMenu() { $("#menu").classList.remove("open"); }
+function projectMenu(el) {
+  const r = el.getBoundingClientRect();
+  openMenu(r.left, r.bottom+6, `<input class="input" placeholder="Search projects…" aria-label="Search projects" style="margin-bottom:6px">` +
+    PROJECTS.map(g => `<div class="mh">● ${g.group} · ${g.items.length}</div>` + g.items.map(p => `<button role="menuitem" data-toast="Switched to ${p.name}"><span class="mark" style="background:${g.color};width:18px;height:18px;font-size:10px">${p.mark}</span>${p.name}${p.name==="branchwork"?' <span class="faint">✓</span>':""}</button>`).join("")).join("") +
+    `<hr><button role="menuitem" data-toast="Open a folder, clone, or init a repo">＋ Add project…</button><button role="menuitem" data-toast="New group">＋ New group</button>`);
+}
+function besideMenu(el) {
+  const r = el.getBoundingClientRect();
+  openMenu(r.right-260, r.bottom+6, `<div class="mh">Open beside</div>` + SCREENS.filter(s=>s.id!==state.panes[0]).map(s=>`<button role="menuitem" data-beside="${s.id}">${s.icon} ${s.label}</button>`).join("") +
+    `<hr><div class="mh">Layouts</div><button role="menuitem" data-layout="agents,changes">✦ Agent + Changes</button><button role="menuitem" data-layout="history,files">⎇ History + Files</button>`);
+}
+
+/* ---------------- Palette ---------------- */
+const CMDS = () => [
+  ...SCREENS.map(s => ({ t:`Go to ${s.label}`, g:"Screens", k:s.key, run:()=>go(s.id) })),
+  ...WORKTREES.map(w => ({ t:`Switch to worktree ${w.branch}`, g:"Worktrees", run:()=>{ state.wt=w.id; render(); } })),
+  { t:"Commit staged files", g:"Git", k:"⌘↵", run:()=>{ go("changes"); toast("Committed 2 files on main"); } },
+  { t:"Fetch · Pull · Push", g:"Git", run:()=>toast("Synced with origin") },
+  { t:"Toggle terminal dock", g:"Terminal", k:"Ctrl+`", run:()=>toggleDock() },
+  { t:"New agent", g:"Agents", run:()=>{ go("agents"); toast("New agent: choose a CLI, profile and worktree"); } },
+  { t:"Open Agent + Changes layout", g:"Layout", run:()=>{ state.panes=["agents","changes"]; state.focus=0; render(); } },
+  { t:"Rewrite history from a commit…", g:"Git", run:()=>{ state.historyMode="rewrite"; go("history"); } },
+  { t:"Keyboard shortcuts", g:"Help", k:"?", run:()=>openSheet() },
+];
+let palIdx = 0;
+function renderPalette() {
+  const q = $("#palInput").value.trim().toLowerCase();
+  let list = q.endsWith("?") ? [{ t:`Ask Claude: "${$("#palInput").value.trim()}"`, g:"✦ Agent", run:()=>toast("Sent to Claude in the active worktree") }] : CMDS().filter(c => !q || (c.t+" "+c.g).toLowerCase().includes(q));
+  palIdx = Math.min(palIdx, Math.max(0, list.length-1));
+  $("#palList").innerHTML = list.length ? list.map((c,i)=>`<div class="pal-item" role="option" aria-selected="${i===palIdx}" data-pal="${i}">${esc(c.t)}<span class="g">${esc(c.g)}</span>${c.k?`<kbd>${c.k}</kbd>`:""}</div>`).join("") : `<div class="empty">No matching commands</div>`;
+  renderPalette.list = list;
+}
+function openPalette() { $("#scrim").classList.add("open"); $("#palette").classList.add("open"); $("#palInput").value=""; palIdx=0; renderPalette(); $("#palInput").focus(); }
+function closeOverlays() { ["#scrim","#palette","#sheet"].forEach(s=>$(s).classList.remove("open")); closeMenu(); }
+function openSheet() { $("#scrim").classList.add("open"); $("#sheet").classList.add("open"); $("[data-close-sheet]").focus(); }
+function toggleDock() { $("#dock").classList.toggle("open"); }
+
+/* ---------------- Events ---------------- */
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button, [data-pal], .pal-item");
+  if (!t) { if (!e.target.closest("#menu")) closeMenu(); return; }
+  const d = t.dataset;
+  if (!t.closest("#menu") && !("besideMenu" in d) && t.id !== "projectBtn" && t.id !== "crumbProject" && t.id !== "crumbGroup" && t.id !== "crumbWt") closeMenu();
+  if (d.go) { go(d.go, e.metaKey || e.ctrlKey); return; }
+  if (d.wt) { state.wt = d.wt; if (state.panes[state.focus]==="conflicts" && d.wt!=="m6") state.panes[state.focus]="home"; render(); return; }
+  if (d.filter) { state.homeFilter = d.filter; render(); return; }
+  if (d.hmode) { state.historyMode = d.hmode; go("history"); return; }
+  if ("hmodeGo" in d) { state.historyMode = "file"; go("history"); return; }
+  if (d.gh) { state.ghTab = d.gh; render(); return; }
+  if (d.diff) { state.diffMode = d.diff; render(); return; }
+  if (d.file && !e.target.matches("input")) { state.selFile = +d.file; render(); return; }
+  if (d.commit) { state.selCommit = +d.commit; render(); return; }
+  if (d.openBeside) { go(d.openBeside, true); return; }
+  if (d.beside) { closeMenu(); go(d.beside, true); return; }
+  if (d.layout) { closeMenu(); const [a,b] = d.layout.split(","); state.panes=[a,b]; state.focus=0; render(); return; }
+  if ("besideMenu" in d) { besideMenu(t); return; }
+  if ("swap" in d) { state.panes.reverse(); render(); return; }
+  if (d.closePane !== undefined) { state.panes.splice(+d.closePane,1); state.focus=0; render(); return; }
+  if ("openAgent" in d) { state.wt="saver"; go("agents"); return; }
+  if ("reviewAgent" in d) { state.wt="main"; state.panes=["agents","changes"]; state.focus=1; render(); toast("Agent + Changes side by side: review, then commit"); return; }
+  if ("startIssue" in d) { toast("Creating worktree issue-41-terminal-focus… and starting Claude"); return; }
+  if ("gen" in d) { $("#cmsg").value = "feat: Orca-style quota meter and labelled saver badges"; return; }
+  if ("commit" in d && d.commit === "") { toast("Committed on " + wt().branch); return; }
+  if ("commitMenu" in d) { const r=t.getBoundingClientRect(); openMenu(r.right-240, r.top-150, `<button role="menuitem" data-toast="Committed (amend)">Commit (amend)</button><button role="menuitem" data-toast="Committed & pushed">Commit &amp; push</button><button role="menuitem" data-toast="Committed & synced">Commit &amp; sync</button>`); return; }
+  if ("resolve" in d) { state.conflictResolved = true; render(); toast("Conflicts resolved. Continue the rebase from the banner"); return; }
+  if (d.act === "continue") { WORKTREES[2].state="changes"; state.conflictResolved=false; state.panes=["history"]; render(); toast("Rebase complete"); return; }
+  if (d.act === "abort") { toast("Abort asks for confirmation in the real app"); return; }
+  if (d.setTheme) { setTheme(d.setTheme); render(); return; }
+  if (d.setText !== undefined) { if (d.setText) document.documentElement.dataset.text = d.setText; else delete document.documentElement.dataset.text; render(); return; }
+  if (d.setDensity) { document.documentElement.dataset.density = d.setDensity; render(); return; }
+  if ("toggleSwitch" in d) { t.setAttribute("aria-checked", t.getAttribute("aria-checked")!=="true"); return; }
+  if (d.toast) { closeMenu(); toast(d.toast); return; }
+  if ("toastClose" in d) { $("#toast").classList.remove("open"); return; }
+  if ("dockClose" in d) { $("#dock").classList.remove("open"); return; }
+  if ("closeSheet" in d) { closeOverlays(); return; }
+  if (d.pal !== undefined) { const c = renderPalette.list[+d.pal]; closeOverlays(); c?.run(); return; }
+  if (t.id === "projectBtn" || t.id === "crumbProject" || t.id === "crumbGroup") { projectMenu(t); return; }
+  if (t.id === "crumbWt") { const r=t.getBoundingClientRect(); openMenu(r.left, r.bottom+6, `<div class="mh">Worktrees · branchwork</div>` + WORKTREES.map(w=>`<button role="menuitem" data-wt="${w.id}">⎇ ${esc(w.branch)} ${w.id===state.wt?'<span class="faint">✓</span>':''}</button>`).join("")); return; }
+  if (t.id === "toggleSidebar") { const a=$("#app"); a.dataset.sidebar = a.dataset.sidebar==="hidden"?"shown":"hidden"; return; }
+  if (t.id === "openPalette") { openPalette(); return; }
+  if (t.id === "helpBtn") { openSheet(); return; }
+  if (t.id === "themeBtn" || t.id === "themeBtn2") { setTheme(document.documentElement.dataset.theme==="light"?"dark":"light"); render(); return; }
+  if (t.id === "dockBtn") { toggleDock(); return; }
+  if (t.id === "modeApp" || t.id === "modeDs") { document.body.dataset.mode = t.id==="modeDs"?"ds":"app"; $("#modeApp").setAttribute("aria-pressed", t.id==="modeApp"); $("#modeDs").setAttribute("aria-pressed", t.id==="modeDs"); if (t.id==="modeDs") renderSwatches(); return; }
+});
+document.addEventListener("change", (e) => { const s = e.target.dataset.stage; if (s !== undefined) { FILES[+s].staged = e.target.checked; render(); } });
+$("#scrim").addEventListener("click", closeOverlays);
+$("#palInput").addEventListener("input", () => { palIdx = 0; renderPalette(); });
+$("#palInput").addEventListener("keydown", (e) => {
+  const n = renderPalette.list.length;
+  if (e.key==="ArrowDown") { e.preventDefault(); palIdx=Math.min(n-1,palIdx+1); renderPalette(); }
+  else if (e.key==="ArrowUp") { e.preventDefault(); palIdx=Math.max(0,palIdx-1); renderPalette(); }
+  else if (e.key==="Enter") { e.preventDefault(); const c=renderPalette.list[palIdx]; closeOverlays(); c?.run(); }
+});
+document.addEventListener("keydown", (e) => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
+  const mod = e.metaKey || e.ctrlKey;
+  if (e.key === "Escape") { closeOverlays(); return; }
+  if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); return; }
+  if (e.ctrlKey && e.code === "Backquote") { e.preventDefault(); toggleDock(); return; }   // unchanged: Ctrl+` toggles the dock
+  if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); $("#toggleSidebar").click(); return; }
+  if (mod && e.code === "Backslash") { e.preventDefault(); if (state.panes.length>1) { state.panes=[state.panes[0]]; state.focus=0; render(); } else go("changes", true); return; }
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "g") { e.preventDefault(); go("changes"); return; }
+  if (mod && /^[1-7]$/.test(e.key)) { e.preventDefault(); go(SCREENS[+e.key-1].id); return; }
+  if (!typing && !mod && e.key === "?") { e.preventDefault(); openSheet(); }
+});
+
+/* ---------------- Theme + design system swatches ---------------- */
+function setTheme(mode) { if (mode==="light") document.documentElement.dataset.theme="light"; else delete document.documentElement.dataset.theme; if (document.body.dataset.mode==="ds") renderSwatches(); }
+function lum(color) {
+  const c = document.createElement("canvas").getContext("2d"); c.fillStyle = "#000"; c.fillStyle = color; c.fillRect(0,0,1,1);
+  const [r,g,b] = c.getImageData(0,0,1,1).data;
+  return [r,g,b].map(v => { v/=255; return v<=.03928 ? v/12.92 : ((v+.055)/1.055)**2.4; }).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+}
+function ratio(a, b) { const [x,y] = [lum(a), lum(b)].sort((p,q)=>q-p); return ((x+.05)/(y+.05)).toFixed(1); }
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function renderSwatches() {
+  const surf = cssVar("--surface");
+  const card = (name, role, asText) => {
+    const v = cssVar(name);
+    const r = ratio(v, surf);
+    const pass = asText ? (r >= 4.5 ? '<span class="status ok">✓ AA '+r+':1</span>' : '<span class="status bad">✕ '+r+':1</span>') : '<span class="faint">surface</span>';
+    return `<div class="sw"><div class="c" style="background:${asText?"var(--surface)":`var(${name})`};color:${asText?`var(${name})`:"var(--text)"};${asText?"":"border-bottom:1px solid var(--border)"}">${asText?"Aa text":""}</div><div class="m"><b>${role}</b><br><code>${name}</code><br>${pass}</div></div>`;
+  };
+  $("#sw-neutral").innerHTML = [["--bg","Background",0],["--surface","Surface",0],["--raised","Raised",0],["--text","Text",1],["--text-2","Text secondary",1],["--text-3","Text tertiary",1]].map(x=>card(...x)).join("");
+  $("#sw-semantic").innerHTML = [["--accent","Accent / action",1],["--success","Success",1],["--warning","Warning",1],["--danger","Danger",1],["--info","Info",1],["--agent","AI / agent",1]].map(x=>card(...x)).join("");
+}
+
+render();
+</script>
+</body>
+</html>
