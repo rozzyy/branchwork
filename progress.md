@@ -15,7 +15,7 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - M6-14: added accessible A/B comparison dialog with include-uncommitted switch, file/stat list, shared split renderer, and bounded Copy patch. Enabled Graph's Compare with working tree context action and added Compare for each Race result; existing Keep and confirmed Discard behavior remains.
 - Added focused Rust, IPC, Compare dialog and Graph entry tests. Updated the M6 plan, manual E2E checklist, feature list, and this handoff.
 - Final `./init.sh` after including all current tracked changes: exit 0, Vitest 82 files / 692 tests, Rust 316 passed / 3 ignored, TypeScript and Clippy clean. Focused CompareDialog/Graph/Agents/IPC suites passed (4 files / 54 tests). Detector returned `[]`; `git diff --check` and feature JSON validation passed.
-- User explicitly ordered merging, commit, push and tagging. Preparing the stage commit and `v0.6.0` release/tag; M6-S5's desktop checklist remains pending and is not represented as passed.
+- User explicitly ordered merging, commit, push and tagging. Stage commit `43a9a80` was fast-forwarded onto `main`; release manifests are now `0.6.0` and are being committed/tagged as `v0.6.0`. M6-S5's desktop checklist remains pending and is not represented as passed.
 - `src-tauri/src/repository.rs` and `src-tauri/src/worktree.rs` acquired a separate stale-worktree-pruning diff during final verification; it is outside M6-13/14 and was preserved for follow-up.
 - Manual native M6-S5 flows remain pending: real desktop worktree state, patch application, and Race keep/discard lifecycle.
 
