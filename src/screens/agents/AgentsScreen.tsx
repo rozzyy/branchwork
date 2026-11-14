@@ -29,6 +29,7 @@ import { readStatus } from "../../ipc/status";
 import { createUnpinnedWorktree, removeWorktree } from "../../ipc/worktrees";
 import { readHandoverDiff, writeHandoverNote } from "../../ipc/handover";
 import { writeTerminal } from "../../ipc/pty";
+import { CompareDialog } from "../compare/CompareDialog";
 import { t } from "../../i18n/t";
 import "./agents.css";
 
@@ -49,20 +50,17 @@ function paneStatus(session: AgentSession, isExited: (id: string | null) => bool
 export function AgentsToolbar() {
   const sessions = useSessions((s) => s.sessions);
   const count = sessions.length;
+  const waiting = sessions.filter((session) => session.status === "waiting").length;
   const layoutMode = useSessions((s) => s.layoutMode);
   const setLayoutMode = useSessions((s) => s.setLayoutMode);
   const setNewAgentOpen = useSessions((s) => s.setNewAgentOpen);
   const setRaceOpen = useSessions((s) => s.setRaceOpen);
   return (
     <>
-      <h1 className="pane-title">
-        {t("agents.title")}{" "}
-        <span className="sub" aria-hidden="true">
-          {t("agents.subtitle", { count })}
-        </span>
-      </h1>
-      <div className="pane-ctl">
-        <div className="agent-grp" title={t("agents.layoutAll")}>
+      <h1 className="pane-title">{t("agents.title")}</h1>
+      <div className="pane-actions">
+        <span className="faint">{t("agents.sessionSummary", { count, waiting })}</span>
+        <div className="seg" title={t("agents.layoutAll")}>
           <button
             type="button"
             className={layoutMode === "grid" ? "on" : ""}
@@ -80,10 +78,10 @@ export function AgentsToolbar() {
             ▭ {t("agents.layoutFull")}
           </button>
         </div>
-        <button type="button" className="btn" onClick={() => setRaceOpen(true)}>
+        <button type="button" className="btn sm" onClick={() => setRaceOpen(true)}>
           ⚑ {t("agents.race")}
         </button>
-        <button type="button" className="btn p" onClick={() => setNewAgentOpen(true)}>
+        <button type="button" className="btn sm primary" onClick={() => setNewAgentOpen(true)}>
           ＋ {t("agents.newAgent")}
         </button>
       </div>
@@ -464,10 +462,10 @@ function StatusDot({ status }: { status: PaneStatus }) {
 }
 
 function StatusChip({ status }: { status: PaneStatus }) {
-  if (status === "done") return <span className="chip cg">{t("agents.statusDone")}</span>;
-  if (status === "running") return <span className="chip agent-chip-run">{t("agents.statusRunning")}</span>;
-  if (status === "waiting") return <span className="chip agent-chip-wait">{t("agents.statusWaiting")}</span>;
-  return <span className="chip">{t("agents.statusIdle")}</span>;
+  if (status === "done") return <span className="status ok"><span aria-hidden>✓</span>{t("agents.statusDone")}</span>;
+  if (status === "running") return <span className="status info"><span aria-hidden>⠋</span>{t("agents.statusRunning")}</span>;
+  if (status === "waiting") return <span className="status warn"><span aria-hidden>●</span>{t("agents.statusWaiting")}</span>;
+  return <span className="status faint"><span aria-hidden>○</span>{t("agents.statusIdle")}</span>;
 }
 
 function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
@@ -489,9 +487,6 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
     >
       <div className="agent-phd">
         <StatusDot status={status} />
-        <span className="mono agent-wt" title={session.worktreePath}>
-          {tail(session.worktreePath)}
-        </span>
         {session.cliId === "custom" ? (
           <span className="agent-cli" title={def.name}>
             <CliIcon id={session.cliId} /> {def.name}
@@ -512,11 +507,10 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
             ))}
           </select>
         )}
-        <ProfileChip session={session} />
+        <span className="faint agent-wt" title={session.worktreePath}>· {tail(session.worktreePath)}</span>
         <StatusChip status={status} />
-        <QuotaMeter session={session} />
-        <SaverBadges session={session} />
         <span className="sp" />
+        <ProfileChip session={session} />
         <span className="agent-lay">
           {(["left", "right", "full"] as const).map((side) => (
             <button
@@ -532,19 +526,6 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
             </button>
           ))}
         </span>
-        <button
-          type="button"
-          className="agent-phb"
-          title={t("agents.reviewBeside")}
-          aria-label={t("agents.reviewBeside")}
-          onClick={() => {
-            useWorktrees.getState().select(session.worktreePath);
-            useStage.getState().go("agents");
-            useStage.getState().openSplit("changes", "right");
-          }}
-        >
-          ±
-        </button>
         <button
           type="button"
           className="agent-phb"
@@ -571,6 +552,25 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
           onClick={() => void store.closeSession(session.id)}
         >
           ✕
+        </button>
+      </div>
+      {/* Meters sit in their own strip: the header holds only identity and
+       * actions, so a narrow split pane can never push the buttons out of view. */}
+      <div className="agent-phm">
+        <QuotaMeter session={session} />
+        <SaverBadges session={session} />
+        <button
+          type="button"
+          className="btn sm ghost"
+          title={t("agents.reviewBeside")}
+          aria-label={t("agents.reviewBeside")}
+          onClick={() => {
+            useWorktrees.getState().select(session.worktreePath);
+            useStage.getState().go("agents");
+            useStage.getState().openSplit("changes", "right");
+          }}
+        >
+          ± {t("agents.reviewBesideShort")}
         </button>
       </div>
       <div className="agent-pane-body">
@@ -1100,6 +1100,7 @@ function RaceDialog() {
   const [binaries, setBinaries] = useState<Record<CliId, string | null> | null>(null);
   const [busy, setBusy] = useState(false);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
+  const [compareTarget, setCompareTarget] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -1124,7 +1125,7 @@ function RaceDialog() {
     }
   }, [open, entries, fileCounts]);
 
-  if (!open) return null;
+  if (!open && !compareTarget) return null;
 
   const fail = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
@@ -1229,6 +1230,8 @@ function RaceDialog() {
   };
 
   return (
+    <>
+    {open && <>
     <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
       <div className="dlg dlg-wide" role="dialog" aria-modal="true" aria-labelledby="race-dialog-title">
         <div className="dlg-ic">⚑</div>
@@ -1297,6 +1300,9 @@ function RaceDialog() {
                   <button type="button" className="btn sm" onClick={() => keep(entry.id)}>
                     {t("agents.raceKeep")}
                   </button>
+                  <button type="button" className="btn sm" onClick={() => { setOpen(false); setCompareTarget(entry.worktreePath); }}>
+                    {t("agents.raceCompare")}
+                  </button>
                   <button type="button" className="btn sm" onClick={() => discard(entry)}>
                     {t("agents.raceDiscard")}
                   </button>
@@ -1313,6 +1319,18 @@ function RaceDialog() {
         </div>
       </div>
     </div>
+    </>}
+    <CompareDialog
+      open={compareTarget !== null}
+      onClose={() => setCompareTarget(null)}
+      options={entries.map((entry) => ({
+        path: entry.worktreePath,
+        branch: useWorktrees.getState().worktrees.find((worktree) => worktree.path === entry.worktreePath)?.branch ?? tail(entry.worktreePath),
+      }))}
+      initialA={useWorktrees.getState().activePath ?? undefined}
+      initialB={compareTarget ?? undefined}
+    />
+    </>
   );
 }
 

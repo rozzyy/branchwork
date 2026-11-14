@@ -1,0 +1,22 @@
+.compare-backdrop { z-index: 190; }
+.compare-dialog { width: min(1120px, 96vw); height: min(760px, 92vh); display: flex; flex-direction: column; padding: 18px; }
+.compare-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.compare-head h3 { margin: 0; }
+.compare-head p, .compare-note { color: var(--text-2); font-size: 12px; margin: 4px 0 0; }
+.compare-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: end; margin-top: 16px; }
+.compare-controls label { min-width: 0; display: grid; gap: 5px; color: var(--text-2); font-size: 12px; }
+.compare-controls select { width: 100%; color: var(--text); }
+.compare-toggle { grid-column: 1 / -1; display: flex !important; grid-auto-flow: column; justify-content: start; align-items: center; }
+.compare-note { margin: 9px 0; }
+.compare-summary { font-size: 12px; color: var(--text-2); padding: 8px 0; border-top: 1px solid var(--border); }
+.compare-body { display: grid; grid-template-columns: minmax(240px, 32%) minmax(0, 1fr); min-height: 0; flex: 1; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.compare-files { overflow: auto; border-right: 1px solid var(--border); }
+.compare-files button { display: grid; width: 100%; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; align-items: center; text-align: left; padding: 7px 9px; border: 0; color: var(--text); background: transparent; cursor: pointer; }
+.compare-files button:hover, .compare-files button.selected { background: var(--hover); }
+.compare-files button span { color: var(--text-2); }
+.compare-files button code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compare-files button small { color: var(--text-2); }
+.compare-files > p, .compare-diff > p { padding: 16px; color: var(--text-2); }
+.compare-diff { min-width: 0; min-height: 0; overflow: auto; }
+.compare-dialog > .dlg-actions { justify-content: flex-end; }
+@media (max-width: 720px) { .compare-controls { grid-template-columns: 1fr; } .compare-body { grid-template-columns: minmax(140px, 38%) minmax(0, 1fr); } }

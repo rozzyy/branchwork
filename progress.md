@@ -2,6 +2,23 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-14: Automatically recover stale linked worktrees
+
+- User reported a repository failing to load worktrees because a linked worktree base under `/private/tmp/claude-501/...` no longer existed. `worktree::prune_path` now runs before repository registration and before `worktree::list` / `worktree::summary` reads, so Git removes stale administrative records before they can break refresh or Launchpad summaries. Git's prune only removes registrations whose worktree directories are gone; existing worktrees remain registered.
+- Added Rust regression tests for repository add and worktree refresh. Focused tests passed: 2/2. `./init.sh` passed: Vitest 82 files / 692 tests, Rust 316 passed / 3 ignored, TypeScript and Clippy clean. Scoped `rustfmt --check`, `git diff --check`, and JSON validation passed after the last edit; summary path change was compiled by the focused Rust run.
+- Runtime estimate: each add/refresh/summary read now launches one fixed-argument `git worktree prune --expire=now`; Git scans worktree metadata (O(W) in registered worktrees) and uses bounded metadata memory relative to W. No untrusted argument is passed to Git. Native app verification remains pending.
+
+## 2026-11-14: Complete M6 Stage 5 Compare on `m7-stage-1`
+
+- Followed the user's direction to keep this work aligned with `m7-stage-1`; preserved the pre-existing M7 prototype-parity diff.
+- M6-13: added typed same-repository worktree comparison IPC, tracked dirty snapshots that preserve HEAD/index/files, explicit untracked exclusion, same-path/repository validation, and caps on file count, diff size, timeout, and patch output. Reused existing diff model helpers and regenerated typed bindings.
+- M6-14: added accessible A/B comparison dialog with include-uncommitted switch, file/stat list, shared split renderer, and bounded Copy patch. Enabled Graph's Compare with working tree context action and added Compare for each Race result; existing Keep and confirmed Discard behavior remains.
+- Added focused Rust, IPC, Compare dialog and Graph entry tests. Updated the M6 plan, manual E2E checklist, feature list, and this handoff.
+- Final `./init.sh` after including all current tracked changes: exit 0, Vitest 82 files / 692 tests, Rust 316 passed / 3 ignored, TypeScript and Clippy clean. Focused CompareDialog/Graph/Agents/IPC suites passed (4 files / 54 tests). Detector returned `[]`; `git diff --check` and feature JSON validation passed.
+- User explicitly ordered merging, commit, push and tagging. Preparing the stage commit and `v0.6.0` release/tag; M6-S5's desktop checklist remains pending and is not represented as passed.
+- `src-tauri/src/repository.rs` and `src-tauri/src/worktree.rs` acquired a separate stale-worktree-pruning diff during final verification; it is outside M6-13/14 and was preserved for follow-up.
+- Manual native M6-S5 flows remain pending: real desktop worktree state, patch application, and Race keep/discard lifecycle.
+
 ## 2026-11-12: M5-01 manual checkpoint approved
 
 - User confirmed the Launchpad and Inbox manual flows at desktop and narrow widths are OK. Marked M5-01 `done` in `feature_list.json`; automated review and acceptance coverage were already complete.
@@ -1320,3 +1337,23 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Followed the first unfinished feature in `feature_list.json`: `followup-terminal-file-drop`. Reviewed bounded, quoted PTY path insertion and targeted pane logic; prior focused 15-test suite is recorded. Manual Finder drop could not be observed because `cua-driver permissions status` returned “the app didn't answer”. User had authorized continuing across manual checkpoints; status is recorded done with this gap explicit.
 - Then reviewed `followup-issue-2-term-env`: default `TERM=xterm-256color` is applied before per-session overrides; regression test verifies the child sees TERM and `clear` has no warning.
 - Current baseline `./init.sh` exit 0: TypeScript and Clippy clean; Vitest 80 files / 687 tests passed; Rust 308 passed / 3 ignored. Packaged-app TERM and manual Finder drop checks remain unverified. No additional code change or commit was made after the M7 push.
+
+## 2026-11-14: Fix clipped agent pane header after split
+
+- Bug: splitting an agent pane left/right clipped the header's trailing actions (layout toggles, ±, ⤴, ↗, ✕). Root cause: every `.agent-phd` child is `flex-shrink: 0`, the quota meter (two windows) plus saver badges made the row's intrinsic width exceed a half-width pane, and `.agent-pane { overflow: hidden }` cut off the right end.
+- Fix: moved `QuotaMeter` and `SaverBadges` into a new `.agent-phm` strip directly under the header (wraps, popovers still open downward inside the pane); header now holds identity + actions only, and `.agent-wt` / `.agent-cli-switch` may shrink so the buttons never clip. Regression test added in `AgentsScreen.test.tsx` ("meters live in a strip below the header…").
+- `./init.sh` exit 0: TypeScript and Clippy clean; Vitest 80 files / 688 tests passed; Rust 308 passed / 3 ignored. Uncommitted on `m7-stage-1`.
+
+## 2026-11-14: Fix agent panes not filling the view height in Full layout
+
+- Bug report: Grid and Full layouts fill only the width, not the height. Measured with a headless Playwright page using the real `stage.css` + `agents.css` + `terminal.css` (760px view): solo 760, grid left+right 760/760, **full 420** — Grid already fills; only Full was capped by `.agent-full .agent-pane { height: 420px }` (from `c110d42`).
+- Fix: removed the fixed height so Full rows use the same `minmax(310px, 1fr)` sizing as Grid. After: full 1 pane 760; full 2 panes 380/380 sharing the view instead of 420/420 overflowing. No test added: jsdom cannot measure layout; the measurement script lived in the session scratchpad.
+- `./init.sh` exit 0: TypeScript and Clippy clean; Vitest 80 files / 688 tests passed; Rust 308 passed / 3 ignored. `git diff --check` clean. Uncommitted on `m7-stage-1`.
+
+## 2026-11-14: Match the UI to docs/design/redesign-prototype.html (worktree list excluded)
+
+- Compared headless screenshots of the prototype (all screens) with the running Vite app. Root cause of the drift: shell, Home and Settings still used the pre-redesign glass/rounded chrome and the Launchpad+Inbox layout; the M7 tasks restyled tokens but not those structures.
+- Shell: 44px solid title bar with location crumb (no brand text), bordered rectangular search, ☾/☀ theme + ? only; flush 232px sidebar with bordered project card (mark, "{group} · N projects"), "For this worktree" heading, screen rows with count badges and ⌘1–⌘7 hints; status bar ⎇ branch · changes · ↑↓ · agents · "❯ Terminal Ctrl+`". Stage: lone pane is a 12px-inset bordered panel with a 44px header; split / Agents / Terminal stay flush. Worktree list untouched per request.
+- Home: greeting row with primary "＋ New worktree", three KPI panels, "Needs your attention" panel (Inbox rows with icon tile, primary action, snooze, done; tabs All/Review/Mention/CI/Agents), then Issues for you ("Start → worktree") and CI feed · 24h. The open-PR list and agents card were dropped to match the prototype (PR count stays in the KPI).
+- Agents: toolbar "N sessions · M waiting", segmented layout, small Race / primary New agent; pane header shows bold CLI, faint worktree, status label (Running / Waiting for you / Done / Idle), profile chip; "± Review beside" moved into the meter strip. Settings: 760px column of panels with section headers and one-line hints. "Open beside" uses the ghost small button.
+- Tests updated for the new structure (TitleBar, Launchpad, Inbox, Agents status text, ui type-scale rule). `./init.sh` exit 0: TypeScript and Clippy clean; Vitest 80 files / 687 tests passed; Rust 308 passed / 3 ignored. `git diff --check` clean. Not verified: native Tauri window, light theme, and screens that need a real repo/agent session (Changes, History, Files, agent panes) — only empty states were screenshotted. Uncommitted on `m7-stage-1`.

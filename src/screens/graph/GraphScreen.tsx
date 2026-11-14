@@ -33,6 +33,7 @@ import { GraphEditorTabs } from "./GraphEditorTabs";
 import { WipInspector } from "./WipInspector";
 import "./graph.css";
 import { graphAncestry } from "./graphUtils";
+import { CompareDialog } from "../compare/CompareDialog";
 export { graphAncestry } from "./graphUtils";
 
 const ROW_HEIGHT = 38;
@@ -71,7 +72,6 @@ const filterKeys = {
   mine: "graph.filter.mine",
 } as const;
 const deferredMenuActions = [
-  "graph.action.diff",
   "graph.action.agent",
 ] as const;
 // ponytail: a badge letter for the known bucket a WIP file is in; not a real git status
@@ -426,6 +426,7 @@ export function GraphView() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuPosition | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const requestId = useRef(0);
   const detailRequestId = useRef(0);
@@ -703,6 +704,7 @@ export function GraphView() {
       if (activePath) void useTerminalScreen.getState().openHere(activePath);
     } },
     { kind: "separator" },
+    { kind: "item", label: t("graph.action.diff"), icon: "⇄", disabled: !activePath || useWorktrees.getState().worktrees.length < 2, onSelect: () => { setMenu(null); setCompareOpen(true); } },
     { kind: "header", label: t("graph.deferredActions") },
     ...deferredMenuActions.map((labelKey) => ({
       kind: "item" as const,
@@ -776,6 +778,7 @@ export function GraphView() {
     >
       {() => (
         <>
+          <CompareDialog open={compareOpen} onClose={() => setCompareOpen(false)} initialA={activePath} />
           <section className="graph-list-panel" aria-label={t("graph.commitHistory")}>
             <GraphFilterBar totalLoaded={commits.length} hasMore={hasMore} totalCommits={totalCommits} />
             {error && commits.length === 0 ? (

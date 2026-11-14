@@ -126,3 +126,18 @@ button.chip:hover { background: var(--hover); color: var(--text); }
 .publish-visibility { display: flex; gap: 16px; }
 .publish-visibility label { display: flex; align-items: center; gap: 6px; }
 .publish-error { margin: 0; color: var(--danger); font-size: 12px; }
+/* Prototype panel + section primitives (redesign-prototype.html .panel/.section-h/
+ * .tabs/.empty) and the text utilities screens compose with. */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-panel); }
+.section-h { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 650; }
+.section-h h3 { margin: 0; font-size: var(--fs-body); font-weight: 650; }
+.section-h .grow { flex: 1; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.tab { border: 0; background: transparent; padding: 8px 12px; cursor: pointer; color: var(--text-2); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; font: inherit; }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.empty { display: grid; place-items: center; text-align: center; color: var(--text-2); padding: 32px; gap: 8px; }
+.grow { flex: 1; min-width: 0; }
+.muted { color: var(--text-2); }
+.faint { color: var(--text-3); }
+.meter { display: inline-block; width: 44px; height: 6px; border-radius: 6px; background: var(--border-strong); overflow: hidden; vertical-align: middle; }
+.meter > i { display: block; height: 100%; border-radius: 6px; background: var(--success); }

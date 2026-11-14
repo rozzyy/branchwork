@@ -73,13 +73,16 @@ force-with-lease confirmation on a pushed branch.
 
 | Task | Scope | Depends on |
 |---|---|---|
-| M6-13 Compare IPC | `compare_worktrees(a, b, include_uncommitted)` returns a file list with +/− stats (capped); `compare_file_diff(a, b, path, include_uncommitted)` returns a `DiffModel`; `compare_patch` returns patch text for Copy patch (size-capped). Uncommitted state is snapshotted without touching either working tree (see Decision 3). Both worktrees must belong to the same repository. | M6-02 |
-| M6-14 Compare screen + entry points | Replace the placeholder: worktree A/B pickers, include-uncommitted toggle, file list, shared diff renderer, Copy patch. Entry points: Graph "Compare with working tree", Race results "Compare" with Keep one / Discard others (removes worktree + branch after confirmation, spec §6.6.6). | M6-13 |
+| M6-13 Compare IPC ✅ | `compare_worktrees(a, b, include_uncommitted)` returns a file list with +/− stats (capped); `compare_file_diff(a, b, path, include_uncommitted)` returns a `DiffModel`; `compare_patch` returns patch text for Copy patch (size-capped). Uncommitted state is snapshotted without touching either working tree (see Decision 3). Both worktrees must belong to the same repository. | M6-02 |
+| M6-14 Compare screen + entry points ✅ | Worktree A/B pickers, include-uncommitted toggle, bounded file list, shared diff renderer, Copy patch. Entry points: Graph "Compare with working tree", Race result "Compare"; existing Keep and confirmed Discard actions remain available. | M6-13 |
 
-Manual checkpoint M6.5: compare two race worktrees with and without
+Implementation and automated verification are complete on `m7-stage-1`.
+Manual checkpoint M6.5 remains pending: compare two race worktrees with and without
 uncommitted changes, copy the patch and apply it elsewhere, keep one race
-result and discard the others. Then the M6 review gate (code + security +
-E2E + §9 performance note), and on approval the `v0.6.0` release.
+result and discard the others. The user explicitly ordered merging, committing,
+tagging, and pushing the current changes before those desktop flows were run;
+the `v0.6.0` release is being prepared under that instruction. The checklist
+remains an outstanding manual verification item.
 
 ## Cross-stage constraints
 

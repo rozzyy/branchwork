@@ -40,6 +40,9 @@ export const commands = {
 	graphCommitFileDiff: (projectId: string, worktreePath: string, sha: string, path: string) => __TAURI_INVOKE<DiffModel_Serialize>("graph_commit_file_diff", { projectId, worktreePath, sha, path }),
 	status: (worktreePath: string) => __TAURI_INVOKE<StatusSummary_Serialize>("status", { worktreePath }),
 	diffFile: (worktreePath: string, path: string, area: DiffArea) => __TAURI_INVOKE<DiffModel_Serialize>("diff_file", { worktreePath, path, area }),
+	compareWorktrees: (a: string, b: string, includeUncommitted: boolean) => __TAURI_INVOKE<CompareSummary_Serialize>("compare_worktrees", { a, b, includeUncommitted }),
+	compareFileDiff: (a: string, b: string, path: string, includeUncommitted: boolean) => __TAURI_INVOKE<DiffModel_Serialize>("compare_file_diff", { a, b, path, includeUncommitted }),
+	comparePatch: (a: string, b: string, includeUncommitted: boolean) => __TAURI_INVOKE<string>("compare_patch", { a, b, includeUncommitted }),
 	commit: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit", { worktreePath, options }),
 	commitAndPush: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit_and_push", { worktreePath, options }),
 	commitAndSync: (worktreePath: string, options: CommitOptions) => __TAURI_INVOKE<boolean>("commit_and_sync", { worktreePath, options }),
@@ -313,6 +316,46 @@ export type CommitOptions = {
 	message: string,
 	amend: boolean,
 	stageAll: boolean,
+};
+
+export type CompareFile = CompareFile_Serialize | CompareFile_Deserialize;
+
+export type CompareFileStatus = "added" | "deleted" | "modified" | "renamed" | "copied" | "typechange" | "unreadable" | "conflicted";
+
+export type CompareFile_Deserialize = {
+	path: string,
+	oldPath?: string | null,
+	status: CompareFileStatus,
+	additions: number,
+	deletions: number,
+	binary: boolean,
+	truncated: boolean,
+};
+
+export type CompareFile_Serialize = {
+	path: string,
+	oldPath: string | null,
+	status: CompareFileStatus,
+	additions: number,
+	deletions: number,
+	binary: boolean,
+	truncated: boolean,
+};
+
+export type CompareSummary = CompareSummary_Serialize | CompareSummary_Deserialize;
+
+export type CompareSummary_Deserialize = {
+	files: CompareFile_Deserialize[],
+	truncated: boolean,
+	/**  Untracked files are intentionally excluded from stash-create snapshots. */
+	untrackedExcluded: boolean,
+};
+
+export type CompareSummary_Serialize = {
+	files: CompareFile_Serialize[],
+	truncated: boolean,
+	/**  Untracked files are intentionally excluded from stash-create snapshots. */
+	untrackedExcluded: boolean,
 };
 
 export type ConflictEntry = {

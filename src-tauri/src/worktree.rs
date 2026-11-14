@@ -444,6 +444,7 @@ fn path_matches_watch(path: &Path, watched_path: &Path, mode: &RecursiveMode) ->
 }
 
 pub fn list(path: &Path, watcher: &WorktreeWatcher) -> Result<Vec<Worktree>, AppError> {
+    prune_path(path)?;
     let repository = Repository::open(path).map_err(|error| {
         AppError::not_a_repo(format!(
             "Invalid Git repository at {}: {error}",
@@ -498,6 +499,7 @@ pub fn list(path: &Path, watcher: &WorktreeWatcher) -> Result<Vec<Worktree>, App
 
 /// Bounded Launchpad view: count every registered worktree but read metadata for at most `limit`.
 pub fn summary(path: &Path, limit: usize) -> Result<WorktreeSummary, AppError> {
+    prune_path(path)?;
     let repository = Repository::open(path).map_err(|error| {
         AppError::not_a_repo(format!(
             "Invalid Git repository at {}: {error}",
@@ -1214,7 +1216,13 @@ pub fn remove(
 }
 
 pub fn prune(project: &Project) -> Result<(), AppError> {
-    let (main_path, _) = project_main_repository(Path::new(&project.local_path))?;
+    prune_path(Path::new(&project.local_path))
+}
+
+/// Remove Git's administrative records for linked worktrees whose directories are gone.
+/// Git only prunes records it can verify are stale; live worktree registrations remain intact.
+pub(crate) fn prune_path(path: &Path) -> Result<(), AppError> {
+    let (main_path, _) = project_main_repository(path)?;
     run_git_write(
         &main_path,
         &[
@@ -1537,6 +1545,23 @@ mod tests {
         );
         assert_eq!(linked.dirty_count, 2);
         assert_eq!(linked.state, WorktreeState::Dirty);
+    }
+
+    #[test]
+    fn list_prunes_missing_linked_worktree_before_loading() {
+        let temp = TestDir::new();
+        let main_path = temp.0.join("main");
+        fs::create_dir(&main_path).unwrap();
+        let repository = init_repository(&main_path);
+        let stale_path = temp.0.join("removed-worktree");
+        repository.worktree("stale", &stale_path, None).unwrap();
+        fs::remove_dir_all(&stale_path).unwrap();
+        let watcher = WorktreeWatcher::new(|_| {});
+
+        // Listing may fail later if the host cannot start its filesystem watcher; pruning
+        // happens first and must still remove the stale administrative record.
+        let _ = list(&main_path, &watcher);
+        assert!(repository.worktrees().unwrap().is_empty());
     }
 
     #[test]

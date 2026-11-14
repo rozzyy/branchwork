@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ghNotifications, markAllGithubNotificationsRead, markGithubNotificationRead } from "../../ipc/inbox";
 import { ghRateLimitStatus, openGithubRepoPage } from "../../ipc/repo";
@@ -7,6 +7,7 @@ import { useGithubAccounts } from "../../github/store";
 import { useSessions, type AgentSession } from "../../agents/sessions";
 import { useStage } from "../../state/stage";
 import { InboxView } from "./InboxScreen";
+import { useLaunchpadUi } from "../launchpad/launchpadUi";
 
 vi.mock("../../ipc/inbox", () => ({
   ghNotifications: vi.fn(),
@@ -62,36 +63,35 @@ beforeEach(() => {
   useGithubAccounts.setState({ accounts: ["octocat"], defaultAccount: "octocat", ownerAccounts: {}, loaded: true });
   useSessions.setState({ sessions: [], loaded: true });
   useStage.setState({ go: vi.fn() } as never);
+  useLaunchpadUi.setState({ refreshRequest: 0 });
 });
 
 describe("InboxView", () => {
-  it("keeps loading and empty feedback in the split view", async () => {
+  const row = (name: string) => screen.findByRole("article", { name });
+
+  it("keeps loading and empty feedback inside the attention panel", async () => {
     let finishLoad!: (value: { notifications: typeof notification[]; failures: [] }) => void;
     vi.mocked(ghNotifications).mockImplementationOnce(() => new Promise((resolve) => { finishLoad = resolve; }));
     render(<InboxView />);
-
-    const list = document.querySelector(".inbox-list") as HTMLElement;
-    expect(await within(list).findByText("Loading inbox…")).toBeInTheDocument();
+    expect(await screen.findByText("Loading inbox…")).toBeInTheDocument();
     finishLoad({ notifications: [], failures: [] });
-    expect(await within(list).findByText("You're all caught up.")).toBeInTheDocument();
-    expect(within(document.querySelector(".inbox-detail") as HTMLElement).getByText("You're all caught up.")).toBeInTheDocument();
+    expect(await screen.findByText("You're all caught up.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Needs your attention" })).toBeInTheDocument();
   });
 
-  it("shows a quota retry state and refreshes when requested", async () => {
+  it("shows a quota retry state and refreshes when Home's Refresh is requested", async () => {
     vi.mocked(ghRateLimitStatus)
       .mockResolvedValueOnce({ limit: 100, remaining: 1, reset_at: null, retry_after: 60 })
       .mockResolvedValueOnce(null);
     render(<InboxView />);
-
-    const list = document.querySelector(".inbox-list") as HTMLElement;
-    expect(await within(list).findByText(/GitHub quota is low/)).toBeInTheDocument();
+    expect(await screen.findByText(/GitHub quota is low/)).toBeInTheDocument();
     expect(ghNotifications).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    expect(await screen.findByRole("button", { name: "Please review PR 7" })).toBeInTheDocument();
+    act(() => useLaunchpadUi.getState().requestRefresh());
+    expect(await row("Please review PR 7")).toBeInTheDocument();
     expect(ghNotifications).toHaveBeenCalledWith(["octocat"]);
   });
 
-  it("maps CI and agent filters while keeping unknown GitHub reasons in All", async () => {
+  it("maps CI and agent tabs while keeping unknown GitHub reasons in All", async () => {
     vi.mocked(ghNotifications).mockResolvedValueOnce({
       notifications: [
         notification,
@@ -102,58 +102,54 @@ describe("InboxView", () => {
     });
     useSessions.setState({ sessions: [agentSession("waiting")] });
     render(<InboxView />);
-
-    await screen.findByRole("button", { name: "Please review PR 7" });
-    fireEvent.click(screen.getByRole("button", { name: "CI" }));
-    expect(await screen.findByRole("button", { name: "Build failed" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Subscribed thread" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Agent" }));
-    expect(await screen.findByRole("button", { name: "Codex is waiting for input" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Build failed" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
-    expect(await screen.findByRole("button", { name: "Subscribed thread" })).toBeInTheDocument();
+    await row("Please review PR 7");
+    fireEvent.click(screen.getByRole("tab", { name: "CI" }));
+    expect(await row("Build failed")).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Subscribed thread" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Agents" }));
+    expect(await row("Codex is waiting for input")).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Build failed" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "All" }));
+    expect(await row("Subscribed thread")).toBeInTheDocument();
   });
 
-  it("opens a safe contextual GitHub route and marks the notification read", async () => {
+  it("opens a safe contextual GitHub route and marks the notification read from the row", async () => {
     render(<InboxView />);
-    expect(await screen.findByRole("button", { name: "Please review PR 7" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Please review PR 7" })).toBeInTheDocument();
-    const detail = document.querySelector(".inbox-detail") as HTMLElement;
-    fireEvent.click(within(detail).getByRole("button", { name: "Review now" }));
+    const item = await row("Please review PR 7");
+    fireEvent.click(within(item).getByRole("button", { name: "Review now" }));
     expect(openGithubRepoPage).toHaveBeenCalledWith("octo", "repo", "pull", 7);
-    fireEvent.click(within(detail).getByRole("button", { name: "Mark done" }));
+    fireEvent.click(within(item).getByRole("button", { name: "Mark done" }));
     await waitFor(() => expect(markGithubNotificationRead).toHaveBeenCalledWith("octocat", "123"));
   });
 
-  it("filters by notification category without marking selection read", async () => {
+  it("filters by notification category without marking anything read", async () => {
     render(<InboxView />);
-    await screen.findByRole("button", { name: "Please review PR 7" });
-    fireEvent.click(screen.getByRole("button", { name: "Mention" }));
-    expect(within(document.querySelector(".inbox-list") as HTMLElement).getByText("You're all caught up.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    expect(await screen.findByRole("button", { name: "Please review PR 7" })).toBeInTheDocument();
+    await row("Please review PR 7");
+    fireEvent.click(screen.getByRole("tab", { name: "Mention" }));
+    expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Review" }));
+    expect(await row("Please review PR 7")).toBeInTheDocument();
     expect(markGithubNotificationRead).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Review" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tab", { name: "Review" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("marks all GitHub notifications read", async () => {
     render(<InboxView />);
-    await screen.findByRole("button", { name: "Please review PR 7" });
+    await row("Please review PR 7");
     fireEvent.click(screen.getByRole("button", { name: "Read all" }));
     await waitFor(() => expect(markAllGithubNotificationsRead).toHaveBeenCalledWith("octocat"));
   });
 
-  it("snoozes a notification for one day and shows account errors inside the list", async () => {
+  it("snoozes a notification for one day and shows account errors inside the panel", async () => {
     vi.mocked(ghNotifications).mockResolvedValueOnce({
       notifications: [notification],
       failures: [{ account: "other-account", message: "temporary failure" }],
     });
     render(<InboxView />);
-    await screen.findByRole("button", { name: "Please review PR 7" });
+    const item = await row("Please review PR 7");
     expect(screen.getByRole("alert")).toHaveTextContent("temporary failure");
-    const row = screen.getByRole("button", { name: "Please review PR 7" }).closest(".inbox-item") as HTMLElement;
     const before = Date.now();
-    fireEvent.click(within(row).getByRole("button", { name: "Snooze" }));
+    fireEvent.click(within(item).getByRole("button", { name: "Snooze" }));
     await waitFor(() => {
       const saved = vi.mocked(saveSetting).mock.calls
         .filter(([key]) => key === "inboxState")
@@ -166,10 +162,9 @@ describe("InboxView", () => {
   it("dismisses an agent event without closing or stopping its session", async () => {
     useSessions.setState({ sessions: [agentSession("waiting")] });
     render(<InboxView />);
-    expect(await screen.findByRole("button", { name: "Codex is waiting for input" })).toBeInTheDocument();
-    const row = screen.getByRole("button", { name: "Codex is waiting for input" }).closest(".inbox-item") as HTMLElement;
-    fireEvent.click(within(row).getByRole("button", { name: "Mark done" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Codex is waiting for input" })).not.toBeInTheDocument());
+    const item = await row("Codex is waiting for input");
+    fireEvent.click(within(item).getByRole("button", { name: "Mark done" }));
+    await waitFor(() => expect(screen.queryByRole("article", { name: "Codex is waiting for input" })).not.toBeInTheDocument());
     expect(useSessions.getState().sessions).toHaveLength(1);
     expect(useSessions.getState().sessions[0].status).toBe("waiting");
   });
@@ -177,10 +172,9 @@ describe("InboxView", () => {
   it("allows dismissing an already-finished agent event", async () => {
     useSessions.setState({ sessions: [agentSession("done")] });
     render(<InboxView />);
-    expect(await screen.findByRole("button", { name: "Codex finished" })).toBeInTheDocument();
-    const row = screen.getByRole("button", { name: "Codex finished" }).closest(".inbox-item") as HTMLElement;
-    fireEvent.click(within(row).getByRole("button", { name: "Mark done" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Codex finished" })).not.toBeInTheDocument());
+    const item = await row("Codex finished");
+    fireEvent.click(within(item).getByRole("button", { name: "Mark done" }));
+    await waitFor(() => expect(screen.queryByRole("article", { name: "Codex finished" })).not.toBeInTheDocument());
     expect(useSessions.getState().sessions).toHaveLength(1);
     expect(useSessions.getState().sessions[0].status).toBe("done");
   });

@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { t } from "../../i18n/t";
-import { CLI_REGISTRY } from "../../agents/registry";
 import { useSessions } from "../../agents/sessions";
 import { useGithubAccounts } from "../../github/store";
 import {
   ghRateLimitStatus, ghRepoAssignedIssues, ghRepoPulls, ghRepoRemote, ghRepoRuns, ghRepoRerun,
-  openGithubRepoPage, type RepoIssue, type RepoPull, type RepoRun,
+  type RepoIssue, type RepoPull, type RepoRun,
 } from "../../ipc/repo";
 import { createWorktree, summarizeWorktrees, type Worktree } from "../../ipc/worktrees";
 import { errorMessage } from "../../ipc/errors";
@@ -78,20 +77,34 @@ function scopeProjects(projects: Project[], groupId: string | null, all: boolean
 }
 
 export function LaunchpadToolbar() {
-  const groups = useRepos((state) => state.groups);
-  const projects = useRepos((state) => state.projects);
-  const activeGroupId = useRepos((state) => state.activeGroupId);
-  const activeProjectId = useRepos((state) => state.activeProjectId);
   const allGroups = useLaunchpadUi((state) => state.allGroups);
-  const creatingWorktree = useLaunchpadUi((state) => state.creatingWorktree);
   const setAllGroups = useLaunchpadUi((state) => state.setAllGroups);
   const requestRefresh = useLaunchpadUi((state) => state.requestRefresh);
-  const setCreatingWorktree = useLaunchpadUi((state) => state.setCreatingWorktree);
-  const activeGroupName = groups.find((group) => group.id === activeGroupId)?.name ?? t("launchpad.ungrouped");
-  const scopeProjectsCount = allGroups
-    ? projects.length
-    : scopeProjects(projects, activeGroupId, false).length;
+  return (
+    <>
+      <h1 className="pane-title">{t("nav.home")}</h1>
+      <div className="launchpad-toolbar-actions pane-actions">
+        <Segmented
+          label={t("launchpad.scope")}
+          value={allGroups ? "all" : "group"}
+          onChange={(value) => setAllGroups(value === "all")}
+          options={[
+            { value: "group", label: t("launchpad.thisGroup") },
+            { value: "all", label: t("launchpad.allGroups") },
+          ]}
+        />
+        <Button size="sm" onClick={requestRefresh}>↻ {t("launchpad.refresh")}</Button>
+      </div>
+    </>
+  );
+}
 
+/** "＋ New worktree" primary action; lives in the Home greeting row (prototype). */
+export function NewWorktreeButton() {
+  const activeProjectId = useRepos((state) => state.activeProjectId);
+  const creatingWorktree = useLaunchpadUi((state) => state.creatingWorktree);
+  const setCreatingWorktree = useLaunchpadUi((state) => state.setCreatingWorktree);
+  const requestRefresh = useLaunchpadUi((state) => state.requestRefresh);
   const createNewWorktree = async () => {
     const repoState = useRepos.getState();
     const project = repoState.projects.find((candidate) => candidate.id === repoState.activeProjectId);
@@ -119,47 +132,25 @@ export function LaunchpadToolbar() {
       setCreatingWorktree(false);
     }
   };
-
   return (
-    <>
-      <h1 className="pane-title">
-        {t("nav.home")}
-        <span className="launchpad-toolbar-subtitle">{allGroups ? t("launchpad.allGroups") : activeGroupName} · {scopeProjectsCount}</span>
-      </h1>
-      <div className="launchpad-toolbar-actions pane-actions">
-        <Segmented
-          label={t("launchpad.scope")}
-          value={allGroups ? "all" : "group"}
-          onChange={(value) => setAllGroups(value === "all")}
-          options={[
-            { value: "group", label: t("launchpad.thisGroup") },
-            { value: "all", label: t("launchpad.allGroups") },
-          ]}
-        />
-        <Button className="launchpad-refresh" variant="ghost" size="sm" aria-label={t("launchpad.refresh")} title={t("launchpad.refresh")} onClick={requestRefresh}>
-          ↻
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={!activeProjectId || creatingWorktree}
-          title={!activeProjectId ? t("launchpad.noActiveProject") : undefined}
-          onClick={() => void createNewWorktree()}
-        >
-          {creatingWorktree ? <><span className="spin" /> {t("launchpad.creatingWorktree")}</> : <>＋ {t("launchpad.newWorktree")}</>}
-        </Button>
-      </div>
-    </>
+    <Button
+      variant="primary"
+      disabled={!activeProjectId || creatingWorktree}
+      title={!activeProjectId ? t("launchpad.noActiveProject") : undefined}
+      onClick={() => void createNewWorktree()}
+    >
+      {creatingWorktree ? <><span className="spin" /> {t("launchpad.creatingWorktree")}</> : <>＋ {t("launchpad.newWorktree")}</>}
+    </Button>
   );
 }
 
-export function LaunchpadView() {
+export function LaunchpadView({ attention }: { attention?: ReactNode } = {}) {
   const projects = useRepos((state) => state.projects);
+  const groups = useRepos((state) => state.groups);
   const activeGroupId = useRepos((state) => state.activeGroupId);
   const accountNames = useGithubAccounts((state) => state.accounts);
   const defaultAccount = useGithubAccounts((state) => state.defaultAccount);
   const ownerAccounts = useGithubAccounts((state) => state.ownerAccounts);
-  const sessions = useSessions((state) => state.sessions);
   const go = useStage((state) => state.go);
   const allGroups = useLaunchpadUi((state) => state.allGroups);
   const refreshRequest = useLaunchpadUi((state) => state.refreshRequest);
@@ -252,7 +243,6 @@ export function LaunchpadView() {
     completedRecent,
     passedRecent,
     spark,
-    openPulls,
     issues,
     ciFeed,
   } = useMemo(() => {
@@ -272,7 +262,6 @@ export function LaunchpadView() {
         return epoch >= from && epoch < to;
       }).length;
     });
-    const openPulls = data.flatMap((project) => project.pulls.map((pull) => ({ project, pull }))).slice(0, 12);
     const issues = data.flatMap((project) => project.issues.map((issue) => ({ project, issue }))).slice(0, 12);
     const ciFeed = [...runs]
       .sort((a, b) => (Date.parse(b.run.createdAt ?? "") || 0) - (Date.parse(a.run.createdAt ?? "") || 0))
@@ -284,29 +273,10 @@ export function LaunchpadView() {
       completedRecent,
       passedRecent,
       spark,
-      openPulls,
       issues,
       ciFeed,
     };
   }, [data]);
-  const scopedAgentCards = useMemo(() => {
-    const worktreePaths = new Set<string>();
-    for (const project of data) {
-      worktreePaths.add(project.path);
-      for (const worktree of project.worktrees) worktreePaths.add(worktree.path);
-    }
-    return sessions
-      .filter((session) => ["running", "waiting", "done"].includes(session.status) && worktreePaths.has(session.worktreePath))
-      .slice(-8)
-      .reverse();
-  }, [data, sessions]);
-
-  const safeOpen = (project: ProjectData, page: "pull" | "issues" | "actions", number?: number) => {
-    if (!project.remote) return;
-    void openGithubRepoPage(project.remote.owner, project.remote.repo, page, number).catch((failure) =>
-      toast({ title: errorMessage(failure), icon: "⚠" }));
-  };
-
   const ensureProject = async (project: ProjectData, path?: string) => {
     const record = projects.find((candidate) => candidate.id === project.id);
     if (!record) return false;
@@ -356,65 +326,53 @@ export function LaunchpadView() {
     }
   };
 
-  const focusAgent = async (session: (typeof sessions)[number]) => {
-    const project = data.find((item) => item.worktrees.some((worktree) => worktree.path === session.worktreePath));
-    if (project) await ensureProject(project, session.worktreePath);
-    if (useSessions.getState().sessions.find((candidate) => candidate.id === session.id)?.slot !== "full") {
-      useSessions.getState().toggleSlot(session.id, "full");
-    }
-    go("agents");
-  };
-
-  const openHandover = (sessionId: string) => {
-    useSessions.getState().setHandoverFor(sessionId);
-    go("agents");
-  };
-
+  const scopeLabel = allGroups ? t("launchpad.allGroups") : groups.find((group) => group.id === activeGroupId)?.name ?? t("launchpad.ungrouped");
+  const notes = [
+    error && <p className="launchpad-error" role="alert" key="error">{error}</p>,
+    limitNote && <p className="launchpad-note" role="status" key="limit">{t("launchpad.projectLimit", { count: MAX_PROJECTS })}</p>,
+    worktreeLimitNote && <p className="launchpad-note" role="status" key="wt-limit">{t("launchpad.worktreeLimit")}</p>,
+    rateLimited && <p className="launchpad-note" role="status" key="rate">{t("launchpad.rateLimited")}</p>,
+    ...data.filter((project) => project.error).map((project) => <p className="launchpad-error" role="alert" key={project.id}>{t("launchpad.repoError", { repo: project.name, message: project.error! })}</p>),
+  ].filter(Boolean);
+  const runTone = (run: RepoRun) => runFailed(run) ? "bad" : run.status === "completed" && run.conclusion === "success" ? "ok" : "warn";
+  const runGlyph = (run: RepoRun) => runFailed(run) ? "✕" : run.status === "completed" && run.conclusion === "success" ? "✓" : "●";
   return (
-    <main className="launchpad-screen">
-      <header className="launchpad-welcome">
-        <div><p className="launchpad-eyebrow">{t("launchpad.eyebrow")}</p><h2>{greeting()}</h2>
-          <p>{t("launchpad.summary", { projects: selectedProjects.length, worktrees: worktreeCount })}</p></div>
-        <section className="launchpad-kpis" aria-label={t("launchpad.kpis")}>
-          <article className="launchpad-kpi"><span>{t("launchpad.openPulls")}</span><strong>{loading ? "—" : openPullCount}</strong><small>{t("launchpad.openPullsHint")}</small></article>
-          <article className="launchpad-kpi"><span>{t("launchpad.worktrees")}</span><strong>{loading ? "—" : worktreeCount}</strong><small>{t("launchpad.worktreesHint")}</small></article>
-          <article className="launchpad-kpi"><span>{t("launchpad.ciPassRate")}</span><strong>{loading || completedRecent.length === 0 ? "—" : `${passedRecent}/${completedRecent.length}`}</strong>
-            <div className="launchpad-spark" role="img" aria-label={t("launchpad.ciSparkline")}>
-              {spark.map((value, index) => <i key={index} style={{ height: `${Math.max(3, Math.min(20, 4 + value * 4))}px` }} />)}
-            </div><small>{t("launchpad.last24h")}</small></article>
-        </section>
-      </header>
-      <div className="launchpad-columns">
-        <section className="launchpad-card launchpad-attention"><header><h3>{t("launchpad.attention")}</h3><span>{openPulls.length + issues.length}</span></header>
-          {error && <p className="launchpad-error" role="alert">{error}</p>}
-          {limitNote && <p className="launchpad-note" role="status">{t("launchpad.projectLimit", { count: MAX_PROJECTS })}</p>}
-          {worktreeLimitNote && <p className="launchpad-note" role="status">{t("launchpad.worktreeLimit")}</p>}
-          {rateLimited && <p className="launchpad-note" role="status">{t("launchpad.rateLimited")}</p>}
-          {data.filter((project) => project.error).map((project) => <p className="launchpad-error" role="alert" key={project.id}>{t("launchpad.repoError", { repo: project.name, message: project.error! })}</p>)}
-          <h4>{t("launchpad.openPulls")}</h4>
-          {loading ? <p className="launchpad-muted">{t("launchpad.loading")}</p> : openPulls.length === 0 ? <p className="launchpad-muted">{t("launchpad.noPulls")}</p> :
-            <div className="launchpad-list">{openPulls.map(({ project, pull }) => <article key={`${project.id}:${pull.number}`}>
-              <div className="launchpad-row-main"><strong>{pull.title}</strong><small>{project.name} · #{pull.number} · {pull.author}</small></div>
-              <Button size="sm" onClick={() => safeOpen(project, "pull", pull.number)}>{t("launchpad.open")}</Button>
-            </article>)}</div>}
-          <h4 className="launchpad-subsection-title">{t("launchpad.issuesForYou")}</h4>
+    <main className="home">
+      <div className="home-top">
+        <div>
+          <div className="faint">{t("launchpad.workspaceIn", { group: scopeLabel })}</div>
+          <h2>{greeting()}</h2>
+        </div>
+        <span className="grow" />
+        <NewWorktreeButton />
+      </div>
+      <section className="kpis" aria-label={t("launchpad.kpis")}>
+        <article className="panel kpi"><span className="muted">{t("launchpad.openPulls")}</span><b>{loading ? "—" : openPullCount}</b><span className="faint">{t("launchpad.openPullsHint")}</span></article>
+        <article className="panel kpi"><span className="muted">{t("launchpad.worktrees")}</span><b>{loading ? "—" : worktreeCount}</b><span className="faint">{t("launchpad.worktreesHint")}</span></article>
+        <article className="panel kpi"><span className="muted">{t("launchpad.ciPassRate")}</span><b>{loading || completedRecent.length === 0 ? "—" : `${passedRecent}/${completedRecent.length}`}</b>
+          <div className="launchpad-spark" role="img" aria-label={t("launchpad.ciSparkline")}>
+            {spark.map((value, index) => <i key={index} style={{ height: `${Math.max(3, Math.min(20, 4 + value * 4))}px` }} />)}
+          </div><span className="faint">{t("launchpad.last24h")}</span></article>
+      </section>
+      {attention}
+      {notes.length > 0 && <div className="home-notes">{notes}</div>}
+      <div className="cols2">
+        <section className="panel" aria-label={t("launchpad.issuesForYou")}><div className="section-h"><h3>{t("launchpad.issuesForYou")}</h3></div>
           {loading ? <p className="launchpad-muted">{t("launchpad.loading")}</p> : issues.length === 0 ? <p className="launchpad-muted">{t("launchpad.noIssues")}</p> :
-            <div className="launchpad-list">{issues.map(({ project, issue }) => <article key={`${project.id}:${issue.number}`}>
-              <div className="launchpad-row-main"><strong>{issue.title}</strong><small>{project.name} · #{issue.number} · {issue.author}</small></div>
-              <div className="launchpad-row-actions"><Button size="sm" onClick={() => void startIssue(project, issue)}>{t("launchpad.start")}</Button><Button size="sm" variant="ghost" onClick={() => void assignIssue(project, issue)}>{t("launchpad.assign")}</Button></div>
-            </article>)}</div>}
+            issues.map(({ project, issue }) => <div className="list-row" key={`${project.id}:${issue.number}`}>
+              <span className="status ok" aria-hidden>●</span>
+              <span className="grow" title={`${project.name} · #${issue.number} · ${issue.author}`}>#{issue.number} {issue.title}</span>
+              <Button size="sm" onClick={() => void startIssue(project, issue)}>{t("launchpad.start")}</Button>
+              <Button size="sm" variant="ghost" onClick={() => void assignIssue(project, issue)}>{t("launchpad.assign")}</Button>
+            </div>)}
         </section>
-        <section className="launchpad-card launchpad-agents"><header><h3>{t("launchpad.agents")}</h3><Button size="sm" variant="ghost" onClick={() => go("agents")}>{t("launchpad.openAll")}</Button></header>
-          {scopedAgentCards.length === 0 ? <p className="launchpad-muted">{t("launchpad.noAgents")}</p> : <div className="launchpad-list">{scopedAgentCards.map((session) => <article key={session.id}>
-            <div className="launchpad-row-main"><strong><i className={`launchpad-agent-dot ${session.status}`} />{CLI_REGISTRY[session.cliId].name}</strong><span className={`launchpad-status ${session.status}`}>{session.status}</span><small>{session.profile.slug} · {session.worktreePath.split("/").filter(Boolean).pop()}</small></div>
-            <div className="launchpad-row-actions"><Button size="sm" onClick={() => void focusAgent(session)}>{t("launchpad.openCli")}</Button><Button size="sm" variant="ghost" onClick={() => openHandover(session.id)}>{t("launchpad.handover")}</Button></div>
-          </article>)}</div>}
-        </section>
-        <section className="launchpad-card launchpad-ci"><header><h3>{t("launchpad.ciFeed")}</h3><span>{recentRuns.length}</span></header>
+        <section className="panel" aria-label={t("launchpad.ciFeed")}><div className="section-h"><h3>{t("launchpad.ciFeed")}</h3><span className="grow" /><span className="faint">{recentRuns.length}</span></div>
           {loading ? <p className="launchpad-muted">{t("launchpad.loading")}</p> : ciFeed.length === 0 ? <p className="launchpad-muted">{t("launchpad.noRuns")}</p> :
-            <div className="launchpad-list">{ciFeed.map(({ project, run }) => <article key={`${project.id}:${run.id}`}>
-              <div className="launchpad-row-main"><strong><i className={`launchpad-ci-dot ${run.conclusion ?? run.status}`} />{run.name}</strong><small>{project.name} · {run.branch} · {formatRunStatus(run)} · {ageLabel(run.createdAt)}</small></div>
-              {runFailed(run) && project.remote && project.account ? <Button size="sm" variant="ghost" disabled={rerunning === run.id} onClick={() => {
+            ciFeed.map(({ project, run }) => <div className="list-row" key={`${project.id}:${run.id}`}>
+              <span className={`status ${runTone(run)}`}>{runGlyph(run)} {formatRunStatus(run)}</span>
+              <span className="grow">{project.name} · {run.branch} · {run.name}</span>
+              <span className="faint">{ageLabel(run.createdAt)}</span>
+              {runFailed(run) && project.remote && project.account && <Button size="sm" variant="ghost" disabled={rerunning === run.id} onClick={() => {
                 if (rerunning !== null) return;
                 void ask({ title: t("repo.rerunTitle"), body: t("repo.rerunBody", { name: run.name, id: run.id, branch: run.branch }), ok: t("repo.rerunOk"), icon: "↻" }).then((answer) => {
                   if (answer !== true) return;
@@ -424,8 +382,8 @@ export function LaunchpadView() {
                     .catch((failure: unknown) => toast({ title: errorMessage(failure), icon: "⚠" }))
                     .finally(() => setRerunning(null));
                 });
-              }}>{rerunning === run.id ? t("repo.rerunning") : t("launchpad.ciRerun")}</Button> : <Button size="sm" variant="ghost" onClick={() => safeOpen(project, "actions")}>{t("launchpad.open")}</Button>}
-            </article>)}</div>}
+              }}>{rerunning === run.id ? t("repo.rerunning") : t("launchpad.ciRerun")}</Button>}
+            </div>)}
         </section>
       </div>
       {!loading && selectedProjects.length === 0 && <p className="launchpad-muted">{t("launchpad.noProjects")}</p>}

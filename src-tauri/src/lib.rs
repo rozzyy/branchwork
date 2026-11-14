@@ -1,6 +1,7 @@
 mod blame;
 mod cli;
 mod commit;
+mod compare;
 mod conflict;
 mod diff;
 mod error;
@@ -409,6 +410,40 @@ fn diff_file(
 ) -> Result<diff::DiffModel, AppError> {
     let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
     diff::read(&worktree_path, &path, area)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn compare_worktrees(
+    store: State<'_, Store>,
+    a: String,
+    b: String,
+    include_uncommitted: bool,
+) -> Result<compare::CompareSummary, AppError> {
+    compare::list(&store, &a, &b, include_uncommitted)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn compare_file_diff(
+    store: State<'_, Store>,
+    a: String,
+    b: String,
+    path: String,
+    include_uncommitted: bool,
+) -> Result<diff::DiffModel, AppError> {
+    compare::file_diff(&store, &a, &b, &path, include_uncommitted)
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn compare_patch(
+    store: State<'_, Store>,
+    a: String,
+    b: String,
+    include_uncommitted: bool,
+) -> Result<String, AppError> {
+    compare::patch(&store, &a, &b, include_uncommitted)
 }
 
 #[tauri::command(async)]
@@ -1637,6 +1672,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             graph_commit_file_diff,
             status,
             diff_file,
+            compare_worktrees,
+            compare_file_diff,
+            compare_patch,
             commit,
             commit_and_push,
             commit_and_sync,

@@ -15,12 +15,12 @@ beforeEach(() => {
   useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, openProjectIds: [], status: "idle", error: null });
 });
 
-it("shows the theme-adaptive brand mark next to the app name", () => {
+it("shows the location crumb instead of brand text, matching the redesign prototype", () => {
   const { container } = render(<TitleBar />);
-  const mark = container.querySelector(".app-mark");
-  expect(mark).not.toBeNull();
-  expect(mark?.getAttribute("aria-hidden")).toBe("true");
-  expect(screen.getByText("Branchwork")).toBeInTheDocument();
+  expect(container.querySelector(".app-mark")).toBeNull();
+  expect(screen.queryByText("Branchwork")).toBeNull();
+  expect(screen.getByRole("navigation", { name: "Workspace location" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Search or ask… \(end with \?\)/ })).toBeInTheDocument();
 });
 
 it("shows the active group and project in the title bar", () => {

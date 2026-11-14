@@ -20,6 +20,11 @@ import { gitBranchCreate, gitCheckout, gitCherryPick, gitRevert } from "../../ip
 import { useToasts } from "../../ui/toast";
 import { ghRepoRemote, openGithubCommit } from "../../ipc/repo";
 import { useFiles } from "../../state/files";
+vi.mock("../../ipc/compare", () => ({
+  readCompareWorktrees: vi.fn().mockResolvedValue({ files: [], truncated: false, untrackedExcluded: true }),
+  readCompareFileDiff: vi.fn(),
+  readComparePatch: vi.fn(),
+}));
 
 vi.mock("../../ipc/graph", () => ({
   readGraphCommitDetail: vi.fn(),
@@ -285,8 +290,12 @@ it("shows all worktree file groups, opens Changes, and inspects commit details",
   expect(screen.getByText("main", { selector: ".graph-commit-meta .graph-ref" })).toBeVisible();
 });
 
-it("filters rows and visibly disables deferred graph actions", async () => {
+it("filters rows and opens comparison from the graph context menu", async () => {
   setupGraph();
+  useWorktrees.setState({ worktrees: [
+    { path: "/repos/main", branch: "main", head: "head-sha", ahead: 0, behind: 0, dirtyCount: 0, state: "clean" },
+    { path: "/repos/side", branch: "side", head: "side-sha", ahead: 0, behind: 0, dirtyCount: 0, state: "clean" },
+  ] });
   await screen.findByRole("option", { name: /Initial commit/ });
 
   await userEvent.click(screen.getByRole("button", { name: "⌂ Worktrees" }));
@@ -308,7 +317,10 @@ it("filters rows and visibly disables deferred graph actions", async () => {
   expect(screen.getByRole("menuitem", { name: "Copy SHA" })).toBeEnabled();
   expect(screen.getByRole("menuitem", { name: "Create worktree here" })).toBeEnabled();
   expect(screen.getByRole("menuitem", { name: /Start agent here · Later/ })).toBeDisabled();
-  expect(screen.getByRole("menuitem", { name: /Compare with working tree · Later/ })).toBeDisabled();
+  const compare = screen.getByRole("menuitem", { name: "Compare with working tree" });
+  expect(compare).toBeEnabled();
+  await userEvent.click(compare);
+  expect(await screen.findByRole("dialog", { name: "Compare worktrees" })).toBeVisible();
 });
 
 it("runs fetch, pull, and push from the toolbar with ahead/behind counts", async () => {

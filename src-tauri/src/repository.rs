@@ -267,6 +267,7 @@ pub fn open_and_register(path: &Path, store: &Store) -> Result<Project, AppError
         ));
     }
     let project = inspect_repository(&path)?;
+    crate::worktree::prune_path(Path::new(&project.local_path))?;
     if let Some(existing) = store.project_by_path(&project.local_path)? {
         return Ok(existing);
     }
@@ -376,6 +377,22 @@ mod tests {
         assert_eq!(store.list_projects().unwrap(), vec![project.clone()]);
         assert_eq!(open_and_register(&path, &store).unwrap(), project);
         assert_eq!(store.list_projects().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn adding_repository_prunes_missing_linked_worktree() {
+        let temp = TestDir::new();
+        let path = temp.0.join("repo");
+        fs::create_dir(&path).unwrap();
+        init_repository(&path);
+        let repository = Repository::open(&path).unwrap();
+        let stale_path = temp.0.join("removed-worktree");
+        repository.worktree("stale", &stale_path, None).unwrap();
+        fs::remove_dir_all(&stale_path).unwrap();
+
+        open_and_register(&path, &Store::in_memory().unwrap()).unwrap();
+
+        assert!(repository.worktrees().unwrap().is_empty());
     }
 
     #[test]

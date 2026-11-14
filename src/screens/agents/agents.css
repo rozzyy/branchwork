@@ -97,13 +97,11 @@
   grid-column: 2;
 }
 
+/* Full layout: one pane per row, rows share the view height like the grid
+ * does (no fixed pane height, so a lone pane fills the whole view). */
 .agent-pane[data-slot="full"],
 .agent-full .agent-pane {
   grid-column: 1 / -1;
-}
-
-.agent-full .agent-pane {
-  height: 420px;
 }
 
 /* A lone default session fills the whole view until the user splits. A fixed
@@ -119,15 +117,17 @@
   height: auto;
 }
 
+/* Pane header (prototype `.agent-head`): raised strip, dot + CLI + worktree
+ * + status on the left, profile and pane actions on the right. */
 .agent-phd {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 12px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  background: var(--s2);
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-body);
+  background: var(--raised);
   min-width: 0;
 }
 
@@ -139,6 +139,32 @@
   flex: 1;
   flex-shrink: 1;
   min-width: 0;
+}
+
+/* Text items give way before the actions do: in a narrow split pane the
+ * worktree name and CLI switcher truncate, the buttons stay visible. */
+.agent-phd .agent-wt,
+.agent-phd .agent-cli-switch {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Secondary strip under the header for live meters (account quota, token
+ * savers). Wraps instead of overflowing; popovers open downward into the pane. */
+.agent-phm {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--raised);
+  min-width: 0;
+}
+
+.agent-phm:empty {
+  display: none;
 }
 
 .agent-dot {
@@ -158,9 +184,7 @@
 }
 
 .agent-wt {
-  font-family: var(--font-mono);
-  font-size: var(--fs-meta);
-  color: var(--fg);
+  color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -168,8 +192,8 @@
 }
 
 .agent-cli {
-  color: var(--fg2);
-  font-weight: 600;
+  color: var(--text);
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -178,9 +202,9 @@
   border: 0;
   background: none;
   padding: 0;
-  color: var(--fg2);
+  color: var(--text);
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   max-width: 170px;
   cursor: pointer;
@@ -298,50 +322,50 @@ textarea.input {
 .agent-lay {
   display: flex;
   gap: 1px;
-  background: var(--s3);
-  border-radius: 7px;
-  padding: 1px;
 }
 
 .agent-lay button {
   border: 0;
   background: none;
-  color: var(--fg2);
+  color: var(--text-2);
   width: 24px;
-  height: 20px;
-  border-radius: 6px;
+  height: 24px;
+  border-radius: var(--r-control);
   cursor: pointer;
   font-size: 12px;
 }
 
 .agent-lay button:hover {
-  color: var(--fg);
+  background: var(--hover);
+  color: var(--text);
 }
 
 .agent-lay button.on {
-  background: var(--s4);
-  color: var(--fg);
+  background: var(--selected);
+  color: var(--text);
 }
 
 .agent-phb {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
   border: 0;
-  background: var(--s3);
-  color: var(--fg2);
-  border-radius: 7px;
-  padding: 3px 8px;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text-2);
   font-size: 12px;
   cursor: pointer;
-  white-space: nowrap;
 }
 
 .agent-phb:hover {
-  background: var(--s4);
-  color: var(--fg);
+  background: var(--hover);
+  color: var(--text);
 }
 
 .agent-phb.x:hover {
-  background: var(--red);
-  color: #fff;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .agent-pane-body {

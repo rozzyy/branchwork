@@ -15,6 +15,9 @@ import { useSessions } from "../agents/sessions";
 import { GroupSwitcherPopover, projectLabel, useSwitcher } from "./GroupSwitcher";
 import { StatusLabel } from "../ui/StatusLabel";
 
+/** ⌘-number hints shown on the right of each screen row (prototype `.row .k`). */
+const SCREEN_KEYS: Partial<Record<ScreenId, string>> = { home: "⌘1", changes: "⌘2", history: "⌘3", files: "⌘4", agents: "⌘5", terminal: "⌘6", github: "⌘7" };
+
 // Deterministic color stripe/dot per worktree path, picked from a small token palette.
 // Ordered so adjacent hashes don't land on near-identical hues (--acc and --blu are both blue-ish).
 const WORKTREE_COLORS = ["var(--acc)", "var(--grn)", "var(--yel)", "var(--pur)", "var(--blu)", "var(--red)"];
@@ -361,6 +364,8 @@ export function Sidebar() {
   const projectOpen = useSwitcher((s) => s.open);
   const activeProject = useRepos((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
   const activeGroup = useRepos((s) => s.groups.find((g) => g.id === s.activeGroupId) ?? null);
+  const groupProjectCount = useRepos((s) => s.projects.filter((p) => (p.groupId ?? null) === (s.activeGroupId ?? null)).length);
+  const dirtyCount = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath)?.dirtyCount ?? 0);
   useEffect(() => {
     if (!projectOpen && wasProjectOpen.current && document.activeElement === document.body) projectTriggerRef.current?.focus();
     wasProjectOpen.current = projectOpen;
@@ -407,25 +412,33 @@ export function Sidebar() {
     >
       <span className="nav-ic" aria-hidden>{s.icon}</span>
       <span className="nav-label">{t(s.label)}</span>
+      {s.id === "changes" && dirtyCount > 0 && (
+        <span className="count" role="status" aria-label={t("sidebar.changed", { count: dirtyCount })}>
+          {dirtyCount}
+        </span>
+      )}
       {s.id === "agents" && waitingAgents > 0 && (
-        <span className="nav-badge" role="status" aria-label={t("agents.waitingBadge", { count: waitingAgents })}>
+        <span className="count agent" role="status" aria-label={t("agents.waitingBadge", { count: waitingAgents })}>
           {waitingAgents}
         </span>
       )}
       {s.id === "conflicts" && conflictCount > 0 && (
-        <span className="nav-badge" role="status" aria-label={t("conflicts.badge", { count: conflictCount })}>
+        <span className="count bad" role="status" aria-label={t("conflicts.badge", { count: conflictCount })}>
           {conflictCount}
         </span>
       )}
       {glyph(s.id)}
+      {SCREEN_KEYS[s.id] && <span className="nav-k" aria-hidden>{SCREEN_KEYS[s.id]}</span>}
     </button>
   );
 
   return (
     <aside className="sidebar">
       <nav className="side-scroll">
-        <button ref={projectTriggerRef} className="project-picker-trigger group-pop-trigger" type="button" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().toggle(); }}>
-          <span aria-hidden>◫</span><span className="project-picker-copy"><strong>{activeProject ? projectLabel(activeProject) : t("groups.noProjectSelected")}</strong><small>{activeGroup?.name ?? t("groups.ungrouped")}</small></span><span aria-hidden>▾</span>
+        <button ref={projectTriggerRef} className="project-picker-trigger group-pop-trigger" type="button" aria-haspopup="menu" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().toggle(); }}>
+          <span className="project-mark" aria-hidden style={{ background: activeGroup?.color ?? "var(--accent)" }}>{(activeProject ? projectLabel(activeProject) : "?").trim().charAt(0).toUpperCase()}</span>
+          <span className="project-picker-copy"><strong>{activeProject ? projectLabel(activeProject) : t("groups.noProjectSelected")}</strong><small>{t("sidebar.projectsInGroup", { group: activeGroup?.name ?? t("groups.ungrouped"), count: groupProjectCount })}</small></span>
+          <span className="faint" aria-hidden>▾</span>
         </button>
         {projectOpen && projectAnchor && <GroupSwitcherPopover anchorEl={projectAnchor} />}
         <WorktreeSection />

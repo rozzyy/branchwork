@@ -294,7 +294,7 @@ pub(crate) fn validate_file_path(path: &str) -> Result<PathBuf, AppError> {
     Ok(path.to_path_buf())
 }
 
-fn model_from_diff(
+pub(crate) fn model_from_diff(
     repository: &Repository,
     worktree_path: &Path,
     diff: &Diff<'_>,
@@ -348,7 +348,10 @@ fn model_from_diff(
     })
 }
 
-fn blob_is_binary(repository: &Repository, delta: &DiffDelta<'_>) -> Result<bool, AppError> {
+pub(crate) fn blob_is_binary(
+    repository: &Repository,
+    delta: &DiffDelta<'_>,
+) -> Result<bool, AppError> {
     for oid in [delta.old_file().id(), delta.new_file().id()] {
         if !oid.is_zero() {
             match repository.find_blob(oid) {
@@ -394,7 +397,7 @@ fn delta_matches(delta: &DiffDelta<'_>, file_path: &str) -> bool {
         .any(|path| path == Path::new(file_path))
 }
 
-fn delta_bytes(repository: &Repository, delta: &DiffDelta<'_>) -> Result<u64, AppError> {
+pub(crate) fn delta_bytes(repository: &Repository, delta: &DiffDelta<'_>) -> Result<u64, AppError> {
     let old_size = resolved_file_size(repository, delta.old_file().id(), delta.old_file().size())?;
     let new_size = resolved_file_size(repository, delta.new_file().id(), delta.new_file().size())?;
     Ok(old_size.max(new_size))

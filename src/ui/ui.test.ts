@@ -26,7 +26,7 @@ describe("ui.css", () => {
     expect(shellCss).toMatch(/\.worktree-row-meta\s*\{[^}]*font-size:\s*var\(--fs-meta\)/);
     expect(stageCss).toMatch(/\.pane-title\s*\{[^}]*font-size:\s*var\(--fs-title\)/);
     expect(changesCss).toMatch(/\.changes-file-row\s*\{[^}]*font-size:\s*var\(--fs-body\)/);
-    expect(settingsCss).toMatch(/\.settings h3\s*\{[^}]*font-size:\s*var\(--fs-meta\)/);
+    expect(settingsCss).toMatch(/\.settings \.section-h h3\s*\{[^}]*font-size:\s*var\(--fs-body\)/);
   });
 
   it("keeps the global double focus ring on keyboard-focused inputs", () => {

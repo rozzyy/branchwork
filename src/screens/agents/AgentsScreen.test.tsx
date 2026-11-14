@@ -190,6 +190,25 @@ describe("AgentsView", () => {
     expect(screen.getByText("Caveman n/a")).toBeInTheDocument();
   });
 
+  it("meters live in a strip below the header so pane actions are never pushed out of view", async () => {
+    useSessions.setState({
+      sessions: useSessions.getState().sessions.map((session) =>
+        session.id === "a1" ? { ...session, savers: { rtk: "active", caveman: "off" } } : session,
+      ),
+    });
+    render(<AgentsView />);
+    const meter = await screen.findByRole("button", { name: /Usage 5h 42%/ });
+    const rtk = screen.getByRole("button", { name: /RTK-style compression.*Active/ });
+    const close = screen.getAllByRole("button", { name: "Stop session" })[0];
+    // Header: identity + actions only. Strip: quota meter + saver badges.
+    expect(close.closest(".agent-phd")).not.toBeNull();
+    expect(meter.closest(".agent-phd")).toBeNull();
+    expect(rtk.closest(".agent-phd")).toBeNull();
+    const strip = meter.closest(".agent-phm");
+    expect(strip).not.toBeNull();
+    expect(rtk.closest(".agent-phm")).toBe(strip);
+  });
+
   it("a 5-hour window past its reset still shows a 0% meter next to weekly", async () => {
     vi.mocked(readProfileQuota).mockResolvedValueOnce({
       state: "ok",
@@ -260,8 +279,8 @@ describe("AgentsView", () => {
   it("shows status dots and chips from live session state", () => {
     render(<AgentsView />);
     // a1 has a live session, a2 failed to spawn: running vs idle.
-    expect(screen.getByText("running")).toBeInTheDocument();
-    expect(screen.getByText("idle")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByText("Idle")).toBeInTheDocument();
     expect(screen.getByTitle("/wt/a")).toBeInTheDocument();
   });
 
@@ -280,7 +299,7 @@ describe("AgentsView", () => {
     });
     render(<AgentsView />);
     expect(document.querySelector(".agent-pane")).toHaveClass("st-waiting");
-    expect(screen.getByText("waiting")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for you")).toBeInTheDocument();
   });
 
   it("opens the profile menu with the current profile checked", async () => {

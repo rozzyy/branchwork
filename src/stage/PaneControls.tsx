@@ -14,7 +14,7 @@ export function PaneControls({ index }: { index: number }) {
     return (
       <div className="pane-ctl">
         <button
-          className="open-beside"
+          className="btn sm ghost open-beside"
           aria-label={t("split.openBeside")}
           title={`${t("split.openBeside")} (⌘\\)`}
           onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 320, y: r.bottom + 6 }); }}

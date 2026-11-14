@@ -63,10 +63,10 @@ export function SettingsToolbar() {
   return <h1 className="pane-title">{t("nav.settings")}</h1>;
 }
 
-function Row({ label, children }: { label: ReactNode; children: ReactNode }) {
+function Row({ label, hint, children }: { label: ReactNode; hint?: string; children: ReactNode }) {
   return (
     <div className="opt">
-      <div className="opt-label">{label}</div>
+      <div className="opt-label">{label}{hint && <small>{hint}</small>}</div>
       <div className="opt-ctl">{children}</div>
     </div>
   );
@@ -419,9 +419,9 @@ export function SettingsView() {
 
   return (
     <div className="settings">
-      <h3>{t("settings.appearance")}</h3>
-      <div className="card">
-        <Row label={t("settings.theme")}>
+      <section className="panel">
+        <div className="section-h"><h3>{t("settings.appearance")}</h3></div>
+        <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
           <Segmented<ThemeMode>
             label={t("settings.theme")}
             value={theme.mode}
@@ -444,7 +444,7 @@ export function SettingsView() {
         <Row label={t("settings.baseTint")}>
           <input type="range" min={0} max={360} value={theme.baseHue} aria-label={t("settings.baseTint")} onChange={(e) => setTheme({ baseHue: Number(e.target.value) })} />
         </Row>
-        <Row label={t("settings.textSize")}>
+        <Row label={t("settings.textSize")} hint={t("settings.textSizeHint")}>
           <Segmented<TextSize>
             label={t("settings.textSize")}
             value={theme.textSize}
@@ -455,7 +455,7 @@ export function SettingsView() {
             ]}
           />
         </Row>
-        <Row label={t("settings.density")}>
+        <Row label={t("settings.density")} hint={t("settings.densityHint")}>
           <Segmented<Density>
             label={t("settings.density")}
             value={theme.density}
@@ -467,18 +467,18 @@ export function SettingsView() {
             ]}
           />
         </Row>
-      </div>
+      </section>
 
-      <h3>{t("settings.keyboard")}</h3>
-      <div className="card">
-        <Row label={t("settings.singleKeyShortcuts")}>
+      <section className="panel">
+        <div className="section-h"><h3>{t("settings.keyboard")}</h3></div>
+        <Row label={t("settings.singleKeyShortcuts")} hint={t("settings.singleKeyShortcutsHint")}>
           <Switch label={t("settings.singleKeyShortcuts")} checked={singleKeyShortcuts} onChange={setSingleKeyShortcuts} />
         </Row>
-        <Row label={t("settings.terminalShortcut")}><kbd>Ctrl+`</kbd></Row>
-      </div>
+        <Row label={t("settings.terminalShortcut")} hint={t("settings.terminalShortcutHint")}><kbd className="kbd">Ctrl+`</kbd></Row>
+      </section>
 
-      <h3>{t("settings.agents")}</h3>
-      <div className="card">
+      <section className="panel">
+        <div className="section-h"><h3>{t("settings.agents")}</h3></div>
         <Row label={t("settings.autoSwitch")}>
           <Switch
             label={t("settings.autoSwitch")}
@@ -486,7 +486,7 @@ export function SettingsView() {
             onChange={(on) => setAgentAutoSwitch(on)}
           />
         </Row>
-        <Row label={t("settings.tokenSaver")}>
+        <Row label={t("settings.tokenSaver")} hint={t("settings.tokenSaverHint")}>
           <Switch
             label={t("settings.tokenSaver")}
             checked={agentTokenSaver}
@@ -496,19 +496,27 @@ export function SettingsView() {
         <Row label={t("settings.saverProtected")}>
           <SaverProtectedInput />
         </Row>
-      </div>
-      <h3>{t("settings.agentAccounts")}</h3>
-      <AgentAccounts />
-      <h3>{t("settings.githubAccounts")}</h3>
-      <GithubAccounts />
+      </section>
 
-      <h3>{t("settings.demo")}</h3>
-      <div className="card demo">
+      <section className="panel">
+        <div className="section-h"><h3>{t("settings.agentAccounts")}</h3></div>
+        <AgentAccounts />
+      </section>
+
+      <section className="panel">
+        <div className="section-h"><h3>{t("settings.githubAccounts")}</h3></div>
+        <GithubAccounts />
+      </section>
+
+      <section className="panel">
+        <div className="section-h"><h3>{t("settings.demo")}</h3></div>
+        <div className="demo">
         <Button onClick={() => toast({ title: t("demo.toast.title"), detail: t("demo.toast.detail"), action: { label: t("toast.undo"), run: () => toast({ title: t("demo.undone"), icon: "↶" }) } })}>{t("settings.demo.toast")}</Button>
         <Button variant="primary" onClick={demoConfirm}>{t("settings.demo.confirm")}</Button>
         <Button variant="danger" onClick={demoDanger}>{t("settings.demo.danger")}</Button>
         <Button onClick={demoInput}>{t("settings.demo.input")}</Button>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

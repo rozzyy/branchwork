@@ -32,7 +32,7 @@ push to, plus a scratch branch you can rewrite. Restart the app fully first (Rus
 
 - [x] **M6-S1-18 Open on GitHub.** Right-click a commit → Open on GitHub opens `github.com/<owner>/<repo>/commit/<sha>` (PR links visible there). A repo without a GitHub `origin` shows an error toast.
 - [x] **M6-S1-19 Blame files.** Right-click a commit → Blame files opens its first changed file in Blame. A commit with no file changes shows an info toast.
-- [x] **M6-S1-20 Still deferred.** Compare with working tree, Rebase from here, Start agent here show "· Later" and are disabled.
+- [x] **M6-S1-20 At the Stage 1 checkpoint.** Compare with working tree, Rebase from here, and Start agent here were deferred until their implementation stages.
 
 Stage 1 manual flows confirmed OK by the user on 2026-11-13 (Checkpoint M6.1 approved), including the packaged-app retest of the issue #3 fix.
 
@@ -81,3 +81,14 @@ Rebuild the app (`pnpm tauri build`) and test the built `.app` at least once: th
 - [ ] **M6-S4-08 Conflict → Continue.** Reorder two commits that touch the same lines → Start → toast with Resolve conflicts; Rebase shows "Rebase in progress" (Continue disabled while files are conflicted, with a link to Conflicts). Resolve in Conflicts → back in Rebase → Continue → "Rebase complete" (a reword placed after the conflict keeps its new message).
 - [ ] **M6-S4-09 Abort.** Start a conflicting rebase again → Abort asks (danger) → Cancel keeps it; Abort → the branch is back at the old HEAD and `git status` is clean.
 - [ ] **M6-S4-10 Pushed branch.** On a branch that's already pushed: the side panel warns about `--force-with-lease`. After the rebase (also after a conflict + Continue), the screen offers "Push with --force-with-lease" → a danger confirm → the push succeeds and the screen returns to "Pick a commit…". If someone else pushed to the remote branch first, the push is refused with a clear error and nothing is overwritten.
+
+## Stage 5 — Compare worktrees (Checkpoint M6.5)
+
+Restart the app fully first (Rust changed). Use a repository with at least two
+worktrees; Race creates additional unpinned worktrees.
+
+- [ ] **M6-S5-01 Compare committed differences.** In Graph, right-click a commit and choose "Compare with working tree". Select two different worktrees; confirm the file list and +/− stats match `git diff`, then inspect a file in the shared split diff.
+- [ ] **M6-S5-02 Include tracked working changes.** Make staged and unstaged edits in both worktrees. Enable "Include tracked uncommitted changes"; confirm the displayed changes include both and neither worktree's HEAD, index, or file contents change during comparison.
+- [ ] **M6-S5-03 Untracked files.** Add an untracked file in either worktree; confirm the comparison note says untracked files are excluded and the file is absent from the result.
+- [ ] **M6-S5-04 Copy patch.** Copy patch, apply it in a scratch worktree with `git apply --check` then `git apply`; confirm the patch applies cleanly.
+- [ ] **M6-S5-05 Race comparison.** Start a race with two CLIs, wait for both worktrees to exist, choose Compare on a result, and compare it against another worktree. Return to Race results; Keep the selected result and confirm it remains; Discard another result and confirm the danger prompt removes its worktree and branch only after confirmation.
