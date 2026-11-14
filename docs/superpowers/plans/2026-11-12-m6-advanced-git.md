@@ -81,8 +81,8 @@ Manual checkpoint M6.5 remains pending: compare two race worktrees with and with
 uncommitted changes, copy the patch and apply it elsewhere, keep one race
 result and discard the others. The user explicitly ordered merging, committing,
 tagging, and pushing the current changes before those desktop flows were run;
-the `v0.6.0` release is being prepared under that instruction. The checklist
-remains an outstanding manual verification item.
+the `v0.6.0` release was tagged and pushed under that instruction. The
+checklist remains an outstanding manual verification item.
 
 ## Cross-stage constraints
 

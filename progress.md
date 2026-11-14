@@ -4,6 +4,8 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 
 ## 2026-11-14: Automatically recover stale linked worktrees
 
+- Release closeout: stage commit `43a9a80` and release commit `58deca6` are on `main`; `v0.6.0` is an annotated tag at `58deca6`. Both `origin/main` and `origin/v0.6.0` were pushed and verified. Local `m7-stage-1` was deleted after merge. Working tree was clean at verification. M6-S5 and other native desktop checklists remain pending.
+
 - User reported a repository failing to load worktrees because a linked worktree base under `/private/tmp/claude-501/...` no longer existed. `worktree::prune_path` now runs before repository registration and before `worktree::list` / `worktree::summary` reads, so Git removes stale administrative records before they can break refresh or Launchpad summaries. Git's prune only removes registrations whose worktree directories are gone; existing worktrees remain registered.
 - Added Rust regression tests for repository add and worktree refresh. Focused tests passed: 2/2. `./init.sh` passed: Vitest 82 files / 692 tests, Rust 316 passed / 3 ignored, TypeScript and Clippy clean. Scoped `rustfmt --check`, `git diff --check`, and JSON validation passed after the last edit; summary path change was compiled by the focused Rust run.
 - Runtime estimate: each add/refresh/summary read now launches one fixed-argument `git worktree prune --expire=now`; Git scans worktree metadata (O(W) in registered worktrees) and uses bounded metadata memory relative to W. No untrusted argument is passed to Git. Native app verification remains pending.
