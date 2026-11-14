@@ -55,8 +55,6 @@ export interface AgentSession {
   limitHit: boolean;
   /** Token-saver state of the running integration (not persisted). */
   savers: SessionSavers;
-  /** When the current PTY started (ms); usage readers ignore older logs. */
-  startedAt?: number;
 }
 
 export type AgentLayoutMode = "grid" | "full";
@@ -697,7 +695,6 @@ export const useSessions = create<SessionsStore>((set, get) => {
           error: null,
           status: "running",
           savers: result.savers,
-          startedAt: Date.now(),
         });
         scheduleIdle(session.id);
       } else if (result.loginRequired) {
@@ -810,7 +807,6 @@ export const useSessions = create<SessionsStore>((set, get) => {
                     error: null,
                     sharedWithDock: false,
                     savers: ready.savers,
-                    startedAt: Date.now(),
                   },
                 ],
               });
@@ -919,7 +915,6 @@ export const useSessions = create<SessionsStore>((set, get) => {
         status: "running",
         limitHit: false,
         savers: ready.savers,
-        startedAt: Date.now(),
       });
       scheduleIdle(id);
       save();

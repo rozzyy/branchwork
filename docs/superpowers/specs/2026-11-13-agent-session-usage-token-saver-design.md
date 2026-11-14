@@ -1,7 +1,7 @@
 # Agent Session Usage and Token Saver — Design
 
 - **Date:** 2026-11-13
-- **Status:** Draft — awaiting user approval
+- **Status:** Implemented; revised 2026-11-14 (see Revision)
 - **Scope:** Branchwork Agents screen, session usage meters, and default token-saving behavior
 
 ## Intent
@@ -101,3 +101,8 @@ These choices belong in implementation planning and must preserve the no-fabrica
 - [Orca — Usage & rate-limit tracking](https://orca.dev/docs/agents/usage-tracking)
 - [9router-go — Token Saver](https://luqman-v1.github.io/9router-go/token-saver.html)
 - [9Router — README, token saver and usage features](https://github.com/oahcom/9router/blob/master/README.md)
+
+## Revision 2026-11-14
+
+At the user's request the pane meter follows Orca's usage UI: it shows the profile's provider-reported plan quota windows (5-hour, weekly, model-scoped weekly) with percentage, bar, reset countdown and report time, instead of session token counts. Session token totals are no longer displayed. Saver badges always show their state as visible text (`RTK on`, `Caveman off`, `RTK n/a`), with the explanation on hover, focus or click.
+

@@ -3,7 +3,15 @@ import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
 import { useProfiles, usageKey } from "../../agents/profiles";
 import { UsageBar } from "../../agents/usage";
-import { formatTokens, useSessionUsage, useUsagePolling } from "../../agents/sessionUsage";
+import {
+  formatReset,
+  QUOTA_WARN_PERCENT,
+  tightestWindow,
+  useAgentMeterPolling,
+  useAgentMeters,
+  windowExpired,
+  windowLabel,
+} from "../../agents/quota";
 import { SAVER_IDS, type SaverId, type SaverState } from "../../agents/savers";
 import { useSessions, type AgentSession, type AgentStatus, type RaceEntry } from "../../agents/sessions";
 import { useStage } from "../../state/stage";
@@ -210,48 +218,136 @@ function ProfileChip({ session }: { session: AgentSession }) {
   );
 }
 
+/** "12.3k" style count for measured saver savings. */
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+/** "12m ago" / "3h ago" / "2d ago" for the provider's report time. */
+function formatAgo(atMs: number, now: number): string {
+  const minutes = Math.floor(Math.max(0, now - atMs) / 60_000);
+  if (minutes < 1) return t("usage.justNow");
+  if (minutes < 60) return t("usage.minutesAgo", { n: String(minutes) });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t("usage.hoursAgo", { n: String(hours) });
+  return t("usage.daysAgo", { n: String(Math.floor(hours / 24)) });
+}
+
 /**
- * Session token meter. A percentage appears only when the log reports the
- * model's context window; otherwise just the counted tokens. Unknown and
- * failed reads get their own short labels, never a zero.
+ * Orca-style account usage for the pane's profile: the tightest current
+ * quota window (label, percent, bar, reset countdown). Clicking opens every
+ * window. Session tokens are deliberately not shown here.
  */
-function SessionMeter({ session }: { session: AgentSession }) {
-  const view = useSessionUsage((s) => s.views[session.id]);
-  if (!session.sessionId || !view) return null;
-  if (view.kind === "ok") {
-    const detail =
-      t("agents.usageDetail", {
-        input: formatTokens(view.tokens.input),
-        output: formatTokens(view.tokens.output),
-        total: formatTokens(view.tokens.total),
-      }) +
-      (view.percent != null ? ` · ${t("agents.usageContext", { percent: String(view.percent) })}` : "") +
-      (view.stale ? ` · ${t("agents.usageStale")}` : "");
+function QuotaMeter({ session }: { session: AgentSession }) {
+  const view = useSessionQuota(session);
+  const fallback = useProfiles((s) => s.usage[usageKey(session.profile)]);
+  const [open, setOpen] = useState(false);
+  if (!session.sessionId) return null;
+  const now = Date.now();
+  if (!view || view.kind !== "ok") {
+    // CLIs without a quota reader may still have a probe-reported figure (Muse).
+    if (fallback && (!view || view.kind === "unsupported")) {
+      const label = t("usage.summaryProbe", { window: fallback.window, percent: String(fallback.percent) });
+      return (
+        <span className="agent-quota static" title={label} aria-label={label}>
+          {fallback.percent}% <UsageBar usage={fallback} /> <span className="agent-quota-reset">{fallback.window}</span>
+        </span>
+      );
+    }
+    const [label, help] =
+      !view || view.kind === "loading"
+        ? [t("usage.loading"), t("usage.loading")]
+        : view.kind === "none"
+          ? [t("usage.none"), t("usage.noneHelp", { name: CLI_REGISTRY[session.cliId].name })]
+          : view.kind === "unsupported"
+            ? [t("usage.na"), t("usage.unsupportedHelp", { name: CLI_REGISTRY[session.cliId].name })]
+            : [t("usage.unavailable"), t("usage.unavailableHelp")];
     return (
-      <span className={"agent-usage" + (view.stale ? " stale" : "")} title={detail} aria-label={detail}>
-        {view.percent != null && (
-          <>
-            {view.percent}% <UsageBar usage={{ percent: view.percent, window: "" }} />{" "}
-          </>
-        )}
-        {t("agents.usageTokens", { tokens: formatTokens(view.tokens.total) })}
+      <span className="agent-quota muted" title={help} aria-label={help}>
+        {label}
       </span>
     );
   }
-  const name = CLI_REGISTRY[session.cliId].name;
-  const [label, help] =
-    view.kind === "loading"
-      ? [t("agents.usageLoading"), t("agents.usageLoading")]
-      : view.kind === "none"
-        ? [t("agents.usageNone"), t("agents.usageNoneHelp")]
-        : view.kind === "unsupported"
-          ? [t("agents.usageNa"), t("agents.usageUnsupportedHelp", { name })]
-          : [t("agents.usageNa"), t("agents.usageUnavailableHelp")];
+  const tight = tightestWindow(view.windows, now);
+  const summary = tight
+    ? t("usage.summary", {
+        window: windowLabel(tight),
+        percent: String(tight.percent),
+        reset: tight.resetsAtMs != null ? formatReset(tight.resetsAtMs, now) : t("usage.resetUnknown"),
+      })
+    : t("usage.allReset");
   return (
-    <span className="agent-usage muted" title={help} aria-label={help}>
-      {label}
+    <span className="agent-quota-wrap">
+      <button
+        type="button"
+        className={
+          "agent-quota" +
+          (tight && tight.percent >= QUOTA_WARN_PERCENT ? " warn" : "") +
+          (view.stale ? " stale" : "")
+        }
+        title={summary}
+        aria-label={summary}
+        aria-expanded={open ? "true" : "false"}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(!open)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setOpen(false);
+        }}
+      >
+        {tight ? (
+          <>
+            <span className="agent-quota-win">{windowLabel(tight)}</span> {tight.percent}%{" "}
+            <UsageBar usage={{ percent: tight.percent, window: windowLabel(tight) }} />
+            {tight.resetsAtMs != null && (
+              <span className="agent-quota-reset">· {formatReset(tight.resetsAtMs, now)}</span>
+            )}
+          </>
+        ) : (
+          t("usage.allResetShort")
+        )}
+      </button>
+      {open && (
+        <div className="agent-quota-pop" role="dialog" aria-label={t("usage.windows")}>
+          <div className="agent-quota-head">
+            {t("usage.windowsFor", { name: CLI_REGISTRY[session.cliId].name })}
+          </div>
+          {view.windows.map((window) => {
+            const expired = windowExpired(window, now);
+            return (
+              <div key={`${window.minutes}-${window.scope ?? ""}`} className={"agent-quota-row" + (expired ? " expired" : "")}>
+                <span className="agent-quota-win">{windowLabel(window)}</span>
+                {expired ? (
+                  <span className="agent-quota-reset">{t("usage.windowReset")}</span>
+                ) : (
+                  <>
+                    <UsageBar usage={{ percent: window.percent, window: windowLabel(window) }} className="wide" />
+                    <span className="agent-quota-pct">{window.percent}%</span>
+                    <span className="agent-quota-reset">
+                      {window.resetsAtMs != null
+                        ? t("usage.resetsIn", { reset: formatReset(window.resetsAtMs, now) })
+                        : t("usage.resetUnknown")}
+                    </span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+          <div className="agent-quota-foot">
+            {view.fetchedAtMs != null
+              ? t("usage.updated", { ago: formatAgo(view.fetchedAtMs, now) })
+              : t("usage.updatedUnknown")}
+            {view.stale && ` · ${t("usage.stale")}`}
+          </div>
+        </div>
+      )}
     </span>
   );
+}
+
+function useSessionQuota(session: AgentSession) {
+  return useAgentMeters((s) => s.quotas[usageKey(session.profile)]);
 }
 
 const SAVER_NAME: Record<SaverId, "agents.saverRtk" | "agents.saverCaveman"> = {
@@ -272,32 +368,35 @@ const SAVER_STATE: Record<
   unsupported: "agents.saverUnsupported",
 };
 
+const SAVER_SHORT: Record<
+  SaverState,
+  "agents.saverShortActive" | "agents.saverShortOff" | "agents.saverShortUnavailable" | "agents.saverShortUnsupported"
+> = {
+  active: "agents.saverShortActive",
+  off: "agents.saverShortOff",
+  unavailable: "agents.saverShortUnavailable",
+  unsupported: "agents.saverShortUnsupported",
+};
+
 /**
- * Compact badges for the session's token savers. Each reflects the running
- * integration, not the global setting; hover, focus or click reveals what
- * the method does and, for RTK, the measured saving.
+ * Compact badges for the session's token savers with visible state text
+ * ("RTK on", "Caveman off", "RTK n/a"). Each reflects the running
+ * integration, not the global setting; hover, focus or click explains the
+ * method and, for RTK, the measured saving.
  */
 function SaverBadges({ session }: { session: AgentSession }) {
-  const savings = useSessionUsage((s) => s.savings[session.id]);
+  const savings = useAgentMeters((s) => s.savings[session.id]);
   const [open, setOpen] = useState<SaverId | null>(null);
-  const shown = SAVER_IDS.filter((id) => session.savers[id] !== "unsupported");
-  if (shown.length === 0) {
-    const help = t("agents.saverNoneHelp", { name: CLI_REGISTRY[session.cliId].name });
-    return (
-      <span className="chip agent-saver-na" title={help} aria-label={help}>
-        {t("agents.saverNone")}
-      </span>
-    );
-  }
+  const name = CLI_REGISTRY[session.cliId].name;
   return (
     <span className="agent-savers">
-      {shown.map((id) => {
+      {SAVER_IDS.map((id) => {
         const state = session.savers[id];
-        const parts = [t(SAVER_HELP[id]), t(SAVER_STATE[state])];
+        const parts = [t(SAVER_HELP[id]), t(SAVER_STATE[state], { name })];
         if (id === "rtk" && savings && savings.bytesBefore > savings.bytesAfter) {
           parts.push(
             t("agents.saverSaved", {
-              chars: formatTokens(savings.bytesBefore - savings.bytesAfter),
+              chars: formatCount(savings.bytesBefore - savings.bytesAfter),
               runs: String(savings.runs),
             }),
           );
@@ -315,7 +414,8 @@ function SaverBadges({ session }: { session: AgentSession }) {
               onClick={() => setOpen(open === id ? null : id)}
               onBlur={() => setOpen((current) => (current === id ? null : current))}
             >
-              {t(SAVER_NAME[id])}
+              <i aria-hidden="true" />
+              {t(SAVER_NAME[id])} {t(SAVER_SHORT[state])}
             </button>
             {open === id && (
               <span className="agent-saver-tip" role="tooltip">
@@ -401,7 +501,7 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
         )}
         <ProfileChip session={session} />
         <StatusChip status={status} />
-        <SessionMeter session={session} />
+        <QuotaMeter session={session} />
         <SaverBadges session={session} />
         <span className="sp" />
         <span className="agent-lay">
@@ -1194,7 +1294,7 @@ export function AgentsView() {
   const sessions = useSessions((s) => s.sessions);
   const layoutMode = useSessions((s) => s.layoutMode);
   const loaded = useSessions((s) => s.loaded);
-  useUsagePolling();
+  useAgentMeterPolling();
   useEffect(() => {
     // Clear Codex limit flags created by the old text heuristic. Codex quota
     // status is not reliable enough to keep showing an inferred exhausted state.

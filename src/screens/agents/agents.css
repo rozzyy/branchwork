@@ -489,20 +489,98 @@ textarea.input {
   flex: 1;
 }
 
-/* Session usage meter and token-saver badges (pane header). */
-.agent-usage {
+/* Account usage meter (Orca-style quota windows) and token-saver badges. */
+.agent-quota-wrap {
+  position: relative;
+}
+
+.agent-quota {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
   font-size: 11px;
   color: var(--fg2);
   white-space: nowrap;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
 }
 
-.agent-usage.muted,
-.agent-usage.stale {
+button.agent-quota {
+  cursor: pointer;
+}
+
+button.agent-quota:hover {
+  color: var(--fg);
+}
+
+.agent-quota.muted,
+.agent-quota.stale {
   color: var(--fg3);
 }
 
-.agent-usage .ubar {
-  margin: 0 2px;
+.agent-quota.muted {
+  border-style: dashed;
+}
+
+.agent-quota.warn {
+  color: var(--yel);
+  border-color: color-mix(in oklch, var(--yel) 50%, transparent);
+}
+
+.agent-quota-win {
+  font-weight: 600;
+}
+
+.agent-quota-reset {
+  color: var(--fg3);
+}
+
+.agent-quota-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--s3);
+  color: var(--fg);
+  font-size: 11px;
+  box-shadow: 0 6px 20px oklch(0 0 0 / 0.25);
+}
+
+.agent-quota-head {
+  color: var(--fg3);
+  margin-bottom: 6px;
+}
+
+.agent-quota-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 36px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.agent-quota-row.expired {
+  grid-template-columns: 92px 1fr;
+}
+
+.agent-quota-row .ubar.wide {
+  width: 100%;
+}
+
+.agent-quota-pct {
+  text-align: right;
+}
+
+.agent-quota-foot {
+  margin-top: 6px;
+  color: var(--fg3);
 }
 
 .agent-savers {
@@ -515,6 +593,9 @@ textarea.input {
 }
 
 button.agent-saver {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font: inherit;
   font-size: 10px;
   line-height: 1;
@@ -531,8 +612,16 @@ button.agent-saver[data-state="active"] {
   border-color: color-mix(in oklch, var(--grn) 45%, transparent);
 }
 
-button.agent-saver[data-state="off"] {
-  text-decoration: line-through;
+button.agent-saver > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+}
+
+button.agent-saver[data-state="active"] > i {
+  opacity: 1;
 }
 
 button.agent-saver[data-state="unavailable"] {
@@ -556,7 +645,3 @@ button.agent-saver[data-state="unavailable"] {
   box-shadow: 0 6px 20px oklch(0 0 0 / 0.25);
 }
 
-.agent-saver-na {
-  font-size: 10px;
-  color: var(--fg3);
-}

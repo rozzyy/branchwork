@@ -161,3 +161,13 @@ Rules:
 - [x] **Step 3:** Implement; styles reuse `.chip` / `.ubar` tokens.
 - [x] **Step 4:** `./init.sh` → green.
 - [x] **Step 5: Commit** _(skipped: one commit at the end, then merge into `m6-stage-4` after user confirmation)_
+
+### Task 5: Orca-style quota meter and labelled saver badges ✅ (revision 2026-11-14, user request)
+
+The user asked for Orca-style usage (plan quota windows) instead of token counts, and for visible on/off text on the RTK/Caveman badges.
+
+- Rust `src-tauri/src/quota.rs` replaces `session_usage.rs`: `agent_profile_quota(cli_id, profile_dir) -> ProfileQuota` (`unsupported` | `noData` | `ok { windows: QuotaWindow[], fetchedAtMs }`). Claude: `<profile>/.claude.json` → `cachedUsageUtilization` (`five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`). Codex: newest rollout `rate_limits.primary/secondary`. No credentials, no network. The session token reader and `agent_session_usage` are removed.
+- Frontend `src/agents/quota.ts`: one read per distinct live profile every 15 s; the tightest current window feeds the profile chip; failed reads keep the last value marked stale.
+- Pane header: `QuotaMeter` shows the tightest current window (`5h 42% ▮ · 2h 5m`, warning tone at ≥ 80 %); clicking opens every window with bar, percent, reset countdown, and "Updated … ago". Windows past their reset time show "Reset — no new report yet".
+- `SaverBadges` always render both methods with visible state text: `RTK on|off|unavailable|n/a`, `Caveman …`.
+- [x] Tests: `quota.rs` (8), `src/agents/quota.test.ts` (7), AgentsScreen `pane shows the tightest quota window and labelled saver badges`.

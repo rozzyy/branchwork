@@ -45,14 +45,15 @@ vi.mock("../../ipc/settings", () => ({
   saveSetting: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock("../../ipc/sessionUsage", () => ({
-  readSessionUsage: vi.fn(() =>
+vi.mock("../../ipc/quota", () => ({
+  readProfileQuota: vi.fn(() =>
     Promise.resolve({
       state: "ok",
-      tokens: { input: 10_100, output: 2_200, total: 12_300 },
-      contextUsed: 99_112,
-      contextLimit: 258_400,
-      quota: null,
+      windows: [
+        { minutes: 300, scope: null, percent: 42, resetsAtMs: Date.now() + (2 * 60 + 5) * 60_000 + 30_000 },
+        { minutes: 10_080, scope: null, percent: 35, resetsAtMs: Date.now() + 50 * 3_600_000 + 30_000 },
+      ],
+      fetchedAtMs: Date.now() - 12 * 60_000,
     }),
   ),
   readSaverStats: vi.fn(() => Promise.resolve({ runs: 4, bytesBefore: 20_000, bytesAfter: 7_700 })),
@@ -158,7 +159,7 @@ beforeEach(() => {
 });
 
 describe("AgentsView", () => {
-  it("pane shows session meter and saver badges", async () => {
+  it("pane shows the tightest quota window and labelled saver badges", async () => {
     useSessions.setState({
       sessions: useSessions.getState().sessions.map((session) =>
         session.id === "a1"
@@ -167,17 +168,25 @@ describe("AgentsView", () => {
       ),
     });
     render(<AgentsView />);
-    const meter = await screen.findByLabelText(/Session tokens — in 10\.1k · out 2\.2k · total 12\.3k/);
-    expect(meter).toHaveTextContent("38%");
-    expect(meter).toHaveTextContent("12.3k tok");
+    const meter = await screen.findByRole("button", { name: /Usage 5h 42%, resets in 2h 5m/ });
+    expect(meter).toHaveTextContent("5h");
+    expect(meter).toHaveTextContent("42%");
+    expect(meter).toHaveTextContent("2h 5m");
+    expect(meter).not.toHaveTextContent("tok");
+    fireEvent.click(meter);
+    const panel = screen.getByRole("dialog", { name: "Usage windows" });
+    expect(panel).toHaveTextContent("Weekly");
+    expect(panel).toHaveTextContent("35%");
+    expect(panel).toHaveTextContent("resets in 2d 2h");
+    expect(panel).toHaveTextContent("Updated 12m ago");
+    // Visible on/off text, not only a tooltip.
     const rtk = await screen.findByRole("button", { name: /RTK-style compression.*Active.*Saved 12\.3k chars in 4 runs/ });
     expect(rtk).toHaveAttribute("data-state", "active");
-    expect(rtk).toHaveTextContent("RTK");
-    const caveman = screen.getByRole("button", { name: /Caveman-style answers.*Off/ });
-    expect(caveman).toHaveAttribute("data-state", "off");
-    // The failed-to-start Claude pane has no live PTY: no meter, and its
-    // savers read unsupported in this fixture.
-    expect(screen.getAllByText("Saver n/a")).toHaveLength(1);
+    expect(rtk).toHaveTextContent("RTK on");
+    expect(screen.getByRole("button", { name: /Caveman-style answers.*Off/ })).toHaveTextContent("Caveman off");
+    // The failed Claude pane (no PTY, unsupported fixture) still says so.
+    expect(screen.getByText("RTK n/a")).toBeInTheDocument();
+    expect(screen.getByText("Caveman n/a")).toBeInTheDocument();
   });
 
   it("shows loading feedback while agent sessions are being restored", () => {

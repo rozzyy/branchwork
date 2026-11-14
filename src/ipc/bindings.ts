@@ -228,10 +228,10 @@ export const commands = {
 	 */
 	cliEnsureSaverHook: (cliId: string, profileDir: string) => __TAURI_INVOKE<boolean>("cli_ensure_saver_hook", { cliId, profileDir }),
 	/**
-	 *  Token usage for one agent pane from the CLI's own local session log.
-	 *  Numeric aggregates only; unsupported CLIs report `unsupported`.
+	 *  Account quota windows (5-hour, weekly, …) for one agent profile, from
+	 *  the CLI's own local state. Unsupported CLIs report `unsupported`.
 	 */
-	agentSessionUsage: (cliId: string, profileDir: string, worktreePath: string, sinceMs: number | null) => __TAURI_INVOKE<SessionUsage_Serialize>("agent_session_usage", { cliId, profileDir, worktreePath, sinceMs }),
+	agentProfileQuota: (cliId: string, profileDir: string) => __TAURI_INVOKE<ProfileQuota_Serialize>("agent_profile_quota", { cliId, profileDir }),
 	/**  Measured byte savings the saver sidecar recorded for one agent session. */
 	agentSaverStats: (agentId: string) => __TAURI_INVOKE<SaverStats>("agent_saver_stats", { agentId }),
 	/**
@@ -984,6 +984,24 @@ export type PatResult = {
 	username: string,
 };
 
+export type ProfileQuota = ProfileQuota_Serialize | ProfileQuota_Deserialize;
+
+export type ProfileQuota_Deserialize = 
+/**  The CLI has no quota reader. */
+{ state: "unsupported" } | 
+/**  A reader exists but the CLI has not recorded quota yet. */
+{ state: "noData" } | {
+	state: "ok",
+} & QuotaReport_Deserialize;
+
+export type ProfileQuota_Serialize = 
+/**  The CLI has no quota reader. */
+{ state: "unsupported" } | 
+/**  A reader exists but the CLI has not recorded quota yet. */
+{ state: "noData" } | {
+	state: "ok",
+} & QuotaReport_Serialize;
+
 export type Project = Project_Serialize | Project_Deserialize;
 
 export type Project_Deserialize = {
@@ -1064,6 +1082,47 @@ export type PublishResult_Serialize = {
 	pushError: AppError_Serialize | null,
 };
 
+export type QuotaReport = QuotaReport_Serialize | QuotaReport_Deserialize;
+
+export type QuotaReport_Deserialize = {
+	windows: QuotaWindow_Deserialize[],
+	/**  When the provider reported these figures (unix ms), if known. */
+	fetchedAtMs?: number | null,
+};
+
+export type QuotaReport_Serialize = {
+	windows: QuotaWindow_Serialize[],
+	/**  When the provider reported these figures (unix ms), if known. */
+	fetchedAtMs: number | null,
+};
+
+/**  One provider-reported limit window. */
+export type QuotaWindow = QuotaWindow_Serialize | QuotaWindow_Deserialize;
+
+/**  One provider-reported limit window. */
+export type QuotaWindow_Deserialize = {
+	/**  Window length: 300 = 5 hours, 10080 = weekly. */
+	minutes: number,
+	/**  Model scope of the window (`opus`, `sonnet`), or None for all models. */
+	scope?: string | null,
+	/**  0–100, the provider's own figure. */
+	percent: number,
+	/**  Unix ms. */
+	resetsAtMs?: number | null,
+};
+
+/**  One provider-reported limit window. */
+export type QuotaWindow_Serialize = {
+	/**  Window length: 300 = 5 hours, 10080 = weekly. */
+	minutes: number,
+	/**  Model scope of the window (`opus`, `sonnet`), or None for all models. */
+	scope: string | null,
+	/**  0–100, the provider's own figure. */
+	percent: number,
+	/**  Unix ms. */
+	resetsAtMs: number | null,
+};
+
 /**
  *  GitHub rate-limit metadata from the response headers. The backend stores
  *  the last state in memory so the poller can honor the remaining quota while
@@ -1104,24 +1163,6 @@ export type SaverStats = {
 	bytesBefore: number,
 	bytesAfter: number,
 };
-
-export type SessionUsage = SessionUsage_Serialize | SessionUsage_Deserialize;
-
-export type SessionUsage_Deserialize = 
-/**  The CLI has no usage reader. */
-{ state: "unsupported" } | 
-/**  A reader exists but no matching session log was found yet. */
-{ state: "noData" } | {
-	state: "ok",
-} & UsageReport_Deserialize;
-
-export type SessionUsage_Serialize = 
-/**  The CLI has no usage reader. */
-{ state: "unsupported" } | 
-/**  A reader exists but no matching session log was found yet. */
-{ state: "noData" } | {
-	state: "ok",
-} & UsageReport_Serialize;
 
 export type StashEntry = {
 	index: number,
@@ -1172,53 +1213,6 @@ export type StatusSummary_Deserialize = {
 export type StatusSummary_Serialize = {
 	staged: StatusEntry_Serialize[],
 	unstaged: StatusEntry_Serialize[],
-};
-
-export type TokenCounts = {
-	input: number,
-	output: number,
-	total: number,
-};
-
-/**  Provider-reported account quota window (Codex `rate_limits.primary`). */
-export type UsageQuota = UsageQuota_Serialize | UsageQuota_Deserialize;
-
-/**  Provider-reported account quota window (Codex `rate_limits.primary`). */
-export type UsageQuota_Deserialize = {
-	/**  0–100, the provider's own `used_percent`. */
-	percent: number,
-	windowMinutes?: number | null,
-	/**  Unix seconds. */
-	resetsAt?: number | null,
-};
-
-/**  Provider-reported account quota window (Codex `rate_limits.primary`). */
-export type UsageQuota_Serialize = {
-	/**  0–100, the provider's own `used_percent`. */
-	percent: number,
-	windowMinutes: number | null,
-	/**  Unix seconds. */
-	resetsAt: number | null,
-};
-
-export type UsageReport = UsageReport_Serialize | UsageReport_Deserialize;
-
-export type UsageReport_Deserialize = {
-	tokens: TokenCounts,
-	/**  Tokens in the latest request's context, when the log reports it. */
-	contextUsed?: number | null,
-	/**  The model's context window, when the log reports it. */
-	contextLimit?: number | null,
-	quota?: UsageQuota_Deserialize | null,
-};
-
-export type UsageReport_Serialize = {
-	tokens: TokenCounts,
-	/**  Tokens in the latest request's context, when the log reports it. */
-	contextUsed: number | null,
-	/**  The model's context window, when the log reports it. */
-	contextLimit: number | null,
-	quota: UsageQuota_Serialize | null,
 };
 
 export type WipSummary = WipSummary_Serialize | WipSummary_Deserialize;

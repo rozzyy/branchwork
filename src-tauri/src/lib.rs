@@ -16,7 +16,7 @@ mod publish;
 mod repogit;
 mod repository;
 pub mod saver;
-mod session_usage;
+mod quota;
 mod stage;
 mod stash;
 mod status;
@@ -1475,25 +1475,20 @@ fn cli_ensure_saver_hook(cli_id: String, profile_dir: String) -> Result<bool, Ap
     notify::ensure_claude_saver_hook(dir, &bin)
 }
 
-/// Token usage for one agent pane from the CLI's own local session log.
-/// Numeric aggregates only; unsupported CLIs report `unsupported`.
+/// Account quota windows (5-hour, weekly, …) for one agent profile, from
+/// the CLI's own local state. Unsupported CLIs report `unsupported`.
 #[tauri::command(async)]
 #[specta::specta]
-fn agent_session_usage(
-    cli_id: String,
-    profile_dir: String,
-    worktree_path: String,
-    since_ms: f64,
-) -> Result<session_usage::SessionUsage, AppError> {
-    session_usage::read_usage(&cli_id, Path::new(&profile_dir), &worktree_path, since_ms)
+fn agent_profile_quota(cli_id: String, profile_dir: String) -> Result<quota::ProfileQuota, AppError> {
+    quota::read_quota(&cli_id, Path::new(&profile_dir))
 }
 
 /// Measured byte savings the saver sidecar recorded for one agent session.
 #[tauri::command(async)]
 #[specta::specta]
-fn agent_saver_stats(agent_id: String) -> Result<session_usage::SaverStats, AppError> {
-    let path = session_usage::saver_stats_path(&agent_id)?;
-    Ok(session_usage::read_saver_stats_file(&path))
+fn agent_saver_stats(agent_id: String) -> Result<quota::SaverStats, AppError> {
+    let path = quota::saver_stats_path(&agent_id)?;
+    Ok(quota::read_saver_stats_file(&path))
 }
 
 // (async): `#[tauri::command(async)]` on a sync fn runs it inside `tokio::spawn` (occupies
@@ -1632,7 +1627,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             git_repo_read_file,
             cli_ensure_hooks,
             cli_ensure_saver_hook,
-            agent_session_usage,
+            agent_profile_quota,
             agent_saver_stats,
             agent_write_handover,
             agent_handover_diff,
