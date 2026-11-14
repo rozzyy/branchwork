@@ -789,13 +789,15 @@ describe("profile switching", () => {
   });
 
   it("starts the settle window only after the resume command is typed", async () => {
-    switchTiming.settleMs = 20;
+    // Margins large enough for a loaded machine: the prompt (600 ms) outlasts
+    // the settle window (300 ms), and the exit is reported well within it.
+    switchTiming.settleMs = 300;
     const { work, home } = await twoProfiles();
     const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
     // A slow shell prompt outlasts the settle window before the command is sent.
-    vi.mocked(waitTerminalReady).mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve(true), 80)));
+    vi.mocked(waitTerminalReady).mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve(true), 600)));
     const switching = useSessions.getState().switchProfile(id!, home);
-    await vi.waitFor(() => expect(writes()).toContain(`'codex' 'resume' '${CONV_A}' || exit\n`));
+    await vi.waitFor(() => expect(writes()).toContain(`'codex' 'resume' '${CONV_A}' || exit\n`), { timeout: 2000, interval: 10 });
     exitHandler?.({ sessionId: "pty-2", exitCode: 1, signal: null });
     expect(await switching).toBeNull();
     expect(useSessions.getState().sessions[0].profile).toEqual(work);

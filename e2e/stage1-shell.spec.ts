@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const NAV_ITEMS = ["Home", "Changes", "History", "Files", "Agents", "Terminal", "GitHub"];
+const NAV_ITEMS = ["Home", "Changes", "History", "Files", "Agents", "Terminal", "GitHub", "Browser"];
 
 test.describe("M7 shell", () => {
   test("title bar shows workspace location, search, theme, and shortcuts", async ({ page }) => {
@@ -11,7 +11,7 @@ test.describe("M7 shell", () => {
     await expect(page.getByRole("button", { name: "Show keyboard shortcuts" })).toBeVisible();
   });
 
-  test("sidebar lists the seven primary screens in order and keeps Settings in the footer", async ({ page }) => {
+  test("sidebar lists the primary screens in order and keeps Settings in the footer", async ({ page }) => {
     await page.goto("/");
     const sidebar = page.locator(".sidebar");
     const screenButtons = sidebar.locator(".side-scroll .nav");

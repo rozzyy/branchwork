@@ -90,6 +90,9 @@ function terminalSessions(): string[] {
 export async function startWindowSync(): Promise<() => void> {
   if (!inTauri()) return () => undefined;
   const self = windowLabel();
+  // Browser tab webviews outlive an app webview reload; the fresh page knows
+  // none of them, so close them before any Browser screen opens new ones.
+  void commands.browserCloseAll().catch(() => undefined);
   onGlobalSettingSaved((key) => void emit(SETTINGS_EVENT, { key, source: self }).catch(() => undefined));
   const unlisten = await listen<{ key: string; source: string }>(SETTINGS_EVENT, (event) => {
     if (event.payload.source === self) return;

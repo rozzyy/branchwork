@@ -10,6 +10,7 @@ import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
 import { ConflictsToolbar, ConflictsView } from "./conflicts/ConflictsScreen";
 import { HistoryToolbar, HistoryView } from "./history/HistoryScreen";
 import { HomeToolbar, HomeView } from "./home/HomeScreen";
+import { BrowserToolbar, BrowserView } from "../browser/BrowserScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -63,3 +64,4 @@ VIEWS.agents = { Toolbar: AgentsToolbar, View: AgentsView };
 VIEWS.github = { Toolbar: RepoToolbar, View: RepoViewBoundary };
 VIEWS.home = { Toolbar: HomeToolbar, View: HomeView };
 VIEWS.conflicts = { Toolbar: ConflictsToolbar, View: ConflictsView };
+VIEWS.browser = { Toolbar: BrowserToolbar, View: BrowserView };

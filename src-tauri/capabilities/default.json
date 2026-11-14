@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window and secondary workspace windows (ws-<n>)",
-  "windows": ["main", "ws-*"],
+  "description": "App webviews only (main + ws-<n>). Listed by webview, not window: a window entry would also grant browser tab webviews (browser-*), which must get no capability.",
+  "webviews": ["main", "ws-*"],
   "permissions": [
     "core:default",
     "opener:default",

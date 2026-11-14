@@ -1412,3 +1412,10 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Build warnings fixed: static `@tauri-apps/api` imports (windows.ts, theme/native.ts — also removes the e2e `currentWindow` noise) and vendor chunk groups in `vite.config.ts` (largest chunk 462 kB, startup payload unchanged, CodeMirror stays lazy).
 - Bug fix (user report): Agents grid with one left + two right panes gave the left pane half height. `src/agents/gridPlacement.ts` places panes explicitly (lcm rows, each column's panes share the full height); measured in Chromium with the real CSS (left 900 px, right 450 + 450). Vitest 84 files / 722 tests; Playwright 59/59.
 - User ordered commit + push of everything (M10 native checks not run).
+
+## 2026-11-14: M10 pushed; M11 Stage 1 — Browser screen (branch `m11-stage-1`)
+
+- Pushed: `8d34079` M10, `6644861` Agents grid fix, `ba9b97b` build chunk/dynamic-import cleanup.
+- M11 (placement as a stage screen is my default; user did not choose): spec `docs/superpowers/specs/2026-11-14-m11-browser-design.md`, plan `docs/superpowers/plans/2026-11-14-m11-browser.md`. Native child webview per tab (Tauri `unstable`), React chrome (tabs, address bar, back/forward/reload), rAF-followed bounds, hidden under app overlays, window-scoped tabs. Security: capability now lists webviews (`main`, `ws-*`) so `browser-*` webviews get none; navigation guard allows only http/https/about for browser webviews; http(s)-only parsing in TS and Rust.
+- Verification: `./init.sh` exit 0 — Vitest 85 files / 724 tests; Rust 337 passed / 3 ignored; Clippy clean. Playwright 60/60. Native page rendering, positioning and isolation not exercised (no desktop automation).
+- M11 review (`.agent/reviews/m11-stage-1-review.md`) fixed: own-origin refusal (dev IPC escape), per-window state events, permission denial, stale webview cleanup, title throttle, bounds clamp. Default search engine Google (user). Committed + pushed and released as v0.11.0 on user order (native checks M8–M11 still pending).

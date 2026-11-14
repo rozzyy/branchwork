@@ -18,7 +18,7 @@ const MAX_WINDOW_NUMBER: u32 = 9999;
 const MAX_OPEN_WINDOWS: usize = 8;
 /// Window-scoped setting keys a new window may be seeded with (must match
 /// `WINDOW_SCOPED_KEYS` in `src/ipc/settings.ts`).
-const SEEDABLE_KEYS: [&str; 7] = ["repos", "activeWorktrees", "stage", "agentSessions", "terminalDock", "terminalScreen", "sidebar"];
+const SEEDABLE_KEYS: [&str; 8] = ["repos", "activeWorktrees", "stage", "agentSessions", "terminalDock", "terminalScreen", "sidebar", "browserTabs"];
 const MAX_SEED_BYTES: usize = 256 * 1024;
 
 /// `ws-<n>` with `n` in 1..=9999 and no leading zero.

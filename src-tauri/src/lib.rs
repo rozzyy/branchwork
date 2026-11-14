@@ -1,4 +1,5 @@
 mod blame;
+mod browser;
 mod cli;
 mod commit;
 mod compare;
@@ -1546,6 +1547,58 @@ fn agent_handover_diff(store: State<'_, Store>, worktree_path: String) -> Result
     handover::read_diff(&store, Path::new(&worktree_path))
 }
 
+/// Open (hidden) the native webview of a Browser tab in the calling window at
+/// logical bounds relative to the window (M11).
+#[tauri::command]
+#[specta::specta]
+#[allow(clippy::too_many_arguments)]
+fn browser_open(window: tauri::Window, tab_id: String, url: String, x: f64, y: f64, width: f64, height: f64) -> Result<(), AppError> {
+    browser::open(&window, &tab_id, &url, (x, y, width, height))
+}
+
+/// Move/resize a Browser tab's webview to follow its pane.
+#[tauri::command]
+#[specta::specta]
+fn browser_set_bounds(window: tauri::Window, tab_id: String, x: f64, y: f64, width: f64, height: f64) -> Result<(), AppError> {
+    browser::set_bounds(&window, &tab_id, (x, y, width, height))
+}
+
+/// Show or hide a Browser tab's webview (inactive tab, hidden pane, overlay).
+#[tauri::command]
+#[specta::specta]
+fn browser_show(window: tauri::Window, tab_id: String, visible: bool) -> Result<(), AppError> {
+    browser::show(&window, &tab_id, visible)
+}
+
+/// Load an http(s) URL in a Browser tab.
+#[tauri::command]
+#[specta::specta]
+fn browser_navigate(window: tauri::Window, tab_id: String, url: String) -> Result<(), AppError> {
+    browser::navigate(&window, &tab_id, &url)
+}
+
+/// Back, forward or reload in a Browser tab.
+#[tauri::command]
+#[specta::specta]
+fn browser_go(window: tauri::Window, tab_id: String, action: String) -> Result<(), AppError> {
+    browser::go(&window, &tab_id, &action)
+}
+
+/// Close every Browser webview of the calling window (stale ones left behind
+/// when the app webview reloaded).
+#[tauri::command]
+#[specta::specta]
+fn browser_close_all(window: tauri::Window) -> Result<(), AppError> {
+    browser::close_all(&window)
+}
+
+/// Close a Browser tab's webview (no-op when it is not open).
+#[tauri::command]
+#[specta::specta]
+fn browser_close(window: tauri::Window, tab_id: String) -> Result<(), AppError> {
+    browser::close(&window, &tab_id)
+}
+
 /// Create a secondary workspace window (M10) seeded with window-scoped
 /// settings; Rust picks the label. Returns the new label.
 #[tauri::command]
@@ -1828,6 +1881,13 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             agent_handover_diff,
             agent_copy_conversation,
             window_create,
+            browser_open,
+            browser_set_bounds,
+            browser_show,
+            browser_navigate,
+            browser_go,
+            browser_close,
+            browser_close_all,
             window_restore,
             window_close_self,
             agent_find_codex_conversation,
@@ -1848,7 +1908,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
 /// S3-M1: rejects any top-level webview navigation off the app's own origin. Defence in depth
 /// against an untrusted `<form>`/`<area>` in a rendered Markdown README navigating the main
 /// window to an attacker page (the DOMPurify/CSP fixes close the sanitizer side of this).
-fn is_local_navigation(url: &Url) -> bool {
+pub(crate) fn is_local_navigation(url: &Url) -> bool {
     match url.scheme() {
         // Production: the WKWebView serves the bundled app under this scheme on macOS.
         "tauri" => url.host_str() == Some("localhost"),
@@ -1887,7 +1947,15 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
-                .on_navigation(|_webview, url| is_local_navigation(url))
+                // Browser tabs (M11) may visit http(s) sites; every app webview
+                // stays on the bundled app.
+                .on_navigation(|webview, url| {
+                    if webview.label().starts_with(browser::LABEL_PREFIX) {
+                        browser::allows_navigation(url)
+                    } else {
+                        is_local_navigation(url)
+                    }
+                })
                 .build(),
         )
         .setup(|app| {

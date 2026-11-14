@@ -1,0 +1,15 @@
+/* Browser screen (M11). The page itself is a native webview placed over
+   .browser-page; everything else is regular DOM. */
+.browser { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.browser-tabs { display: flex; align-items: center; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.browser-tab { display: flex; align-items: center; max-width: 200px; min-width: 0; border: 1px solid transparent; border-bottom: 0; border-radius: var(--r-control) var(--r-control) 0 0; color: var(--text-2); }
+.browser-tab.on { border-color: var(--border); background: var(--raised); color: var(--text); margin-bottom: -1px; }
+.browser-tab-title { display: flex; align-items: center; gap: 6px; min-width: 0; height: 28px; padding: 0 4px 0 10px; border: 0; background: none; color: inherit; font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.browser-tab-close { width: 22px; height: 22px; margin-right: 4px; border: 0; border-radius: var(--r-control); background: none; color: var(--text-3); cursor: pointer; }
+.browser-tab-close:hover { background: var(--hover, var(--raised)); color: var(--text); }
+.browser-spin { width: 10px; height: 10px; flex: none; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: browser-spin .8s linear infinite; }
+@keyframes browser-spin { to { transform: rotate(360deg); } }
+.browser-bar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.browser-address { flex: 1; min-width: 0; height: 28px; padding: 4px 10px; }
+.browser-page { position: relative; flex: 1; min-height: 0; background: var(--bg); }
+.browser-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); text-align: center; padding: 16px; }

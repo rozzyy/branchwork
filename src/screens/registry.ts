@@ -2,7 +2,7 @@ import type { MsgKey } from "../i18n/en";
 
 export type ScreenId =
   | "home" | "changes" | "history" | "files" | "agents" | "terminal" | "github"
-  | "settings" | "conflicts";
+  | "browser" | "settings" | "conflicts";
 export type HistoryMode = "graph" | "file" | "rewrite";
 
 export type NavSection = "screens" | "tools" | "footer";
@@ -26,6 +26,7 @@ export const SCREENS: ScreenDef[] = [
   { id: "agents", icon: "✦", label: "nav.agents", section: "screens" },
   { id: "terminal", icon: "❯_", label: "nav.terminal", section: "screens" },
   { id: "github", icon: "◫", label: "nav.github", section: "screens" },
+  { id: "browser", icon: "◎", label: "nav.browser", section: "screens" },
   { id: "conflicts", icon: "⚠", label: "tools.conflicts", section: "tools" },
   { id: "settings", icon: "⚙", label: "nav.settings", section: "footer" },
 ];
@@ -33,7 +34,7 @@ export const NAV_SECTIONS: { id: NavSection; label: MsgKey }[] = [
   { id: "screens", label: "sidebar.sectionScreens" },
 ];
 
-export const SCREEN_IDS: ScreenId[] = [...NAV_SCREENS, "settings", "conflicts"];
+export const SCREEN_IDS: ScreenId[] = [...NAV_SCREENS, "browser", "settings", "conflicts"];
 
 export const screenById = (id: ScreenId): ScreenDef => SCREENS.find((s) => s.id === id)!;
 
@@ -62,6 +63,7 @@ export function migrateScreenId(id: string): { screen: ScreenId; historyMode?: H
     case "agents":
     case "terminal":
     case "github":
+    case "browser":
     case "conflicts":
     case "settings":
       return { screen: id };

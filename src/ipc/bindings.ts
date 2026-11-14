@@ -267,6 +267,26 @@ export const commands = {
 	 */
 	windowCreate: (seeds: WindowSeed[]) => __TAURI_INVOKE<string>("window_create", { seeds }),
 	/**
+	 *  Open (hidden) the native webview of a Browser tab in the calling window at
+	 *  logical bounds relative to the window (M11).
+	 */
+	browserOpen: (tabId: string, url: string, x: number | null, y: number | null, width: number | null, height: number | null) => __TAURI_INVOKE<null>("browser_open", { tabId, url, x, y, width, height }),
+	/**  Move/resize a Browser tab's webview to follow its pane. */
+	browserSetBounds: (tabId: string, x: number | null, y: number | null, width: number | null, height: number | null) => __TAURI_INVOKE<null>("browser_set_bounds", { tabId, x, y, width, height }),
+	/**  Show or hide a Browser tab's webview (inactive tab, hidden pane, overlay). */
+	browserShow: (tabId: string, visible: boolean) => __TAURI_INVOKE<null>("browser_show", { tabId, visible }),
+	/**  Load an http(s) URL in a Browser tab. */
+	browserNavigate: (tabId: string, url: string) => __TAURI_INVOKE<null>("browser_navigate", { tabId, url }),
+	/**  Back, forward or reload in a Browser tab. */
+	browserGo: (tabId: string, action: string) => __TAURI_INVOKE<null>("browser_go", { tabId, action }),
+	/**  Close a Browser tab's webview (no-op when it is not open). */
+	browserClose: (tabId: string) => __TAURI_INVOKE<null>("browser_close", { tabId }),
+	/**
+	 *  Close every Browser webview of the calling window (stale ones left behind
+	 *  when the app webview reloaded).
+	 */
+	browserCloseAll: () => __TAURI_INVOKE<null>("browser_close_all"),
+	/**
 	 *  Reopen the secondary windows that were open at the last quit (called by
 	 *  the main window once at startup).
 	 */

@@ -15,6 +15,7 @@ const WINDOW_SCOPED_KEYS = new Set([
   "terminalDock",
   "terminalScreen",
   "sidebar",
+  "browserTabs",
 ]);
 
 let label: string | undefined;

@@ -1,6 +1,6 @@
 {
-  "milestone": "M10 — Multi-window",
-  "plan": "docs/superpowers/plans/2026-11-14-m10-multi-window.md",
+  "milestone": "M11 — Browser screen",
+  "plan": "docs/superpowers/plans/2026-11-14-m11-browser.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -1614,6 +1614,28 @@
       ],
       "status": "done",
       "evidence": "⌘⇧N, palette New window / Move to new window, pane ⧉ control. ./init.sh exit 0: Vitest 83 files / 716 tests; Rust 333 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. Native multi-window not yet exercised."
+    },
+    {
+      "id": "m11-task-01-browser-webviews",
+      "stage": 39,
+      "name": "Native browser tab webviews + security",
+      "description": "docs/superpowers/plans/2026-11-14-m11-browser.md",
+      "dependencies": [
+        "m10-task-03-window-entry-points"
+      ],
+      "status": "done",
+      "evidence": "browser.rs child webviews (Tauri unstable), http(s)-only parse, navigation guard per webview label, capability by webview; 3 Rust tests. ./init.sh exit 0: Vitest 85 files / 724 tests; Rust 337 passed / 3 ignored; TypeScript and Clippy clean. Playwright 60/60. Native browser webviews not exercised in this session."
+    },
+    {
+      "id": "m11-task-02-browser-screen",
+      "stage": 39,
+      "name": "Browser screen with tabs and address bar",
+      "description": "docs/superpowers/plans/2026-11-14-m11-browser.md",
+      "dependencies": [
+        "m11-task-01-browser-webviews"
+      ],
+      "status": "done",
+      "evidence": "Window-scoped tabs store, toAddress (2 tests), BrowserScreen chrome with rAF-followed bounds and overlay hiding, e2e spec. ./init.sh exit 0: Vitest 85 files / 724 tests; Rust 337 passed / 3 ignored; TypeScript and Clippy clean. Playwright 60/60. Native browser webviews not exercised in this session."
     }
   ]
 }
