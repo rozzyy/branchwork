@@ -1305,6 +1305,40 @@
       ],
       "status": "done",
       "evidence": "Done 2026-11-13. Spec review FAIL (Publish offered for non-GitHub origins; untrimmed name sent to createRepository) then PASS after fixes (.agent/reviews/m6-task-09-spec.md) with regression tests; hardening: credential helper disabled and trace2 forced off for the token push, GIT_TRACE* removed. Deviation: repo-name sanitizer in the UI. ./init.sh: === Verification Complete === (Vitest 71 files / 635 tests; Rust 277 passed / 3 ignored)."
+    },
+    {
+      "id": "m6-task-10-rebase-plan",
+      "stage": 29,
+      "name": "Rebase plan read IPC",
+      "description": ".agent/tasks/m6-task-10-rebase-plan.md",
+      "dependencies": [
+        "m6-task-02-checkout-branch-picks"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review PASS (.agent/reviews/m6-task-10-spec.md); nits fixed (unknown SHA → Validation; lossy UTF-8 for subject/author). Findings 1–2 (refuse truncated/merge plans, rebuild plan server-side) carried into M6-11. Cap test builds commits in-process (26 s → 2 s). ./init.sh green before the nits (Vitest 71 files / 635 tests; Rust 282 passed / 3 ignored); rebase:: 4/4 and clippy after."
+    },
+    {
+      "id": "m6-task-11-rebase-execute",
+      "stage": 29,
+      "name": "Rebase execution IPC",
+      "description": ".agent/tasks/m6-task-11-rebase-execute.md",
+      "dependencies": [
+        "m6-task-10-rebase-plan",
+        "m6-task-05-conflict-resolve"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review FAIL (reword lost after a conflict: message files deleted with the run dir) then PASS (.agent/reviews/m6-task-11-spec.md); fixed with message files in <git-dir>/branchwork-rebase kept until the rebase ends (regression test), explicit drop lines, force-with-lease to <remote> HEAD:<upstream ref>, non-overwriting backup refs, 0700 dirs. ./init.sh: === Verification Complete === (Vitest 71 files / 635 tests; Rust 289 passed / 3 ignored)."
+    },
+    {
+      "id": "m6-task-12-rebase-screen",
+      "stage": 29,
+      "name": "Rebase screen",
+      "description": ".agent/tasks/m6-task-12-rebase-screen.md",
+      "dependencies": [
+        "m6-task-11-rebase-execute"
+      ],
+      "status": "done",
+      "evidence": "Done 2026-11-13. Spec review FAIL (Continue \u2192 done skipped the lease offer and left the stale plan; missing truncated and Start \u2192 conflict \u2192 Continue tests) then PASS (.agent/reviews/m6-task-12-spec.md); fixed with done handling shared by Start and Continue via useRebaseUi (per-worktree base and pushed flag, needsLeasePush), autosquash edge cases (no target, nested prefixes, dropped rows), custom drag type. ./init.sh: === Verification Complete === (Vitest 72 files / 645 tests; Rust 289 passed / 3 ignored)."
     }
   ]
 }

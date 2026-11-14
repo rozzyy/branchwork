@@ -12,6 +12,7 @@ import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
 import { InboxToolbar, InboxView } from "./inbox/InboxScreen";
 import { LaunchpadToolbar, LaunchpadView } from "./launchpad/LaunchpadScreen";
 import { ConflictsToolbar, ConflictsView } from "./conflicts/ConflictsScreen";
+import { RebaseToolbar, RebaseView } from "./rebase/RebaseScreen";
 
 export interface ScreenView {
   Toolbar: FC;
@@ -67,3 +68,4 @@ VIEWS.repo = { Toolbar: RepoToolbar, View: RepoViewBoundary };
 VIEWS.inbox = { Toolbar: InboxToolbar, View: InboxView };
 VIEWS.launchpad = { Toolbar: LaunchpadToolbar, View: LaunchpadView };
 VIEWS.conflicts = { Toolbar: ConflictsToolbar, View: ConflictsView };
+VIEWS.rebase = { Toolbar: RebaseToolbar, View: RebaseView };

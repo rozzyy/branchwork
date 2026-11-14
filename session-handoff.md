@@ -1,16 +1,14 @@
 # Session Handoff
 
-- **Last Updated:** 2026-11-13
-- **Latest follow-up:** By user order, M6 Stage 2 (conflict resolver, `de62b34`) and Stage 3 (local project init & publish, GitHub issue #5) were committed and fast-forwarded into `main` before their manual checkpoints. Not pushed; issue #5 not closed on GitHub yet.
-- **Current Objective:** User runs the pending manual checks — `docs/testing/m6-manual-e2e.md` Stage 2 (M6-S2-01..10) and Stage 3 (M6-S3-01..09) — on `main`. Then Stage 4 (Interactive rebase, M6-10..12) on `m6-stage-4`.
-
-- **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stages 1–3 on `main`; Stages 4 (rebase) and 5 (compare) remain, then the M6 review gate and `v0.6.0`.
-- **Branch:** `main` (local, ahead of `origin/main` `142c243`). Stage worktree `branchwork-m6-stage-3` removed after merge. Tags `v0.4.0`/`v0.5.0` not pushed. Commit/push only on user order.
-- **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters); 11 pre-existing Playwright failures from the M5 Launchpad redesign; close GitHub issue #5 (needs a push of `main` first); unused worktrees `fix-issue-5`, `fix-issue-1` (not created by the agent).
+- **Last Updated:** 2026-11-14
+- **Current Objective:** 🛑 Checkpoint M6.4 (Interactive rebase). User runs `docs/testing/m6-manual-e2e.md` Stage 4 (M6-S4-01..09) on `m6-stage-4`; the Stage 2/3 manual checks (M6-S2, M6-S3) on `main` are also still pending.
+- **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stages 1–3 on `main`; Stage 4 implemented, reviewed (code + security follow-ups PASS) and verified; Stage 5 (compare) remains, then the M6 review gate and `v0.6.0`. M7 (UI/UX redesign) designed and approved, starts after Stage 4 is merged.
+- **Branch:** `m6-stage-4` (main checkout). Commits on top of `main` (`3649feb`): `21feaad`, `3d3ec85` (agent session usage, token saver, quota meter). Stage 4 work is uncommitted. Feature worktree `../branchwork-agent-session-token-saver` (`feat/agent-session-token-saver`) still exists. Commit/push only on user order.
+- **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters); 11 pre-existing Playwright failures from the M5 Launchpad redesign; local branches `fix/issue-1`, `fix/issue-5` remain; remove the agent-session worktree/branch?
 
 ## Recommended Next Step
 
-After the user's manual checks: write `.agent/tasks/m6-task-10-*.md` (rebase plan read IPC) from the plan row, branch `m6-stage-4` from `main`, implement, spec-review.
+After the user approves M6.4: one Stage 4 commit on `m6-stage-4`, `git switch main && git merge --ff-only m6-stage-4 && git branch -d m6-stage-4`. Then either M6 Stage 5 (compare) or, if the user prefers, M7 Stage 1 from the redesign plan (`docs/superpowers/specs/2026-11-14-ui-redesign-design-system-design.md`).
 
 ## M2 structure
 

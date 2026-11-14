@@ -61,9 +61,9 @@ Graph empty state, private publish with a second account, name collision, push-f
 
 | Task | Scope | Depends on |
 |---|---|---|
-| M6-10 Rebase plan read IPC | `rebase_plan(worktree, base)` lists commits `base..HEAD` (capped, for example 500) with sha, subject, and author, and reports whether the branch is already pushed (upstream contains any of those commits). | M6-02 |
-| M6-11 Rebase execution IPC | `rebase_interactive(plan)`: create the backup ref `refs/branchwork/backup/<branch>/<ts>`, write the todo file, and run `git rebase -i` non-interactively with no shell invocation (see Decision 2). Emits per-step progress events. Stops on conflict and hands off to the Conflicts screen; `rebase_continue` and `rebase_abort` (confirmed). Oplog entry: undo restores the backup ref. A subsequent push of a rewritten pushed branch uses `--force-with-lease` after `ask()` confirmation. | M6-10, M6-05 |
-| M6-12 Rebase screen | Replace the placeholder: drag to reorder, per-commit action (pick / reword with inline edit / squash / fixup / drop), auto-squash for `fixup!` / `squash!` subjects, result preview with count, pushed-branch warning, per-step progress. Enable "Interactive rebase from here" in the Graph menu and inspector. ✦ heuristic auto-squash (typo/wip) waits for the AI milestone. | M6-11 |
+| M6-10 Rebase plan read IPC ✅ | `rebase_plan(worktree, base)` lists commits `base..HEAD` (capped, for example 500) with sha, subject, and author, and reports whether the branch is already pushed (upstream contains any of those commits). | M6-02 |
+| M6-11 Rebase execution IPC ✅ | `rebase_interactive(plan)`: create the backup ref `refs/branchwork/backup/<branch>/<ts>`, write the todo file, and run `git rebase -i` non-interactively with no shell invocation (see Decision 2). Emits per-step progress events. Stops on conflict and hands off to the Conflicts screen; `rebase_continue` and `rebase_abort` (confirmed). Oplog entry: undo restores the backup ref. A subsequent push of a rewritten pushed branch uses `--force-with-lease` after `ask()` confirmation. | M6-10, M6-05 |
+| M6-12 Rebase screen ✅ | Replace the placeholder: drag to reorder, per-commit action (pick / reword with inline edit / squash / fixup / drop), auto-squash for `fixup!` / `squash!` subjects, result preview with count, pushed-branch warning, per-step progress. Enable "Interactive rebase from here" in the Graph menu and inspector. ✦ heuristic auto-squash (typo/wip) waits for the AI milestone. | M6-11 |
 
 Manual checkpoint M6.4: reorder, reword, squash, fixup, and drop in one run;
 undo via the backup ref; a rebase that conflicts and continues; abort; the
@@ -110,6 +110,11 @@ E2E + §9 performance note), and on approval the `v0.6.0` release.
    only copies a prepared todo file over git's. Reword uses
    `exec git commit --amend --only -F <msgfile>` lines, so no `GIT_EDITOR`
    is needed. No in-process git2 rebase.
+   *Amended 2026-11-13 (user, option A):* the helper is the app binary itself —
+   `GIT_SEQUENCE_EDITOR` runs `<app> --branchwork-rebase-todo <prepared> <git-todo>`, which
+   `main()` handles before Tauri starts. No separate sidecar, so nothing extra must be bundled
+   (the existing `branchwork-notify` sidecar is not in `bundle.externalBin`; tracked as a
+   follow-up).
 3. **Compare uncommitted state:** `git stash create` snapshots tracked
    changes without touching the tree; untracked files are excluded
    (shown as a note in the Compare screen).

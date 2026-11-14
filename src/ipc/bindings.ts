@@ -54,6 +54,17 @@ export const commands = {
 	gitCherryPick: (worktreePath: string, sha: string) => __TAURI_INVOKE<boolean>("git_cherry_pick", { worktreePath, sha }),
 	/**  Returns whether the revert can be undone. */
 	gitRevert: (worktreePath: string, sha: string) => __TAURI_INVOKE<boolean>("git_revert", { worktreePath, sha }),
+	/**  Commits `base..HEAD` in todo order and whether the branch is already pushed (spec §6.8). */
+	rebasePlan: (worktreePath: string, base: string) => __TAURI_INVOKE<RebasePlan_Serialize>("rebase_plan", { worktreePath, base }),
+	/**
+	 *  Runs an interactive rebase from a validated plan (spec §6.8); the app binary is git's
+	 *  sequence editor (`--branchwork-rebase-todo`).
+	 */
+	rebaseInteractive: (worktreePath: string, request: RebaseRequest) => __TAURI_INVOKE<RebaseOutcome_Serialize>("rebase_interactive", { worktreePath, request }),
+	rebaseContinue: (worktreePath: string) => __TAURI_INVOKE<RebaseOutcome_Serialize>("rebase_continue", { worktreePath }),
+	rebaseAbort: (worktreePath: string) => __TAURI_INVOKE<null>("rebase_abort", { worktreePath }),
+	/**  Push a rewritten (rebased) branch with `--force-with-lease`; the UI confirms first. */
+	gitPushForceWithLease: (worktreePath: string) => __TAURI_INVOKE<null>("git_push_force_with_lease", { worktreePath }),
 	/**  Conflicted paths and the in-progress operation (spec §6.8). */
 	conflictList: (worktreePath: string) => __TAURI_INVOKE<ConflictList>("conflict_list", { worktreePath }),
 	/**  Base/ours/theirs regions of one conflicted file, or a summary for binary/large/deleted files. */
@@ -1152,6 +1163,87 @@ export type RateLimitState_Serialize = {
 	remaining: number | null,
 	reset_at: number | null,
 	retry_after: number | null,
+};
+
+export type RebaseAction = { kind: "pick" } | { kind: "reword"; message: string } | { kind: "squash" } | { kind: "fixup" } | { kind: "drop" };
+
+export type RebaseCommit = RebaseCommit_Serialize | RebaseCommit_Deserialize;
+
+export type RebaseCommit_Deserialize = {
+	sha: string,
+	shortSha: string,
+	subject: string,
+	authorName?: string | null,
+	authorEmail?: string | null,
+	timestamp: number,
+	isMerge: boolean,
+};
+
+export type RebaseCommit_Serialize = {
+	sha: string,
+	shortSha: string,
+	subject: string,
+	authorName: string | null,
+	authorEmail: string | null,
+	timestamp: number,
+	isMerge: boolean,
+};
+
+export type RebaseOutcome = RebaseOutcome_Serialize | RebaseOutcome_Deserialize;
+
+export type RebaseOutcome_Deserialize = {
+	status: RebaseStatus,
+	/**  `refs/branchwork/backup/<branch>/<ts>`, the pre-rebase HEAD. */
+	backupRef?: string | null,
+	undoable: boolean,
+};
+
+export type RebaseOutcome_Serialize = {
+	status: RebaseStatus,
+	/**  `refs/branchwork/backup/<branch>/<ts>`, the pre-rebase HEAD. */
+	backupRef: string | null,
+	undoable: boolean,
+};
+
+export type RebasePlan = RebasePlan_Serialize | RebasePlan_Deserialize;
+
+export type RebasePlan_Deserialize = {
+	branch: string,
+	base: string,
+	/**  Oldest first, the order of a rebase todo list. */
+	commits: RebaseCommit_Deserialize[],
+	truncated: boolean,
+	/**  The upstream already contains a commit of the range, so a rebase rewrites published history. */
+	pushed: boolean,
+};
+
+export type RebasePlan_Serialize = {
+	branch: string,
+	base: string,
+	/**  Oldest first, the order of a rebase todo list. */
+	commits: RebaseCommit_Serialize[],
+	truncated: boolean,
+	/**  The upstream already contains a commit of the range, so a rebase rewrites published history. */
+	pushed: boolean,
+};
+
+export type RebaseProgress = {
+	worktreePath: string,
+	step: number,
+	total: number,
+};
+
+export type RebaseRequest = {
+	base: string,
+	/**  One step per commit of the plan, in the new order. */
+	steps: RebaseStep[],
+};
+
+export type RebaseStatus = "done" | "conflict";
+
+export type RebaseStep = {
+	sha: string,
+	action: RebaseAction,
 };
 
 /**  Per-region choice; `both` is ours followed by theirs. */

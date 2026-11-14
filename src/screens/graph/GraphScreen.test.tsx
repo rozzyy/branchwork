@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useRebaseUi } from "../rebase/rebaseState";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { GraphCommit, GraphPage } from "../../ipc/graph";
@@ -304,7 +305,6 @@ it("filters rows and visibly disables deferred graph actions", async () => {
   fireEvent.contextMenu(commit, { clientX: 120, clientY: 120 });
   expect(screen.getByRole("menuitem", { name: "Copy SHA" })).toBeEnabled();
   expect(screen.getByRole("menuitem", { name: "Create worktree here" })).toBeEnabled();
-  expect(screen.getByRole("menuitem", { name: /Rebase from here · Later/ })).toBeDisabled();
   expect(screen.getByRole("menuitem", { name: /Start agent here · Later/ })).toBeDisabled();
   expect(screen.getByRole("menuitem", { name: /Compare with working tree · Later/ })).toBeDisabled();
 });
@@ -511,6 +511,17 @@ it("shows Mine's configured-email guidance and leaves Agent unavailable", async 
 
   expect(screen.getByText("Mine needs a Git user.email configured for this repository. No email is configured.")).toBeVisible();
   expect(screen.getByRole("button", { name: "Agent commits are unavailable until agent metadata is available" })).toBeDisabled();
+});
+
+it("Rebase from here sets the base and opens the Rebase screen", async () => {
+  setupGraph();
+  const commit = await screen.findByRole("option", { name: /Commit 1,/ });
+
+  fireEvent.contextMenu(commit, { clientX: 120, clientY: 120 });
+  await userEvent.click(screen.getByRole("menuitem", { name: /Rebase from here/ }));
+
+  expect(useRebaseUi.getState().base).toEqual({ worktree: "/repos/main", sha: page0Commits[1].sha });
+  expect(useStage.getState().go).toHaveBeenCalledWith("rebase");
 });
 
 it("shows an empty state for a repository with no commits", async () => {

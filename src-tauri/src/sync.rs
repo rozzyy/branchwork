@@ -36,6 +36,50 @@ pub(crate) fn require_first_commit(
     Ok(())
 }
 
+/// `git push --force-with-lease` for a rebased branch the user confirmed rewriting.
+pub(crate) fn push_force_with_lease(worktree_path: &Path) -> Result<(), AppError> {
+    let (root, repository) = open_worktree(worktree_path)?;
+    require_first_commit(&repository, "pushing")?;
+    let branch = current_branch(&repository, "push")?;
+    // Name the remote and `HEAD` so `push.default=matching` can't force-push other branches.
+    // The remote is the one a plain `git push` uses: pushRemote, remote.pushDefault, upstream.
+    let config = repository.config()?;
+    let upstream_remote = repository
+        .branch_upstream_remote(&format!("refs/heads/{branch}"))
+        .ok()
+        .and_then(|name| name.as_str().ok().map(str::to_owned));
+    let remote = config
+        .get_string(&format!("branch.{branch}.pushRemote"))
+        .or_else(|_| config.get_string("remote.pushDefault"))
+        .ok()
+        .or_else(|| upstream_remote.clone())
+        .unwrap_or_else(|| "origin".to_owned());
+    // Like `push.default=simple`: only the same-named branch, so a branch tracking another one
+    // (`switch -c feature origin/main`) can never force-overwrite it.
+    let target = format!("refs/heads/{branch}");
+    if upstream_remote.as_deref() == Some(remote.as_str())
+        && let Ok(merge) = config.get_string(&format!("branch.{branch}.merge"))
+        && merge != target
+    {
+        return Err(AppError::validation(format!(
+            "{branch} tracks {merge}, not a branch of the same name; force-push it from a terminal if that's intended"
+        )));
+    }
+    let refspec = format!("HEAD:{target}");
+    let output = run_git(
+        &root,
+        &[
+            OsStr::new("push"),
+            OsStr::new("--force-with-lease"),
+            // The remote name comes from repo config; never read it as an option.
+            OsStr::new("--"),
+            OsStr::new(&remote),
+            OsStr::new(&refspec),
+        ],
+    )?;
+    require_success(&root, &repository, "push", output)
+}
+
 pub(crate) fn fetch(worktree_path: &Path) -> Result<(), AppError> {
     let (root, repository) = open_worktree(worktree_path)?;
     let output = run_git(&root, &[OsStr::new("fetch"), OsStr::new("--prune")])?;

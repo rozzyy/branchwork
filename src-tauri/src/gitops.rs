@@ -84,7 +84,7 @@ fn checkout_failure(
     }
 }
 
-fn write_payload(
+pub(crate) fn write_payload(
     store: &Store,
     record_id: i64,
     payload: serde_json::Value,

@@ -907,6 +907,21 @@ pub(crate) fn invoke_git_with_extra_config(
     run_with_config(command, args, filters, false, extra)
 }
 
+/// Like [`invoke_git_allowing_hooks`], with extra environment variables applied last (so they
+/// override the defaults, e.g. `GIT_SEQUENCE_EDITOR` for an interactive rebase).
+pub(crate) fn invoke_git_with_env(
+    repository_path: &Path,
+    args: &[&OsStr],
+    filters: &HashSet<String>,
+    env: &[(&str, String)],
+) -> Result<Output, AppError> {
+    let mut command = git_command_with_user_config(repository_path);
+    for (name, value) in env {
+        command.env(name, value);
+    }
+    run_with_config(command, args, filters, false, &[])
+}
+
 fn run_with_config(
     mut command: Command,
     args: &[&OsStr],

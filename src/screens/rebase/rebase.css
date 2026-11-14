@@ -1,0 +1,33 @@
+/* Rebase screen (M6-12), after the prototype's `.rb*` styles. */
+.rebase { display: grid; grid-template-columns: minmax(0, 1fr) 300px; height: 100%; min-height: 0; }
+.rebase-subtitle { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--fg3); }
+.rebase-list-pane { display: flex; flex-direction: column; min-height: 0; padding: 12px 16px; overflow: auto; }
+.rebase-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.rebase-bar .rebase-muted { flex: 1; }
+.rebase-muted { color: var(--fg3); font-size: 12px; }
+.rebase-block { margin: 0 0 8px; color: var(--yel); font-size: 12px; }
+.rebase-list { list-style: none; margin: 0; padding: 0; }
+.rebase-row { display: grid; grid-template-columns: 18px 104px minmax(0, 1fr) 110px 64px auto; gap: 10px; align-items: center; padding: 6px 10px; margin-bottom: 6px; border-radius: 12px; background: var(--s2); box-shadow: var(--spec), 0 0 0 .5px var(--line); }
+.rebase-row.dropped .rebase-msg { text-decoration: line-through; color: var(--fg3); }
+.rebase-handle { color: var(--fg3); cursor: grab; }
+.rebase-msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rebase-msg .input { width: 100%; }
+.rebase-who, .rebase-sha { color: var(--fg3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rebase-move { display: flex; gap: 2px; }
+.rebase-side { padding: 14px 16px; border-left: 1px solid var(--line); overflow: auto; display: grid; align-content: start; gap: 8px; }
+.rebase-side h4 { margin: 6px 0 0; font-size: 11px; letter-spacing: .06em; color: var(--fg3); text-transform: uppercase; }
+.rebase-count { font-size: 24px; font-weight: 700; }
+.rebase-preview { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+.rebase-preview li::before { content: "● "; color: var(--grn); }
+.rebase-preview li.melded { color: var(--fg3); }
+.rebase-preview li.melded::before { color: var(--yel); }
+.rebase-warning { margin: 4px 0 0; padding: 8px 10px; border-radius: 10px; background: color-mix(in oklch, var(--yel) 14%, transparent); font-size: 12px; }
+.rebase-state { display: grid; place-content: center; gap: 8px; padding: 32px; text-align: center; height: 100%; }
+.rebase-state h2 { margin: 0; font-size: 15px; }
+.rebase-actions { display: flex; gap: 8px; justify-content: center; }
+@container (max-width: 760px) {
+  .rebase { grid-template-columns: 1fr; }
+  .rebase-side { border-left: 0; border-top: 1px solid var(--line); }
+  .rebase-row { grid-template-columns: 18px 96px minmax(0, 1fr) auto; }
+  .rebase-who, .rebase-sha { display: none; }
+}

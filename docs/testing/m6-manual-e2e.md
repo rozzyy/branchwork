@@ -64,3 +64,20 @@ Restart the app fully first (Rust changed). Use a linked GitHub account; for the
 - [ ] **M6-S3-07 Second account / organization.** Pick the other account (or an organization owner) → publish works as that account (the first push uses that account's token even if your keychain holds the other account).
 - [ ] **M6-S3-08 Name collision.** Publish with a name that already exists on that owner → clear GitHub error; no `origin` is added; nothing pushed.
 - [ ] **M6-S3-09 Push failure keeps the repo.** Simulate a push failure (e.g. a pre-push hook that exits 1) → toast says the repo was created and to retry with Push; `origin` is set; Push from Graph succeeds after removing the hook.
+
+## Stage 4 — Interactive rebase (Checkpoint M6.4)
+
+> **Checkpoint M6.4 approved by the user on 2026-11-14** and the stage commit ordered. The user did not report results for M6-S4-01..09, so the checks below remain unverified.
+
+Rebuild the app (`pnpm tauri build`) and test the built `.app` at least once: the rebase sequence editor is the app binary itself (`--branchwork-rebase-todo`), so the dev run and the bundle both have to work. Use a throwaway branch with 5–6 local commits, including one `fixup! <subject>` commit; for the pushed steps, a branch that has an upstream on GitHub.
+
+- [ ] **M6-S4-01 Entry.** Graph → right-click a commit → "Rebase from here" opens Rebase with the commits after it, oldest first (author, short SHA). The inspector's Rebase button does the same. Opening Rebase with no base says to pick a commit in Graph. Choosing a base in worktree A and then switching to worktree B doesn't show A's plan.
+- [ ] **M6-S4-02 Edit the plan.** Reorder by drag and drop and with ↑/↓ (Tab to the buttons and press Enter). Change actions; reword shows a prefilled input; drop strikes the row through. The side panel count ("N of M commits") and the preview follow; squash/fixup rows show "↳ melded into the commit above". Dragging text from another app onto the list does nothing.
+- [ ] **M6-S4-03 Auto-squash.** "Auto-squash fixup!/squash!" moves the `fixup!` commit right after its target with action fixup. A `fixup!` whose target isn't in the range stays in place. ✦ AI auto-squash is disabled.
+- [ ] **M6-S4-04 Start guards.** Start is disabled with a reason when the first kept row is squash/fixup, when every row is dropped, when a reword message is empty, and for a range containing a merge commit.
+- [ ] **M6-S4-05 Run.** With reorder + reword + fixup + squash + drop, Start → "Rebasing step/total" → toast "Rebase complete" with Undo. Graph and `git log` show the new order, the reworded message, the squash's combined message, and the dropped commit gone. `git for-each-ref refs/branchwork/backup` lists a backup at the old HEAD. No `branchwork-rebase` folder remains under `.git`.
+- [ ] **M6-S4-06 Undo.** Click Undo (or ⌘Z undo-last) → HEAD returns to the old commit; the working tree is untouched.
+- [ ] **M6-S4-07 Refused when dirty.** Modify a tracked file → Start → clear error, nothing changes. Restore the file.
+- [ ] **M6-S4-08 Conflict → Continue.** Reorder two commits that touch the same lines → Start → toast with Resolve conflicts; Rebase shows "Rebase in progress" (Continue disabled while files are conflicted, with a link to Conflicts). Resolve in Conflicts → back in Rebase → Continue → "Rebase complete" (a reword placed after the conflict keeps its new message).
+- [ ] **M6-S4-09 Abort.** Start a conflicting rebase again → Abort asks (danger) → Cancel keeps it; Abort → the branch is back at the old HEAD and `git status` is clean.
+- [ ] **M6-S4-10 Pushed branch.** On a branch that's already pushed: the side panel warns about `--force-with-lease`. After the rebase (also after a conflict + Continue), the screen offers "Push with --force-with-lease" → a danger confirm → the push succeeds and the screen returns to "Pick a commit…". If someone else pushed to the remote branch first, the push is refused with a clear error and nothing is overwritten.

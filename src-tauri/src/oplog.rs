@@ -66,6 +66,7 @@ pub(crate) fn record(
             | "checkout"
             | "cherry_pick"
             | "revert"
+            | "rebase"
             | "discard"
             | "delete_to_trash"
             | "stash_drop"
@@ -74,7 +75,7 @@ pub(crate) fn record(
         && !cfg!(any(target_os = "linux", target_os = "windows")))
         && !(matches!(
             operation,
-            "commit" | "pull" | "checkout" | "cherry_pick" | "revert"
+            "commit" | "pull" | "checkout" | "cherry_pick" | "revert" | "rebase"
         ) && payload["beforeHead"].is_null())
         && payload["payloadTooLarge"] != true;
     let payload = serde_json::to_vec(&payload)
@@ -404,7 +405,8 @@ fn apply_reverse(root: &Path, row: &OplogRow) -> Result<(), AppError> {
     let payload = row_payload(row)?;
     match row.kind.as_str() {
         "commit" | "sync" => undo_commit(root, &payload),
-        "pull" | "cherry_pick" | "revert" => undo_reset_keep(root, &payload),
+        // Rebase: back to the pre-rebase HEAD (also kept as `refs/branchwork/backup/...`).
+        "pull" | "cherry_pick" | "revert" | "rebase" => undo_reset_keep(root, &payload),
         "checkout" => undo_checkout(root, &payload),
         "discard" => undo_discard(root, &payload),
         "delete_to_trash" => undo_delete(root, &payload),

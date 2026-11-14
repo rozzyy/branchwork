@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { useRebaseUi } from "../rebase/rebaseState";
 import { errorMessage } from "../../ipc/errors";
 import { t } from "../../i18n/t";
 import type { Project } from "../../ipc/catalog";
@@ -67,7 +68,6 @@ const filterKeys = {
   mine: "graph.filter.mine",
 } as const;
 const deferredMenuActions = [
-  "graph.action.rebase",
   "graph.action.diff",
   "graph.action.agent",
 ] as const;
@@ -347,6 +347,12 @@ function cherryPickCommit(worktreePath: string, commit: GraphCommit) {
 
 function revertCommit(worktreePath: string, commit: GraphCommit) {
   return runGitAction(worktreePath, t("graph.action.revert"), () => gitRevert(worktreePath, commit.sha));
+}
+
+/** "Rebase from here": the chosen commit becomes the rebase base. */
+function rebaseFrom(worktreePath: string, commit: GraphCommit) {
+  useRebaseUi.getState().setBase(worktreePath, commit.sha);
+  useStage.getState().go("rebase");
 }
 
 async function openCommitOnGithub(worktreePath: string, commit: GraphCommit) {
@@ -694,6 +700,7 @@ export function GraphView() {
       if (activePath) void revertCommit(activePath, menu.commit);
     } },
     { kind: "separator" },
+    { kind: "item", label: t("graph.action.rebase"), icon: "↕", disabled: !activePath, onSelect: () => activePath && rebaseFrom(activePath, menu.commit) },
     { kind: "item", label: t("graph.action.openOnGithub"), icon: "↗", disabled: !activePath, onSelect: () => {
       if (activePath) void openCommitOnGithub(activePath, menu.commit);
     } },
@@ -1044,7 +1051,7 @@ function CommitInspector({
       <div className="graph-commit-actions">
         <button className="btn sm" disabled={!activePath || busy} onClick={() => { if (activePath) void cherryPickCommit(activePath, commit); }}>{t("graph.cherryPick")}</button>
         <button className="btn sm" disabled={!activePath || busy} onClick={() => { if (activePath) void revertCommit(activePath, commit); }}>{t("graph.revert")}</button>
-        <button className="btn sm" disabled title={t("graph.deferredTitle")}>{t("graph.action.rebase")} · {t("graph.later")}</button>
+        <button className="btn sm" disabled={!activePath || busy} onClick={() => activePath && rebaseFrom(activePath, commit)}>{t("graph.action.rebase")}</button>
       </div>
     </div>
   );

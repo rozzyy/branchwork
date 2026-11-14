@@ -13,6 +13,7 @@ mod notify;
 mod oplog;
 mod pty;
 mod publish;
+mod rebase;
 mod repogit;
 mod repository;
 pub mod saver;
@@ -498,6 +499,93 @@ fn git_push(
     sync::push(&worktree_path)?;
     emit_op_done(&app, &store, &worktree_path);
     Ok(())
+}
+
+/// Commits `base..HEAD` in todo order and whether the branch is already pushed (spec §6.8).
+#[tauri::command(async)]
+#[specta::specta]
+fn rebase_plan(
+    store: State<'_, Store>,
+    worktree_path: String,
+    base: String,
+) -> Result<rebase::RebasePlan, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    rebase::plan(&worktree_path, &base)
+}
+
+fn emit_rebase_progress(app: &AppHandle, worktree_path: &Path) -> impl Fn(u32, u32) + Sync + use<> {
+    let app = app.clone();
+    let worktree_path = worktree_path.to_string_lossy().into_owned();
+    move |step, total| {
+        let event = rebase::RebaseProgress {
+            worktree_path: worktree_path.clone(),
+            step,
+            total,
+        };
+        if let Err(error) = app.emit("rebase:progress", event) {
+            eprintln!("Could not emit rebase:progress: {error}");
+        }
+    }
+}
+
+/// Runs an interactive rebase from a validated plan (spec §6.8); the app binary is git's
+/// sequence editor (`--branchwork-rebase-todo`).
+#[tauri::command(async)]
+#[specta::specta]
+fn rebase_interactive(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+    request: rebase::RebaseRequest,
+) -> Result<rebase::RebaseOutcome, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let exe = std::env::current_exe()
+        .map_err(|error| AppError::internal(format!("Could not locate the app binary: {error}")))?;
+    let progress = emit_rebase_progress(&app, &worktree_path);
+    let result = rebase::interactive(&store, &worktree_path, &request, &exe, &progress);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn rebase_continue(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<rebase::RebaseOutcome, AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let progress = emit_rebase_progress(&app, &worktree_path);
+    let result = rebase::continue_rebase(&worktree_path, &progress);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+#[tauri::command(async)]
+#[specta::specta]
+fn rebase_abort(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = rebase::abort_rebase(&worktree_path);
+    emit_op_done(&app, &store, &worktree_path);
+    result
+}
+
+/// Push a rewritten (rebased) branch with `--force-with-lease`; the UI confirms first.
+#[tauri::command(async)]
+#[specta::specta]
+fn git_push_force_with_lease(
+    app: AppHandle,
+    store: State<'_, Store>,
+    worktree_path: String,
+) -> Result<(), AppError> {
+    let worktree_path = status::validate_catalog_worktree(&store, Path::new(&worktree_path))?;
+    let result = sync::push_force_with_lease(&worktree_path);
+    emit_op_done(&app, &store, &worktree_path);
+    result
 }
 
 /// Conflicted paths and the in-progress operation (spec §6.8).
@@ -1559,6 +1647,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             git_branch_create,
             git_cherry_pick,
             git_revert,
+            rebase_plan,
+            rebase_interactive,
+            rebase_continue,
+            rebase_abort,
+            git_push_force_with_lease,
             conflict_list,
             conflict_read,
             conflict_resolve,
@@ -1648,6 +1741,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .typ::<PtyOutput>()
         .typ::<PtyExit>()
         .typ::<PtyErrorEvent>()
+        .typ::<rebase::RebaseProgress>()
 }
 
 /// S3-M1: rejects any top-level webview navigation off the app's own origin. Defence in depth
@@ -1667,6 +1761,11 @@ fn is_local_navigation(url: &Url) -> bool {
         }
         _ => false,
     }
+}
+
+/// `Some(exit code)` when the process was started as the rebase sequence editor.
+pub fn rebase_todo_helper(args: Vec<std::ffi::OsString>) -> Option<i32> {
+    rebase::todo_helper(&args)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
