@@ -23,6 +23,7 @@ import { useSessions } from "./agents/sessions";
 import { useProfiles } from "./agents/profiles";
 import { errorMessage } from "./ipc/errors";
 import { toast } from "./ui/toast";
+import { startWindowSync } from "./state/windows";
 
 export default function App() {
   useGlobalKeys();
@@ -45,6 +46,16 @@ export default function App() {
     })().catch((error) => {
       toast({ title: errorMessage(error), icon: "⚠" });
     });
+    // M10: window lifecycle + app-wide settings sync (desktop only).
+    let stopWindowSync: (() => void) | undefined;
+    let windowSyncDisposed = false;
+    void startWindowSync()
+      .then((dispose) => {
+        // Unmounted before setup finished (StrictMode/HMR): undo it now.
+        if (windowSyncDisposed) dispose();
+        else stopWindowSync = dispose;
+      })
+      .catch(() => undefined);
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme(useSettings.getState().theme);
     mq?.addEventListener("change", onChange);
@@ -57,6 +68,8 @@ export default function App() {
       });
     }
     return () => {
+      windowSyncDisposed = true;
+      stopWindowSync?.();
       disposed = true;
       mq?.removeEventListener("change", onChange);
       unlisten?.();

@@ -86,6 +86,15 @@ impl Store {
         Ok(())
     }
 
+    /// Delete every setting whose key starts with `prefix` (a closed window's
+    /// scoped keys). Returns the number of rows removed.
+    pub fn delete_settings_with_prefix(&self, prefix: &str) -> rusqlite::Result<usize> {
+        self.conn.lock().unwrap().execute(
+            "DELETE FROM settings WHERE substr(key, 1, length(?1)) = ?1",
+            params![prefix],
+        )
+    }
+
     pub fn list_groups(&self) -> rusqlite::Result<Vec<Group>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn

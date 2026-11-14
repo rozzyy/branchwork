@@ -25,6 +25,7 @@ mod stash;
 mod status;
 mod store;
 mod sync;
+mod windows;
 mod worktree;
 
 use error::AppError;
@@ -1545,6 +1546,35 @@ fn agent_handover_diff(store: State<'_, Store>, worktree_path: String) -> Result
     handover::read_diff(&store, Path::new(&worktree_path))
 }
 
+/// Create a secondary workspace window (M10) seeded with window-scoped
+/// settings; Rust picks the label. Returns the new label.
+#[tauri::command]
+#[specta::specta]
+fn window_create(app: AppHandle, store: State<'_, Store>, seeds: Vec<windows::WindowSeed>) -> Result<String, AppError> {
+    windows::create(&app, &store, &seeds)
+}
+
+/// Reopen the secondary windows that were open at the last quit (called by
+/// the main window once at startup).
+#[tauri::command]
+#[specta::specta]
+fn window_restore(app: AppHandle, store: State<'_, Store>) -> Result<Vec<String>, AppError> {
+    windows::restore(&app, &store)
+}
+
+/// The calling secondary window closes for good: it is not reopened and its
+/// window-scoped settings are dropped. The label comes from the caller, so a
+/// window can only close itself.
+#[tauri::command]
+#[specta::specta]
+fn window_close_self(window: tauri::WebviewWindow, store: State<'_, Store>) -> Result<(), AppError> {
+    let label = window.label().to_owned();
+    windows::forget(&store, &label)?;
+    window
+        .destroy()
+        .map_err(|error| AppError::internal(format!("Could not close window: {error}")))
+}
+
 /// Copy one conversation transcript between two profiles of the same CLI so a
 /// profile switch can resume it by ID. False when a Claude pane has no
 /// transcript yet. Only paths inside the two validated profile dirs are used.
@@ -1797,6 +1827,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             agent_write_handover,
             agent_handover_diff,
             agent_copy_conversation,
+            window_create,
+            window_restore,
+            window_close_self,
             agent_find_codex_conversation,
             notify_socket_path,
             notify_status
@@ -1873,6 +1906,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(builder.invoke_handler())
+        .on_window_event(|window, event| {
+            // Closing the main window quits the app (M10): secondary windows
+            // close with it and reopen at the next launch, and no PTY is left
+            // running behind a window that no longer exists.
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                window.app_handle().exit(0);
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Branchwork");
 }

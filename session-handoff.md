@@ -1,8 +1,8 @@
 # Session Handoff
 
 - **Last updated:** 2026-11-14
-- **Current objective:** M9 (up to 4 split panes) committed and pushed on user order without native checks (`docs/testing/m9-manual-e2e.md` unchecked). Next: brainstorm/spec M10 multi-window (approach 2a: each window an independent workspace), then a general browser with tabs and free URLs.
-- **Branch:** `main` (M8 `060be19`, M8 fixes `6123df2`, M9 stage commit) pushed to `origin/main`; no tags pushed.
+- **Current objective:** M10 (multi-window), the build-warning cleanup and the Agents grid fix are committed and pushed on user order; native checks for M8–M10 still pending (`docs/testing/m8|m9|m10-manual-e2e.md`). Next: design the general browser with tabs and free URLs.
+- **Branch:** `main`, pushed to `origin/main`; no tags.
 - **Completed:** M6-13 Compare IPC and M6-14 Compare UI/entry points are implemented. Rust validates same-repository worktrees and bounds output; tracked dirty snapshots exclude untracked files and preserve each worktree/index. The Compare dialog has A/B selectors, tracked-uncommitted option, file stats, shared diff renderer and Copy patch. Graph context menu opens Compare; Race results have Compare plus existing Keep and confirmed Discard actions.
 - **Included work:** M7 prototype-parity updates (including Home and Settings full-width adjustment), M6 Compare, and stale linked-worktree recovery are all included in stage commit `43a9a80`.
 - **Stale worktree recovery:** `git worktree prune --expire=now` runs on repository registration and before worktree list/summary reads. It removes only stale registrations confirmed by Git. Regression tests cover adding a repository and refreshing worktrees.
@@ -13,6 +13,6 @@
 - **CUA status:** CUA tools are available in this session; Accessibility and Screen Recording are granted. Branchwork is open on the current repository. The compare dialog was closed after observation.
 - **M7 manual:** `docs/testing/m7-manual-e2e.md` records partial S1-01/02/04/05/06/07/09 observations, S1-08 pass, partial S2-01/02/04 observations, and S2-03/05 pass. S1-03 and the unobserved parts of S1 and S2 remain pending. Settings theme/text size are System/Default. Ctrl+` toggled the bottom dock; one run changed Settings to Agents, so repeat before clearing the regression. A generic preview action unexpectedly opened a real push confirmation for `feat/auth-oauth`; it was canceled with no push.
 - **Checkpoint:** User approved the M7 manual checkpoint on 2026-11-14 and ordered the stage commit.
-- **Next action:** Start M10 multi-window design with the user (superpowers:brainstorming → spec → plan), on branch `m10-stage-1` from `main`.
+- **Next action:** Brainstorm → spec → plan the browser feature (branch `m11-stage-1`).
 - **Cancelled, do not implement:** all §6.9 ✦ actions (commit message, PR description/summary, AI review, conflict explanation, AI auto-squash, release notes, AI handover note, commit/repo summaries, palette "Ask Claude"), the Claude headless/API-key backend and model picker, and the AI privacy toggle. Their disabled UI stubs (`ChangesScreen.tsx:603`, `ConflictsScreen.tsx:267`, `RebaseScreen.tsx:251`, `palette/commands.ts:148`, `ui.deferred_m7` string) may be removed later as a cleanup task — ask the user first.
 - **Other open leftovers (not started, ask before doing):** stale disabled buttons whose milestone shipped — Blame "View PR" (`BlameScreen.tsx:348`), Files "External editors" (`FilesScreen.tsx:151`), "Ask agent" (`FilesScreen.tsx:746`, `CodeMirrorEditor.tsx:605`), Graph "Start agent here" + Agent filter (`GraphScreen.tsx:75`, `:294`).

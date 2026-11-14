@@ -8,6 +8,7 @@ import { useSettings } from "../state/settings";
 import { useShortcutSheet } from "../shell/ShortcutSheet";
 import { NAV_SCREENS } from "../screens/registry";
 import type { FocusDir } from "../stage/stageModel";
+import { openNewWindow } from "../state/windows";
 
 const ARROW_DIRS: Record<string, FocusDir> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
 
@@ -19,6 +20,7 @@ export function isTyping(el: Element | null): boolean {
 export function handleGlobalKey(e: KeyboardEvent): boolean {
   const mod = e.metaKey || e.ctrlKey;
   if (mod && !e.altKey && !e.shiftKey && /^[1-7]$/.test(e.key)) { useStage.getState().go(NAV_SCREENS[Number(e.key) - 1]); return true; }
+  if (mod && e.shiftKey && !e.altKey && e.code === "KeyN") { if (!e.repeat) void openNewWindow(); return true; }
   if (mod && !e.shiftKey && e.key.toLowerCase() === "k") { usePalette.getState().toggle(); return true; }
   if (mod && !e.shiftKey && e.key.toLowerCase() === "b") { useSidebar.getState().toggle(); return true; }
   // M9 split keys: ⌘\ right, ⌘⇧\ below, ⌘⌥\ close the focused pane.

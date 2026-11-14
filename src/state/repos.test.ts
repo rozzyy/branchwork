@@ -183,6 +183,12 @@ it("load() with a persisted close-all (non-legacy openProjectIds, no active proj
   expect(useRepos.getState().openProjectIds).toEqual([]);
 });
 
+it("load() with a new window's empty seed selects no group and no project", async () => {
+  vi.mocked(loadSetting).mockResolvedValue({ activeGroupId: null, activeProjectId: null, openProjectIds: [], collapsedGroupIds: [] });
+  await useRepos.getState().load();
+  expect(useRepos.getState()).toMatchObject({ activeGroupId: null, activeProjectId: null, openProjectIds: [] });
+});
+
 it("load() drops persisted open ids for projects that no longer exist", async () => {
   vi.mocked(loadSetting).mockResolvedValue({ activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1", "missing"] });
   await useRepos.getState().load();

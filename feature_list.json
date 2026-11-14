@@ -1,6 +1,6 @@
 {
-  "milestone": "M9 — More than two split panes",
-  "plan": "docs/superpowers/plans/2026-11-14-m9-split-panes.md",
+  "milestone": "M10 — Multi-window",
+  "plan": "docs/superpowers/plans/2026-11-14-m10-multi-window.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -1581,6 +1581,39 @@
       ],
       "status": "done",
       "evidence": "⌘\\\\ right, ⌘⇧\\\\ below, ⌘⌥\\\\ close, ⌘⌥ arrows move focus (Terminal keeps the chord when focused); shortcut sheet + e2e updated (4-pane + fifth refusal). ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59."
+    },
+    {
+      "id": "m10-task-01-window-commands",
+      "stage": 38,
+      "name": "Rust window open/restore/forget",
+      "description": "docs/superpowers/plans/2026-11-14-m10-multi-window.md",
+      "dependencies": [
+        "m9-task-03-split-keys"
+      ],
+      "status": "done",
+      "evidence": "windows.rs with ws-<n> validation, saved window list, scoped-settings cleanup; capability for ws-*; 3 Rust tests. ./init.sh exit 0: Vitest 83 files / 716 tests; Rust 333 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. Native multi-window not yet exercised."
+    },
+    {
+      "id": "m10-task-02-scoped-settings",
+      "stage": 38,
+      "name": "Window-scoped settings and lifecycle",
+      "description": "docs/superpowers/plans/2026-11-14-m10-multi-window.md",
+      "dependencies": [
+        "m10-task-01-window-commands"
+      ],
+      "status": "done",
+      "evidence": "ipc/settings.ts namespaces workspace keys per window; state/windows.ts seeds new windows, restores at launch, stops agents/terminals and forgets on close, syncs app-wide settings. 3 unit tests. ./init.sh exit 0: Vitest 83 files / 716 tests; Rust 333 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. Native multi-window not yet exercised."
+    },
+    {
+      "id": "m10-task-03-window-entry-points",
+      "stage": 38,
+      "name": "New window / move pane entry points",
+      "description": "docs/superpowers/plans/2026-11-14-m10-multi-window.md",
+      "dependencies": [
+        "m10-task-02-scoped-settings"
+      ],
+      "status": "done",
+      "evidence": "⌘⇧N, palette New window / Move to new window, pane ⧉ control. ./init.sh exit 0: Vitest 83 files / 716 tests; Rust 333 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. Native multi-window not yet exercised."
     }
   ]
 }

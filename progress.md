@@ -1400,3 +1400,15 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Verification: `./init.sh` exit 0 — Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59 (new 4-pane + fifth-refusal e2e). 2×2 screenshot checked; History mode tabs wrap in very narrow panes (pre-existing toolbar behavior).
 - Queued by user: M10 multi-window (design 2a: each window its own workspace), then a general browser with tabs and free URLs. Neither started.
 - M9 review (`.agent/reviews/m9-stage-1-review.md`, 2 High / 4 Medium) fixed before commit: flat keyed pane rendering (no remount on split/close), stage-only drop attribute, ⌘⌥-arrow handoff with Terminal, equal new panes, sibling focus on close, render churn. Re-verified: `./init.sh` exit 0 — Vitest 82 files / 712 tests; Rust 330 passed / 3 ignored. Playwright 59/59. Screenshots of 1-pane and 4-pane layouts checked.
+
+## 2026-11-14: M9 pushed; M10 Stage 1 — multi-window (branch `m10-stage-1`)
+
+- M9 committed (`386341f`) and pushed with M8 + fixes to `origin/main` on user order (native checks for M8/M9 not run).
+- M10 (approach 2a, each window an independent workspace; restore-all-windows is my default since the user did not answer): spec `docs/superpowers/specs/2026-11-14-m10-multi-window-design.md`, plan `docs/superpowers/plans/2026-11-14-m10-multi-window.md`.
+- Implemented: Rust `windows.rs` (open with main's window options, ws-<n> validation, saved list, forget + scoped-settings deletion), capability for `ws-*`; `ipc/settings.ts` window-scoped keys; `state/windows.ts` (seeded new window, move pane, main restores windows, secondary close confirms + stops agents/terminals + forgets, `settings:changed` sync); ⌘⇧N, palette, pane ⧉.
+- Verification: `./init.sh` exit 0 — Vitest 83 files / 716 tests; Rust 333 passed / 3 ignored; Clippy clean. Playwright 59/59. Native multi-window behavior not exercised (no desktop automation in this session).
+- M10 review (`.agent/reviews/m10-stage-1-review.md`, 4 Medium / 7 Low) fixed before commit: Rust-allocated seeded `window_create`, main close quits, `window_close_self` (no webview destroy permission), cross-window reload of GitHub accounts/profiles, window cap, resilient restore. Re-verified: Vitest 716, Rust 334 / 3 ignored, Playwright 59/59. Known limitation: Codex discovery is per window.
+- New windows start empty and isolated (no group/project/worktree), per user request; Vitest 717.
+- Build warnings fixed: static `@tauri-apps/api` imports (windows.ts, theme/native.ts — also removes the e2e `currentWindow` noise) and vendor chunk groups in `vite.config.ts` (largest chunk 462 kB, startup payload unchanged, CodeMirror stays lazy).
+- Bug fix (user report): Agents grid with one left + two right panes gave the left pane half height. `src/agents/gridPlacement.ts` places panes explicitly (lcm rows, each column's panes share the full height); measured in Chromium with the real CSS (left 900 px, right 450 + 450). Vitest 84 files / 722 tests; Playwright 59/59.
+- User ordered commit + push of everything (M10 native checks not run).

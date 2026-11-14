@@ -262,6 +262,22 @@ export const commands = {
 	 */
 	agentCopyConversation: (cliId: string, fromSlug: string, toSlug: string, conversationId: string) => __TAURI_INVOKE<boolean>("agent_copy_conversation", { cliId, fromSlug, toSlug, conversationId }),
 	/**
+	 *  Create a secondary workspace window (M10) seeded with window-scoped
+	 *  settings; Rust picks the label. Returns the new label.
+	 */
+	windowCreate: (seeds: WindowSeed[]) => __TAURI_INVOKE<string>("window_create", { seeds }),
+	/**
+	 *  Reopen the secondary windows that were open at the last quit (called by
+	 *  the main window once at startup).
+	 */
+	windowRestore: () => __TAURI_INVOKE<string[]>("window_restore"),
+	/**
+	 *  The calling secondary window closes for good: it is not reopened and its
+	 *  window-scoped settings are dropped. The label comes from the caller, so a
+	 *  window can only close itself.
+	 */
+	windowCloseSelf: () => __TAURI_INVOKE<null>("window_close_self"),
+	/**
 	 *  The single Codex rollout for a worktree touched since `since_ms` in one
 	 *  profile, excluding IDs other panes already claim; None when ambiguous.
 	 */
@@ -1359,6 +1375,15 @@ export type StatusSummary_Deserialize = {
 export type StatusSummary_Serialize = {
 	staged: StatusEntry_Serialize[],
 	unstaged: StatusEntry_Serialize[],
+};
+
+/**
+ *  One window-scoped setting for a new window: `key` from `SEEDABLE_KEYS`,
+ *  `value` the JSON text to store.
+ */
+export type WindowSeed = {
+	key: string,
+	value: string,
 };
 
 export type WipSummary = WipSummary_Serialize | WipSummary_Deserialize;
