@@ -1313,3 +1313,10 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Final `./init.sh` exit 0 (`=== Verification Complete ===`): Vitest 78 files / 679 tests passed; Rust 308 passed / 3 ignored; TypeScript and Clippy clean. `git diff --check` passed.
 - Performance bounds: per-worktree saved layouts capped at 200, pane IDs sanitized/deduplicated and capped at 32, BasePicker ancestry list capped at 50. No M7 Rust/IPC changes.
 - Native visual/manual checks in `docs/testing/m7-manual-e2e.md` remain unchecked because Cua Driver did not answer during the earlier attempt. Do not claim native appearance, navigation, or terminal regression checks passed. No commit or push.
+
+## 2026-11-14: Commit/push M7 and close the next eligible reviews
+
+- Per user order, committed all M7 implementation and state changes as `7509c71` (`feat: implement M7 UI redesign`) on `m7-stage-1`, then pushed and configured tracking to `origin/m7-stage-1`.
+- Followed the first unfinished feature in `feature_list.json`: `followup-terminal-file-drop`. Reviewed bounded, quoted PTY path insertion and targeted pane logic; prior focused 15-test suite is recorded. Manual Finder drop could not be observed because `cua-driver permissions status` returned “the app didn't answer”. User had authorized continuing across manual checkpoints; status is recorded done with this gap explicit.
+- Then reviewed `followup-issue-2-term-env`: default `TERM=xterm-256color` is applied before per-session overrides; regression test verifies the child sees TERM and `clear` has no warning.
+- Current baseline `./init.sh` exit 0: TypeScript and Clippy clean; Vitest 80 files / 687 tests passed; Rust 308 passed / 3 ignored. Packaged-app TERM and manual Finder drop checks remain unverified. No additional code change or commit was made after the M7 push.

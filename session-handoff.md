@@ -1,14 +1,14 @@
 # Session Handoff
 
 - **Last Updated:** 2026-11-14
-- **Current Objective:** M7 UI redesign implementation complete on `m7-stage-1`; final automated verification passed. Remaining evidence: native/manual E2E checklist is unverified. Plan: `docs/superpowers/plans/2026-11-14-m7-ui-redesign.md`; normative spec: `docs/superpowers/specs/2026-11-14-ui-redesign-design-system-design.md`.
+- **Current Objective:** M7 implementation committed and pushed; follow-up reviews for native PTY file drops and `TERM` defaults were completed against the current green baseline. Manual desktop checks remain unverified. `feature_list.json` has no unfinished tasks.
 - **Milestone / stage:** M1–M5 released (`v0.5.0`). M6 Stages 1–4 on `main` (Stage 4 `bd6bcc4`, Checkpoint M6.4 approved without reported manual results); M6 Stage 5 (compare) and the M6 review gate / `v0.6.0` remain and are deferred by the user in favor of M7.
 - **Branch:** `m7-stage-1` from `main`. `main` also carries the agent-session commits `21feaad`, `3d3ec85`, `cb7ed59`. Feature worktree `../branchwork-agent-session-token-saver` (`feat/agent-session-token-saver`, fully merged) still exists. Commit/push only on user order.
 - **Open user decisions:** pre-existing M1 medium (`configured_checkout_filters` misses `include.path` filters); 11 pre-existing Playwright failures from the M5 Launchpad redesign; local branches `fix/issue-1`, `fix/issue-5`; remove the agent-session worktree/branch; manual checks M6-S2, M6-S3, M6-S4 unreported.
 
 ## Recommended Next Step
 
-M7 implementation Tasks 01–12 are complete against the normative spec. Final `./init.sh` passed (Vitest 78 files / 679 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean); `git diff --check` passed. Native visual/manual checklist remains unverified because Cua Driver did not answer during the earlier check. Do not claim those manual checks passed. No commit or push was requested.
+M7 implementation Tasks 01–12 are complete against the normative spec. Commit `7509c71` is pushed to `origin/m7-stage-1`. A post-commit `./init.sh` also passed (Vitest 80 files / 687 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean). The feature list has no unfinished tasks. Native M7 visual checks, Finder file-drop verification, and packaged-app TERM verification remain unverified because Cua Driver did not answer; do not claim those manual checks passed.
 
 ## M7 Task 03 handover (2026-11-14)
 

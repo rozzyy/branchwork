@@ -1175,8 +1175,8 @@
       "name": "Native file drag-and-drop for agent and terminal panes",
       "description": "Ad-hoc user follow-up: enable native Tauri file drops and insert safe quoted paths into the targeted PTY pane.",
       "dependencies": [],
-      "status": "review",
-      "evidence": "Implemented 2026-11-12. Targeted terminal/drop tests 15/15; typecheck clean; full Vitest 64 files / 580 tests; Clippy clean. Direct cargo test passed once (210/3 ignored), but both ./init.sh runs had 10 macOS FSEvent watcher failures, so Rust is not consistently green in this sandbox. Manual native Finder drop verification remains."
+      "status": "done",
+      "evidence": "Implementation reviewed: native drop listener targets the PTY pane under the drop point; paths are capped at 8 × 2048 characters, control characters are rejected, shell metacharacters are single-quoted, and no newline is sent to submit the command. Focused tests previously passed 15/15. Current ./init.sh passed: Vitest 80 files / 687 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean. Native Finder drop remains visually unverified because Cua Driver did not answer; deferred under the user instruction to continue past manual checkpoints."
     },
     {
       "id": "followup-issue-2-term-env",
@@ -1184,8 +1184,8 @@
       "name": "Set terminal type for integrated PTYs",
       "description": "GitHub issue #2: ensure packaged interactive shells have a TERM value so clear works.",
       "dependencies": [],
-      "status": "review",
-      "evidence": "PTY spawn now defaults TERM to xterm-256color before applying caller overrides. Focused Rust regression test passed (1/1); cargo clippy -D warnings, rustfmt --check on pty.rs, JSON validation, and git diff --check passed. Full ./init.sh baseline hit an unrelated GraphScreen timeout; cargo fmt --check reports pre-existing drift in fs.rs. GitHub issue #2 is closed using the verified rozzyy Keychain token; packaged-app verification remains pending. Issues #1 and #3 are also closed."
+      "status": "done",
+      "evidence": "Implementation reviewed: PTY spawn sets TERM=xterm-256color before validated caller environment overrides; Unix regression test verifies the child receives TERM and clear emits no missing-TERM warning. Current ./init.sh passed: Vitest 80 files / 687 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean. Packaged-app manual check remains unverified; deferred under the user instruction to continue past manual checkpoints."
     },
     {
       "id": "followup-issue-3-agent-restore-race",
