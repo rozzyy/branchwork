@@ -545,6 +545,9 @@ The dialog asks for a CLI card, a profile, a prompt, and a worktree (existing, o
 
 ### 6.9 AI assists (✦)
 
+> **Cancelled (2026-11-14, user decision):** AI assists will not be built. It is replaced by
+> agent handover optimization (Orca-style), to be specified in its own spec as M8.
+
 Covered features:
 - commit message
 - PR description and summary
