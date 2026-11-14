@@ -104,6 +104,18 @@
   grid-column: 1 / -1;
 }
 
+/* Grid layout with explicit placement (src/agents/gridPlacement.ts): each
+ * column's panes share the full height, e.g. one left pane beside two stacked
+ * right panes spans both rows. */
+.agent-grid.agent-placed {
+  grid-template-rows: repeat(var(--agent-rows), minmax(0, 1fr));
+  grid-auto-rows: auto;
+}
+.agent-grid.agent-placed > .agent-pane {
+  grid-column: var(--agent-col);
+  grid-row: var(--agent-row);
+}
+
 /* A lone default session fills the whole view until the user splits. A fixed
  * 1fr row (never content-driven height) so the terminal cannot grow the pane. */
 .agent-solo .agent-grid {
@@ -481,8 +493,14 @@ textarea.input {
     grid-template-columns: minmax(0, 1fr);
   }
   .agent-pane[data-slot="left"],
-  .agent-pane[data-slot="right"] {
+  .agent-pane[data-slot="right"],
+  .agent-grid.agent-placed > .agent-pane {
     grid-column: 1;
+    grid-row: auto;
+  }
+  .agent-grid.agent-placed {
+    grid-template-rows: none;
+    grid-auto-rows: minmax(310px, 1fr);
   }
   .agent-apick {
     grid-template-columns: repeat(2, 1fr);

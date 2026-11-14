@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { gridPlacement, type GridPlace } from "../../agents/gridPlacement";
 import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
 import { useProfiles, usageKey } from "../../agents/profiles";
@@ -468,7 +469,7 @@ function StatusChip({ status }: { status: PaneStatus }) {
   return <span className="status faint"><span aria-hidden>○</span>{t("agents.statusIdle")}</span>;
 }
 
-function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
+function AgentPane({ session, off, place }: { session: AgentSession; off?: boolean; place?: GridPlace }) {
   const store = useSessions.getState();
   const isExited = useSessions((s) => s.isExited);
   const handoverFor = useSessions((s) => s.handoverFor);
@@ -483,6 +484,7 @@ function AgentPane({ session, off }: { session: AgentSession; off?: boolean }) {
     <div
       className={`agent-pane st-${status}` + (off ? " agent-off" : "")}
       data-slot={session.slot}
+      style={place ? ({ "--agent-col": place.column, "--agent-row": place.row } as CSSProperties) : undefined}
       aria-label={t("agents.paneLabel", { cli: def.name, name: tail(session.worktreePath) })}
     >
       <div className="agent-phd">
@@ -1357,6 +1359,12 @@ export function AgentsView() {
   const visible = ordered.filter((s) => activePath == null || s.worktreePath === activePath);
   // A lone default session fills the whole view; the grid kicks in on split.
   const solo = visible.length === 1 && visible[0].slot === "auto";
+  // Two-column grid: place panes explicitly so a column with fewer panes
+  // still fills the full height (full-width layout and solo need none).
+  const placement = useMemo(
+    () => (layoutMode === "grid" && !solo && visible.length > 0 ? gridPlacement(visible) : null),
+    [layoutMode, solo, visible.map((s) => `${s.id}:${s.slot}`).join(",")],
+  );
 
   if (!loaded) return <ScreenLoader>{t("agents.loading")}</ScreenLoader>;
   return (
@@ -1376,12 +1384,16 @@ export function AgentsView() {
           </button>
         </div>
       )}
-      <div className={"agent-grid" + (visible.length === 0 ? " agent-grid-empty" : "")}>
+      <div
+        className={"agent-grid" + (visible.length === 0 ? " agent-grid-empty" : "") + (placement ? " agent-placed" : "")}
+        style={placement ? ({ "--agent-rows": placement.rows } as CSSProperties) : undefined}
+      >
         {ordered.map((session) => (
           <AgentPane
             key={session.id}
             session={session}
             off={activePath != null && session.worktreePath !== activePath}
+            place={placement?.places.get(session.id)}
           />
         ))}
       </div>
