@@ -114,7 +114,7 @@ test.describe("M0 Stage 3 split view", () => {
     await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
 
-    await pane(page, 0).getByRole("button", { name: "Swap panes", exact: true }).click();
+    await pane(page, 0).getByRole("button", { name: "Swap with neighbor", exact: true }).click();
     await expect(paneHeading(page, 0, "Changes")).toBeVisible();
     await expect(paneHeading(page, 1, "Home")).toBeVisible();
 
@@ -125,6 +125,18 @@ test.describe("M0 Stage 3 split view", () => {
     await pane(page, 1).getByRole("button", { name: "Close pane", exact: true }).click();
     await expect(page.locator("[data-pane]")).toHaveCount(1);
     await expect(paneHeading(page, 0, "Changes")).toBeVisible();
+  });
+
+  test("splits up to four panes and refuses a fifth", async ({ page }) => {
+    await page.goto("/");
+    for (const label of ["Changes", "History", "Files"]) {
+      await page.getByRole("button", { name: label, exact: true }).click({ modifiers: ["Meta"] });
+    }
+    await expect(page.locator("[data-pane]")).toHaveCount(4);
+    await expect(page.getByRole("separator")).toHaveCount(3);
+    await page.getByRole("button", { name: "Agents", exact: true }).click({ modifiers: ["Meta"] });
+    await expect(page.locator("[data-pane]")).toHaveCount(4);
+    await expect(page.getByText("Up to 4 panes; close one first")).toBeVisible();
   });
 
   test("clicking a screen already open in the other pane focuses it instead of duplicating", async ({ page }) => {

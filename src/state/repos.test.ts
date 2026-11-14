@@ -14,7 +14,7 @@ import {
   type Project,
 } from "../ipc/catalog";
 import { loadSetting, saveSetting } from "../ipc/settings";
-import { useStage } from "./stage";
+import { useStage, stageSnapshot } from "./stage";
 import { useFiles } from "./files";
 import { initialStage } from "../stage/stageModel";
 import { useToasts } from "../ui/toast";
@@ -60,7 +60,7 @@ beforeEach(() => {
   vi.mocked(classifyFolder).mockResolvedValue({ kind: "repository" });
   vi.mocked(cloneRepository).mockReset();
   useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, openProjectIds: [], collapsedGroupIds: [], status: "idle", error: null });
-  useStage.setState({ ...initialStage });
+  useStage.setState(stageSnapshot(initialStage));
   useToasts.setState({ toasts: [] });
 });
 

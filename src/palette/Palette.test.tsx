@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Palette } from "./Palette";
 import { usePalette } from "./store";
-import { useStage } from "../state/stage";
+import { useStage, stageSnapshot } from "../state/stage";
 import { initialStage } from "../stage/stageModel";
 import { useToasts } from "../ui/toast";
 import { useWorktrees } from "../state/worktrees";
@@ -16,7 +16,7 @@ vi.mock("../ui/dialog", () => ({ ask: vi.fn() }));
 const initialChanges = useChanges.getState();
 
 beforeEach(() => {
-  useStage.setState({ ...initialStage });
+  useStage.setState(stageSnapshot(initialStage));
   usePalette.setState({ open: true, query: "" });
   useToasts.setState({ toasts: [] });
   useWorktrees.setState({ activePath: "/repos/main" });

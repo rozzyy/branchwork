@@ -5,7 +5,7 @@ import { listPins } from "../../ipc/catalog";
 import { listWorktrees } from "../../ipc/worktrees";
 import { useGithubAccounts } from "../../github/store";
 import { useRepos } from "../../state/repos";
-import { useStage } from "../../state/stage";
+import { useStage, stageSnapshot } from "../../state/stage";
 import { initialStage } from "../../stage/stageModel";
 import { useWorktrees } from "../../state/worktrees";
 import { Sidebar } from "../../shell/Sidebar";
@@ -27,7 +27,7 @@ vi.mock("../../ipc/worktrees", async (importOriginal) => {
 });
 
 beforeEach(() => {
-  useStage.setState({ ...initialStage });
+  useStage.setState(stageSnapshot(initialStage));
   useRepos.setState({
     groups: [],
     projects: [{ id: "p1", owner: null, name: "repo", localPath: "/repo/main", groupId: null }],

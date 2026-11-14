@@ -375,7 +375,8 @@ export function Sidebar() {
   const glyph = (id: ScreenId) => {
     const i = panes.indexOf(id);
     if (panes.length < 2 || i < 0) return null;
-    const g = i === 0 ? (dir === "h" ? "◧" : "⬒") : dir === "h" ? "◨" : "⬓";
+    // Two panes keep the side glyphs; three or four show the pane number.
+    const g = panes.length > 2 ? String(i + 1) : i === 0 ? (dir === "h" ? "◧" : "⬒") : dir === "h" ? "◨" : "⬓";
     return <span className="nav-split" aria-hidden>{g}</span>;
   };
 

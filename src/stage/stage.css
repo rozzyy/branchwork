@@ -1,13 +1,17 @@
 /* Stage follows the prototype: a lone pane is a bordered 10px panel inset by
  * 12px; split panes and the Agents/Terminal screens are flush and square. */
-.stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; position: relative; padding: 12px; }
+.stage { display: flex; min-width: 0; min-height: 0; position: relative; padding: 12px; }
+/* M9: panes are flat, absolutely placed siblings (boxes come from the split
+   tree) so splits never remount a screen; dividers sit on the boundaries. */
+.stage-canvas { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; }
+.stage-canvas > .pane { position: absolute; }
 .pane { display: grid; grid-template-rows: 44px minmax(0, 1fr); min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); box-shadow: none; overflow: hidden; container-type: inline-size; transition: box-shadow .15s; }
-.stage.split-h, .stage.split-v,
-.stage:has(> .pane:only-of-type > .pane-view > .agent-screen),
-.stage:has(> .pane:only-of-type > .pane-view > .term-screen) { padding: 0; }
-.stage.split-h > .pane, .stage.split-v > .pane,
-.stage:has(> .pane:only-of-type > .pane-view > .agent-screen) > .pane,
-.stage:has(> .pane:only-of-type > .pane-view > .term-screen) > .pane { border: 0; border-radius: 0; }
+.stage.split,
+.stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen),
+.stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) { padding: 0; }
+.stage.split .pane,
+.stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen) .pane,
+.stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) .pane { border: 0; border-radius: 0; }
 .pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); }
 .pane-title { margin: 0; font-size: var(--fs-title); font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
 .pane-view { min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
@@ -16,8 +20,6 @@
 .placeholder-icon { font-size: 34px; color: var(--acc); }
 .placeholder h2 { margin: 0; color: var(--fg); font-size: 18px; }
 .placeholder p { margin: 0; }
-.stage.split-h { grid-template-columns: minmax(0, calc((100% - 1px) * var(--r))) 1px minmax(0, 1fr); }
-.stage.split-v { grid-template-rows: minmax(0, calc((100% - 1px) * var(--r))) 1px minmax(0, 1fr); }
 .pane.focus { box-shadow: inset 0 2px var(--accent); }
 .pane-ctl { display: flex; gap: 2px; margin-left: auto; padding-left: 8px; }
 .pane-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
@@ -27,21 +29,24 @@
  * against it (prototype's `.acts ~ .pctl`). */
 .pane-actions ~ .pane-ctl,
 .pane-ctl ~ .pane-ctl { margin-left: 8px; border-left: 1px solid var(--line); }
-.divider { position: relative; z-index: 2; cursor: col-resize; }
+.divider { position: absolute; z-index: 2; cursor: col-resize; }
+.divider-h { width: 1px; transform: translateX(-.5px); }
+.divider-v { height: 1px; transform: translateY(-.5px); }
 .divider::before { content: ""; position: absolute; inset: 0 -6px; cursor: col-resize; }
-.split-v .divider { cursor: row-resize; }
-.split-v .divider::before { inset: -6px 0; cursor: row-resize; }
+.divider-v { cursor: row-resize; }
+.divider-v::before { inset: -6px 0; cursor: row-resize; }
 .divider::after { content: ""; position: absolute; inset: 0; margin: auto; width: 3px; height: 44px; border-radius: 2px; background: var(--line2); transition: all .2s var(--spring); }
-.split-v .divider::after { width: 44px; height: 3px; }
+.divider-v::after { width: 44px; height: 3px; }
 .divider { background:var(--border); }
 .divider:hover::after, .resizing .divider::after { background: var(--acc); height: 90px; }
-.split-v .divider:hover::after, .split-v.resizing .divider::after { width: 90px; height: 3px; }
+.divider-v:hover::after, .resizing .divider-v::after { width: 90px; height: 3px; }
 .stage.resizing { user-select: none; }
 .dropzone { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: 0; background: oklch(0 0 0 / .18); animation: fade .15s; }
 .dz-hl { position: absolute; inset: 6px 50% 6px 6px; display: grid; place-items: center; border: 2px dashed var(--acc); border-radius: 14px; background: var(--accs); color: var(--acc); font-size: 15px; font-weight: 650; transition: inset .25s var(--spring); }
 .dropzone[data-side="right"] .dz-hl { inset: 6px 6px 6px 50%; }
 .dropzone[data-side="top"] .dz-hl { inset: 6px 6px 50% 6px; }
 .dropzone[data-side="bottom"] .dz-hl { inset: 50% 6px 6px 6px; }
+.dz-full { z-index: 31; pointer-events: none; }
 .dz-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; background: var(--glass2); color: var(--fg2); font-size: var(--fs-meta); }
 .dirs { display: flex; gap: 2px; margin-left: 8px; }
 .dir { width: 22px; height: 20px; display: grid; place-items: center; border-radius: 5px; opacity: .65; }

@@ -22,7 +22,7 @@ export function ShortcutSheet() {
   return <div className="shortcut-backdrop" onMouseDown={(e) => { if(e.target===e.currentTarget){hide();trigger.current?.focus();} }}>
     <section className="shortcut-sheet" role="dialog" aria-modal="true" aria-labelledby="shortcut-title">
       <header><h2 id="shortcut-title">{t("shortcuts.title")}</h2><button ref={closeRef} className="icon-btn" aria-label={t("dialog.cancel")} onClick={() => {hide();trigger.current?.focus();}}>×</button></header>
-      <dl>{([["⌘1–⌘7", "shortcuts.screens"],["⌘K","shortcuts.palette"],["⌘B","shortcuts.sidebar"],["⌘\\","shortcuts.split"],["Ctrl+⇧G","shortcuts.changes"],["Ctrl+`","shortcuts.terminal"],["?","shortcuts.help"]] as const).map(([key,label]) => <div key={key}><dt><kbd>{key}</kbd></dt><dd>{t(label)}</dd></div>)}</dl>
+      <dl>{([["⌘1–⌘7", "shortcuts.screens"],["⌘K","shortcuts.palette"],["⌘B","shortcuts.sidebar"],["⌘\\ · ⌘⇧\\","shortcuts.split"],["⌘⌥\\","shortcuts.closePane"],["⌘⌥←↑→↓","shortcuts.paneFocus"],["Ctrl+⇧G","shortcuts.changes"],["Ctrl+`","shortcuts.terminal"],["?","shortcuts.help"]] as const).map(([key,label]) => <div key={key}><dt><kbd>{key}</kbd></dt><dd>{t(label)}</dd></div>)}</dl>
     </section>
   </div>;
 }

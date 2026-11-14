@@ -74,8 +74,9 @@ export function buildCommands(): Command[] {
   const split: Command[] = [
     ...SCREENS.map((s): Command => ({ id: "split-r:" + s.id, group: "palette.group.split", icon: "◨", title: t("palette.splitRight", { screen: t(s.label) }), run: () => stage().openSplit(s.id, "right") })),
     ...SCREENS.map((s): Command => ({ id: "split-b:" + s.id, group: "palette.group.split", icon: "⬓", title: t("palette.splitBottom", { screen: t(s.label) }), run: () => stage().openSplit(s.id, "bottom") })),
-    { id: "split:close", group: "palette.group.split", icon: "✕", title: t("palette.closeSplit"), kbd: "⌘\\", run: () => { const s = stage(); if (s.panes.length > 1) s.closePane(s.focus); } },
+    { id: "split:close", group: "palette.group.split", icon: "✕", title: t("palette.closeSplit"), kbd: "⌘⌥\\", run: () => { const s = stage(); if (s.panes.length > 1) s.closePane(s.focus); } },
     { id: "split:swap", group: "palette.group.split", icon: "⇄", title: t("palette.swapSplit"), run: () => stage().swap() },
+    { id: "split:equalize", group: "palette.group.split", icon: "⊞", title: t("palette.equalizeSplits"), run: () => stage().equalizeAll() },
   ];
   const appearance: Command[] = [
     {

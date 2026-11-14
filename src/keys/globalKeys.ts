@@ -7,6 +7,9 @@ import { useDock } from "../terminal/dock";
 import { useSettings } from "../state/settings";
 import { useShortcutSheet } from "../shell/ShortcutSheet";
 import { NAV_SCREENS } from "../screens/registry";
+import type { FocusDir } from "../stage/stageModel";
+
+const ARROW_DIRS: Record<string, FocusDir> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
 
 export function isTyping(el: Element | null): boolean {
   return !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || (el as HTMLElement).isContentEditable);
@@ -18,7 +21,22 @@ export function handleGlobalKey(e: KeyboardEvent): boolean {
   if (mod && !e.altKey && !e.shiftKey && /^[1-7]$/.test(e.key)) { useStage.getState().go(NAV_SCREENS[Number(e.key) - 1]); return true; }
   if (mod && !e.shiftKey && e.key.toLowerCase() === "k") { usePalette.getState().toggle(); return true; }
   if (mod && !e.shiftKey && e.key.toLowerCase() === "b") { useSidebar.getState().toggle(); return true; }
-  if (mod && e.code === "Backslash") { useStage.getState().toggleSplit(e.shiftKey ? "bottom" : "right"); return true; }
+  // M9 split keys: ⌘\ right, ⌘⇧\ below, ⌘⌥\ close the focused pane.
+  if (mod && e.code === "Backslash") {
+    const stage = useStage.getState();
+    if (e.altKey) stage.closeFocused();
+    else stage.splitFocused(e.shiftKey ? "bottom" : "right");
+    return true;
+  }
+  // ⌘⌥ arrows move focus between stage panes. While the keyboard is inside
+  // the Terminal screen, its own handler moves between terminal panes (it
+  // listens for events from inside `.term-screen` only), so exactly one acts.
+  if (mod && e.altKey && !e.shiftKey && e.key in ARROW_DIRS) {
+    const stage = useStage.getState();
+    if (stage.panes.length < 2 || document.activeElement?.closest(".term-screen")) return false;
+    stage.moveFocus(ARROW_DIRS[e.key]);
+    return true;
+  }
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "g") { useStage.getState().go("changes"); return true; }
   if (e.ctrlKey && !e.metaKey && e.code === "Backquote") { useDock.getState().toggle(); return true; }
   if (mod || e.altKey || isTyping(document.activeElement)) return false;

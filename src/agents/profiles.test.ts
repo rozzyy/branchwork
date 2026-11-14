@@ -77,7 +77,7 @@ beforeEach(() => {
   newTab.mockReset().mockResolvedValue("tab-1");
   useToasts.setState({ toasts: [] });
   useWorktrees.setState({ activePath: "/wt/a" });
-  useStage.setState({ panes: ["settings"], focus: 0, dir: "h", ratio: 0.5 });
+  useStage.setState({ panes: ["settings"], focus: 0, dir: "h" });
   reset();
 });
 

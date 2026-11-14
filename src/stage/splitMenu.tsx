@@ -4,7 +4,7 @@ import { t } from "../i18n/t";
 import { SIDES } from "./dnd";
 import type { Side } from "./stageModel";
 
-export function splitMenuItems(panes: ScreenId[], open: (id: ScreenId, side: Side) => void, preset: (panes: ScreenId[]) => void = () => undefined): MenuItem[] {
+export function splitMenuItems(panes: ScreenId[], open: (id: ScreenId, side: Side) => void, preset?: (panes: ScreenId[]) => void): MenuItem[] {
   return [
     { kind: "header", label: t("split.openBeside") },
     ...NAV_SCREENS.filter((id) => !panes.includes(id)).map((id): MenuItem => {
@@ -30,9 +30,13 @@ export function splitMenuItems(panes: ScreenId[], open: (id: ScreenId, side: Sid
       ),
     });
     }),
-    { kind: "separator" },
-    { kind: "item", label: t("split.presetAgentChanges"), onSelect: () => preset(["agents", "changes"]) },
-    { kind: "item", label: t("split.presetHistoryFiles"), onSelect: () => preset(["history", "files"]) },
+    ...(preset
+      ? ([
+          { kind: "separator" },
+          { kind: "item", label: t("split.presetAgentChanges"), onSelect: () => preset(["agents", "changes"]) },
+          { kind: "item", label: t("split.presetHistoryFiles"), onSelect: () => preset(["history", "files"]) },
+        ] as MenuItem[])
+      : []),
     { kind: "separator" },
     { kind: "note", label: t("split.menuNote") },
   ];

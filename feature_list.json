@@ -1,6 +1,6 @@
 {
-  "milestone": "M8 — Profile switch keeps the conversation",
-  "plan": "docs/superpowers/plans/2026-11-14-m8-profile-switch-session.md",
+  "milestone": "M9 — More than two split panes",
+  "plan": "docs/superpowers/plans/2026-11-14-m9-split-panes.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -1548,6 +1548,39 @@
       ],
       "status": "done",
       "evidence": "switchProfile for claude/codex: discover id, stop, copy, resume by id (`|| exit`), 5 s settle, rollback to source on copy/spawn/early-exit failure. 55 sessions tests pass. ./init.sh exit 0: Vitest 82 files / 703 tests; Rust 329 passed / 3 ignored; TypeScript and Clippy clean. Native cross-account checks pending (docs/testing/m8-manual-e2e.md)."
+    },
+    {
+      "id": "m9-task-01-split-tree-model",
+      "stage": 37,
+      "name": "Tree stage model, store and v2 persistence",
+      "description": "docs/superpowers/plans/2026-11-14-m9-split-panes.md",
+      "dependencies": [
+        "m8-task-04-switch-carry"
+      ],
+      "status": "done",
+      "evidence": "stageModel on terminal/layout tree (max 4, 20% min share, ≤3 depth validation), store keeps derived panes/focus/dir, v1 migration. 14 model tests + store tests. ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59."
+    },
+    {
+      "id": "m9-task-02-split-tree-ui",
+      "stage": 37,
+      "name": "Recursive stage UI, per-pane controls, drop on pane edges",
+      "description": "docs/superpowers/plans/2026-11-14-m9-split-panes.md",
+      "dependencies": [
+        "m9-task-01-split-tree-model"
+      ],
+      "status": "done",
+      "evidence": "Stage renders split tree with per-gutter dividers (200 px min, double-click equalize), drop target = pane under cursor, per-pane Open beside/swap/orientation/close, sidebar numbers for >2 panes, palette equalize. Screenshot of a 2×2 layout checked. ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59."
+    },
+    {
+      "id": "m9-task-03-split-keys",
+      "stage": 37,
+      "name": "Split keyboard map",
+      "description": "docs/superpowers/plans/2026-11-14-m9-split-panes.md",
+      "dependencies": [
+        "m9-task-02-split-tree-ui"
+      ],
+      "status": "done",
+      "evidence": "⌘\\\\ right, ⌘⇧\\\\ below, ⌘⌥\\\\ close, ⌘⌥ arrows move focus (Terminal keeps the chord when focused); shortcut sheet + e2e updated (4-pane + fifth refusal). ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59."
     }
   ]
 }

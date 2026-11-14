@@ -276,7 +276,7 @@ export function InboxView() {
         }
         useWorktrees.getState().select(path);
         if (useWorktrees.getState().activePath !== path) return;
-        useStage.getState().setLayout(["agents", "changes"]);
+        useStage.getState().openPair("agents", "changes");
       })();
       return;
     }

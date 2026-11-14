@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./Sidebar";
-import { useStage } from "../state/stage";
-import { initialStage } from "../stage/stageModel";
+import { useStage, stageSnapshot } from "../state/stage";
+import { initialStage, layoutOf } from "../stage/stageModel";
 import { useRepos } from "../state/repos";
 import { useWorktrees } from "../state/worktrees";
 import { listPins, pinWorktree, unpinWorktree } from "../ipc/catalog";
@@ -29,7 +29,7 @@ const worktrees: Worktree[] = [
   { path: "/repos/gamma", branch: "feature/gamma", head: "a4", ahead: 0, behind: 0, dirtyCount: 0, state: "conflict" },
 ];
 
-beforeEach(() => useStage.setState({ ...initialStage }));
+beforeEach(() => useStage.setState(stageSnapshot(initialStage)));
 
 beforeEach(() => {
   useToasts.setState({ toasts: [] });
@@ -59,7 +59,7 @@ it("⌘-click opens a right split, ⌥-click a bottom split", async () => {
   render(<Sidebar />);
   fireEvent.click(screen.getByRole("button", { name: /Changes/ }), { metaKey: true });
   expect(useStage.getState().panes).toEqual(["home", "changes"]);
-  useStage.setState({ ...initialStage });
+  useStage.setState(stageSnapshot(initialStage));
   fireEvent.click(screen.getByRole("button", { name: /History/ }), { altKey: true });
   expect(useStage.getState()).toMatchObject({ panes: ["home", "history"], dir: "v" });
 });
@@ -109,7 +109,7 @@ it("badges the Agents nav while a session waits", () => {
 });
 
 it("shows position glyphs for both split screens", () => {
-  useStage.setState({ ...initialStage, panes: ["agents", "changes"] });
+  useStage.setState(stageSnapshot(layoutOf(["agents", "changes"])));
   render(<Sidebar />);
   expect(screen.getByRole("button", { name: /Agents/ })).toHaveTextContent("◧");
   expect(screen.getByRole("button", { name: /Changes/ })).toHaveTextContent("◨");
