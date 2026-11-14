@@ -175,6 +175,52 @@ pub fn hook_response(input_json: &str, protected: &[String], bin: &str) -> Optio
     serde_json::to_string(&reply).ok()
 }
 
+/// One statusline window (`{used_percentage, resets_at}`), validated.
+fn statusline_window(value: &serde_json::Value) -> Option<serde_json::Value> {
+    let percent = value.get("used_percentage")?.as_f64().filter(|p| p.is_finite())?;
+    let resets_at = value.get("resets_at")?.as_u64()?;
+    Some(serde_json::json!({ "used_percentage": percent, "resets_at": resets_at }))
+}
+
+/// Merges the `rate_limits` of a Claude Code statusline report into the last saved quota
+/// (windows missing from this report keep their previous values). None when the report
+/// carries no valid window. Only numbers are kept; nothing else from the report is stored.
+pub fn statusline_quota(
+    input_json: &str,
+    previous: Option<&serde_json::Value>,
+    now_ms: u64,
+) -> Option<serde_json::Value> {
+    let input: serde_json::Value = serde_json::from_str(input_json).ok()?;
+    let limits = input.get("rate_limits")?;
+    let mut merged = serde_json::Map::new();
+    let mut fresh = false;
+    for key in ["five_hour", "seven_day"] {
+        if let Some(window) = limits.get(key).and_then(statusline_window) {
+            merged.insert(key.into(), window);
+            fresh = true;
+        } else if let Some(window) = previous.and_then(|p| p.get(key)).and_then(statusline_window) {
+            merged.insert(key.into(), window);
+        }
+    }
+    if !fresh {
+        return None;
+    }
+    merged.insert("fetchedAtMs".into(), serde_json::json!(now_ms as f64));
+    Some(serde_json::Value::Object(merged))
+}
+
+/// The text Claude shows in its own statusline, e.g. `5h 42% · 7d 35%`.
+pub fn statusline_text(quota: &serde_json::Value) -> String {
+    [("five_hour", "5h"), ("seven_day", "7d")]
+        .iter()
+        .filter_map(|(key, label)| {
+            let percent = quota.get(*key)?.get("used_percentage")?.as_f64()?;
+            Some(format!("{label} {:.0}%", percent))
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,5 +335,31 @@ mod tests {
         );
         assert_eq!(hook["updatedInput"]["description"], "Show status");
         assert!(hook.get("permissionDecision").is_none());
+    }
+
+    #[test]
+    fn statusline_merges_rate_limits_and_keeps_missing_windows() {
+        let input = r#"{"session_id":"x","rate_limits":{"five_hour":{"used_percentage":42.4,"resets_at":1797183951},"seven_day":{"used_percentage":35,"resets_at":1797700000}}}"#;
+        let merged = statusline_quota(input, None, 1_000).unwrap();
+        assert_eq!(merged["fetchedAtMs"], 1_000.0);
+        assert_eq!(merged["five_hour"]["used_percentage"], 42.4);
+        assert_eq!(merged["seven_day"]["resets_at"], 1797700000);
+        // A later report without five_hour keeps the last known five_hour window.
+        let later = r#"{"rate_limits":{"seven_day":{"used_percentage":36,"resets_at":1797700000}}}"#;
+        let again = statusline_quota(later, Some(&merged), 2_000).unwrap();
+        assert_eq!(again["fetchedAtMs"], 2_000.0);
+        assert_eq!(again["five_hour"]["used_percentage"], 42.4);
+        assert_eq!(again["seven_day"]["used_percentage"], 36.0);
+        // No rate limits at all, or bad shapes: nothing to record.
+        assert!(statusline_quota(r#"{"session_id":"x"}"#, None, 1).is_none());
+        assert!(statusline_quota(r#"{"rate_limits":{"five_hour":{"used_percentage":"x"}}}"#, None, 1).is_none());
+        assert!(statusline_quota("not json", None, 1).is_none());
+    }
+
+    #[test]
+    fn statusline_text_is_short() {
+        let input = r#"{"rate_limits":{"five_hour":{"used_percentage":42.4,"resets_at":1},"seven_day":{"used_percentage":35,"resets_at":2}}}"#;
+        let merged = statusline_quota(input, None, 1).unwrap();
+        assert_eq!(statusline_text(&merged), "5h 42% · 7d 35%");
     }
 }

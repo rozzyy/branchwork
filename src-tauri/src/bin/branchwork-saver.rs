@@ -5,6 +5,11 @@
 //! `BRANCHWORK_SAVER=rtk`, rewrites allowlisted simple Bash commands to the
 //! run mode. Any error prints nothing, so the call proceeds unchanged.
 //!
+//! `branchwork-saver statusline` is a Claude Code statusline command: it records the live
+//! `rate_limits` (5-hour and weekly usage) from the report on stdin into
+//! `$CLAUDE_CONFIG_DIR/branchwork-quota.json` for Branchwork's usage meter and prints a short
+//! summary for Claude's own status line. Only numbers are stored.
+//!
 //! `branchwork-saver run -- <argv>` runs the command with inherited stdin
 //! and stderr, filters stdout on success (fail-open), keeps the exit code,
 //! and appends measured `<before> <after>` byte counts to the session's
@@ -36,6 +41,39 @@ fn hook() -> i32 {
     if let Some(reply) = saver::hook_response(&input, &protected, &bin.to_string_lossy()) {
         println!("{reply}");
     }
+    0
+}
+
+fn statusline() -> i32 {
+    let mut input = String::new();
+    if std::io::stdin().take(MAX_HOOK_INPUT).read_to_string(&mut input).is_err() {
+        return 0;
+    }
+    let Some(dir) = std::env::var_os("CLAUDE_CONFIG_DIR").map(std::path::PathBuf::from) else {
+        return 0;
+    };
+    let path = dir.join("branchwork-quota.json");
+    let previous = std::fs::File::open(&path).ok().and_then(|file| {
+        let mut text = String::new();
+        file.take(64 * 1024).read_to_string(&mut text).ok()?;
+        serde_json::from_str::<serde_json::Value>(&text).ok()
+    });
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let Some(quota) = saver::statusline_quota(&input, previous.as_ref(), now_ms) else {
+        if let Some(previous) = previous {
+            println!("{}", saver::statusline_text(&previous));
+        }
+        return 0;
+    };
+    // Write then rename, so the app never reads a half-written file.
+    let tmp = dir.join(format!("branchwork-quota.{}.tmp", std::process::id()));
+    if std::fs::write(&tmp, quota.to_string()).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    println!("{}", saver::statusline_text(&quota));
     0
 }
 
@@ -151,9 +189,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let code = match args.first().map(String::as_str) {
         Some("hook") if args.len() == 1 => hook(),
+        Some("statusline") if args.len() == 1 => statusline(),
         Some("run") if args.get(1).map(String::as_str) == Some("--") => run(&args[2..]),
         _ => {
-            eprintln!("usage: branchwork-saver hook | branchwork-saver run -- <command> [args...]");
+            eprintln!("usage: branchwork-saver hook | statusline | run -- <command> [args...]");
             2
         }
     };

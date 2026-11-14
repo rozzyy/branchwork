@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { formatReset, tightestWindow, useAgentMeters, windowLabel } from "./quota";
+import { effectivePercent, formatReset, headlineWindows, tightestWindow, useAgentMeters, windowLabel } from "./quota";
 import { readProfileQuota, readSaverStats } from "../ipc/quota";
 import { ensureProfileDir } from "../ipc/cli";
 import { useProfiles } from "./profiles";
@@ -63,11 +63,24 @@ describe("quota helpers", () => {
     expect(formatReset(NOW + 30_000, NOW)).toBe("<1m");
   });
 
-  it("picks the tightest window that has not reset yet", () => {
-    expect(tightestWindow([fiveHour, weekly], NOW)).toEqual(fiveHour);
+  it("treats a window past its reset time as a fresh 0% window", () => {
     const expired = { ...fiveHour, percent: 100, resetsAtMs: NOW - 1 };
+    expect(effectivePercent(expired, NOW)).toBe(0);
+    expect(effectivePercent(fiveHour, NOW)).toBe(42);
+    expect(tightestWindow([fiveHour, weekly], NOW)).toEqual(fiveHour);
     expect(tightestWindow([expired, weekly], NOW)).toEqual(weekly);
-    expect(tightestWindow([expired], NOW)).toBeNull();
+    expect(tightestWindow([expired], NOW)).toEqual(expired);
+    expect(tightestWindow([], NOW)).toBeNull();
+  });
+
+  it("headlines the 5-hour window plus the tightest other window", () => {
+    const opus = { minutes: 10_080, scope: "opus", percent: 60, resetsAtMs: NOW + 50 * H };
+    const expired = { ...fiveHour, percent: 100, resetsAtMs: NOW - 1 };
+    expect(headlineWindows([weekly, fiveHour], NOW)).toEqual([fiveHour, weekly]);
+    expect(headlineWindows([fiveHour, weekly, opus], NOW)).toEqual([fiveHour, opus]);
+    expect(headlineWindows([expired, weekly], NOW)).toEqual([expired, weekly]);
+    expect(headlineWindows([weekly, opus], NOW)).toEqual([weekly, opus]);
+    expect(headlineWindows([weekly], NOW)).toEqual([weekly]);
   });
 });
 

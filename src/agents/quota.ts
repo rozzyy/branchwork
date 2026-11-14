@@ -55,11 +55,34 @@ export function windowExpired(window: QuotaWindow, now: number): boolean {
   return window.resetsAtMs != null && window.resetsAtMs <= now;
 }
 
-/** The most-used window that is still current, or null. */
+/**
+ * The window's current figure. A window whose reset time has passed restarts at 0%; the
+ * provider hasn't reported the new window yet, so the UI marks it "reset".
+ */
+export function effectivePercent(window: QuotaWindow, now: number): number {
+  return windowExpired(window, now) ? 0 : window.percent;
+}
+
+/** The most-used window right now (reset windows count as 0%), or null when there are none. */
 export function tightestWindow(windows: QuotaWindow[], now: number): QuotaWindow | null {
-  return windows
-    .filter((window) => !windowExpired(window, now))
-    .reduce<QuotaWindow | null>((best, window) => (!best || window.percent > best.percent ? window : best), null);
+  return windows.reduce<QuotaWindow | null>(
+    (best, window) => (!best || effectivePercent(window, now) > effectivePercent(best, now) ? window : best),
+    null,
+  );
+}
+
+/**
+ * The windows a pane header shows: the shortest window (the 5-hour one for Claude and Codex),
+ * always, plus the tightest of the others. Model-wide windows sort before model-scoped ones.
+ */
+export function headlineWindows(windows: QuotaWindow[], now: number): QuotaWindow[] {
+  const ordered = [...windows].sort(
+    (a, b) => a.minutes - b.minutes || Number(a.scope != null) - Number(b.scope != null),
+  );
+  const [shortest, ...rest] = ordered;
+  if (!shortest) return [];
+  const other = tightestWindow(rest, now);
+  return other ? [shortest, other] : [shortest];
 }
 
 const inFlight = new Set<string>();
@@ -86,10 +109,14 @@ export const useAgentMeters = create<AgentMetersStore>((set, get) => {
       if (quota.state === "noData") return setQuota(key, { kind: "none" });
       setQuota(key, { kind: "ok", windows: quota.windows, fetchedAtMs: quota.fetchedAtMs ?? null, stale: false });
       // The profile chip and its menu show the tightest current window.
-      const tight = tightestWindow(quota.windows, Date.now());
+      const now = Date.now();
+      const tight = tightestWindow(quota.windows, now);
       useProfiles
         .getState()
-        .setProfileUsage(session.profile, tight ? { percent: tight.percent, window: windowLabel(tight) } : null);
+        .setProfileUsage(
+          session.profile,
+          tight ? { percent: effectivePercent(tight, now), window: windowLabel(tight) } : null,
+        );
     } catch {
       // A failed read is never shown as zero: keep the last value, marked stale.
       setQuota(key, previous?.kind === "ok" ? { ...previous, stale: true } : { kind: "unavailable" });

@@ -20,6 +20,9 @@ use std::sync::{Mutex, OnceLock};
 use std::time::UNIX_EPOCH;
 
 const MAX_CLAUDE_STATE_BYTES: u64 = 16 * 1024 * 1024;
+/// Written by the saver sidecar's statusline mode.
+pub const LIVE_QUOTA_FILE: &str = "branchwork-quota.json";
+const MAX_LIVE_QUOTA_BYTES: u64 = 64 * 1024;
 const MAX_LOG_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_STATS_BYTES: u64 = 1024 * 1024;
 const MAX_CACHED_READERS: usize = 64;
@@ -129,23 +132,38 @@ fn clamp_percent(value: f64) -> Option<u32> {
     value.is_finite().then(|| value.round().clamp(0.0, 100.0) as u32)
 }
 
-fn read_claude(profile_dir: &Path) -> ProfileQuota {
-    let Ok(file) = std::fs::File::open(profile_dir.join(".claude.json")) else {
-        return ProfileQuota::NoData;
-    };
+/// Live windows recorded by Branchwork's statusline (`<profile>/branchwork-quota.json`).
+fn read_claude_live(profile_dir: &Path) -> Option<QuotaReport> {
+    let file = std::fs::File::open(profile_dir.join(LIVE_QUOTA_FILE)).ok()?;
     let mut text = String::new();
-    if file.take(MAX_CLAUDE_STATE_BYTES).read_to_string(&mut text).is_err() {
-        return ProfileQuota::NoData;
-    }
-    let Ok(root) = serde_json::from_str::<serde_json::Value>(&text) else {
-        return ProfileQuota::NoData;
-    };
-    let Some(cache) = root.get("cachedUsageUtilization").filter(|v| v.is_object()) else {
-        return ProfileQuota::NoData;
-    };
-    let Some(utilization) = cache.get("utilization").filter(|v| v.is_object()) else {
-        return ProfileQuota::NoData;
-    };
+    file.take(MAX_LIVE_QUOTA_BYTES).read_to_string(&mut text).ok()?;
+    let root: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let windows: Vec<QuotaWindow> = [("five_hour", 300), ("seven_day", 10_080)]
+        .into_iter()
+        .filter_map(|(key, minutes)| {
+            let window = root.get(key)?;
+            Some(QuotaWindow {
+                minutes,
+                scope: None,
+                percent: clamp_percent(window.get("used_percentage")?.as_f64()?)?,
+                resets_at_ms: window.get("resets_at").and_then(|v| v.as_u64()).map(|secs| secs as f64 * 1000.0),
+            })
+        })
+        .collect();
+    (!windows.is_empty()).then(|| QuotaReport {
+        windows,
+        fetched_at_ms: root.get("fetchedAtMs").and_then(|v| v.as_f64()).filter(|v| v.is_finite()),
+    })
+}
+
+/// Claude Code's own cached utilization in `<profile>/.claude.json`.
+fn read_claude_cache(profile_dir: &Path) -> Option<QuotaReport> {
+    let file = std::fs::File::open(profile_dir.join(".claude.json")).ok()?;
+    let mut text = String::new();
+    file.take(MAX_CLAUDE_STATE_BYTES).read_to_string(&mut text).ok()?;
+    let root: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let cache = root.get("cachedUsageUtilization").filter(|v| v.is_object())?;
+    let utilization = cache.get("utilization").filter(|v| v.is_object())?;
     let windows: Vec<QuotaWindow> = [
         ("five_hour", 300, None),
         ("seven_day", 10_080, None),
@@ -164,13 +182,26 @@ fn read_claude(profile_dir: &Path) -> ProfileQuota {
         })
     })
     .collect();
-    if windows.is_empty() {
-        return ProfileQuota::NoData;
-    }
-    ProfileQuota::Ok(QuotaReport {
+    (!windows.is_empty()).then(|| QuotaReport {
         windows,
         fetched_at_ms: cache.get("fetchedAtMs").and_then(|v| v.as_f64()).filter(|v| v.is_finite()),
     })
+}
+
+/// The newer of the live statusline report and Claude's cache wins; model-scoped windows
+/// (Opus/Sonnet), which only the cache reports, are kept alongside a newer live report.
+fn read_claude(profile_dir: &Path) -> ProfileQuota {
+    let live = read_claude_live(profile_dir);
+    let cache = read_claude_cache(profile_dir);
+    let report = match (live, cache) {
+        (Some(mut live), Some(cache)) if live.fetched_at_ms.unwrap_or(0.0) > cache.fetched_at_ms.unwrap_or(0.0) => {
+            live.windows.extend(cache.windows.into_iter().filter(|window| window.scope.is_some()));
+            Some(live)
+        }
+        (_, Some(cache)) => Some(cache),
+        (live, None) => live,
+    };
+    report.map_or(ProfileQuota::NoData, ProfileQuota::Ok)
 }
 
 #[derive(Default)]
@@ -526,5 +557,49 @@ mod tests {
         assert!(saver_stats_path("agent-ok-1").is_ok());
         assert!(saver_stats_path("agent-../x").is_err());
         assert!(saver_stats_path("pty-1").is_err());
+    }
+
+    #[test]
+    fn claude_prefers_a_newer_statusline_report() {
+        let tmp = TempDir::fresh("claude-live");
+        let profile = tmp.0.join("claude-p");
+        std::fs::create_dir_all(&profile).unwrap();
+        std::fs::write(
+            profile.join(".claude.json"),
+            r#"{"cachedUsageUtilization": {"fetchedAtMs": 1000, "utilization": {
+                "five_hour": {"utilization": 100, "resets_at": "2026-11-13T12:29:59+00:00"},
+                "seven_day": {"utilization": 30, "resets_at": "2026-11-19T10:59:59+00:00"},
+                "seven_day_opus": {"utilization": 12, "resets_at": null}
+            }}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            profile.join("branchwork-quota.json"),
+            r#"{"fetchedAtMs": 5000, "five_hour": {"used_percentage": 7.6, "resets_at": 1797183951}, "seven_day": {"used_percentage": 36, "resets_at": 1797700000}}"#,
+        )
+        .unwrap();
+        let report = ok(read_quota("claude", &profile).unwrap());
+        assert_eq!(report.fetched_at_ms, Some(5000.0));
+        assert_eq!(
+            report.windows,
+            vec![
+                QuotaWindow { minutes: 300, scope: None, percent: 8, resets_at_ms: Some(1_797_183_951_000.0) },
+                QuotaWindow { minutes: 10080, scope: None, percent: 36, resets_at_ms: Some(1_797_700_000_000.0) },
+                QuotaWindow { minutes: 10080, scope: Some("opus".into()), percent: 12, resets_at_ms: None },
+            ]
+        );
+        // An older statusline report loses to the cache.
+        std::fs::write(
+            profile.join("branchwork-quota.json"),
+            r#"{"fetchedAtMs": 10, "five_hour": {"used_percentage": 1, "resets_at": 1}}"#,
+        )
+        .unwrap();
+        let report = ok(read_quota("claude", &profile).unwrap());
+        assert_eq!(report.fetched_at_ms, Some(1000.0));
+        assert_eq!(report.windows[0].percent, 100);
+        // Statusline only, no cache.
+        std::fs::remove_file(profile.join(".claude.json")).unwrap();
+        let report = ok(read_quota("claude", &profile).unwrap());
+        assert_eq!(report.windows, vec![QuotaWindow { minutes: 300, scope: None, percent: 1, resets_at_ms: Some(1000.0) }]);
     }
 }

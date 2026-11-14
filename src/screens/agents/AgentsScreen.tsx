@@ -3,10 +3,12 @@ import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
 import { useProfiles, usageKey } from "../../agents/profiles";
 import { UsageBar } from "../../agents/usage";
+import type { QuotaWindow } from "../../ipc/bindings";
 import {
+  effectivePercent,
   formatReset,
+  headlineWindows,
   QUOTA_WARN_PERCENT,
-  tightestWindow,
   useAgentMeterPolling,
   useAgentMeters,
   windowExpired,
@@ -270,23 +272,22 @@ function QuotaMeter({ session }: { session: AgentSession }) {
       </span>
     );
   }
-  const tight = tightestWindow(view.windows, now);
-  const summary = tight
-    ? t("usage.summary", {
-        window: windowLabel(tight),
-        percent: String(tight.percent),
-        reset: tight.resetsAtMs != null ? formatReset(tight.resetsAtMs, now) : t("usage.resetUnknown"),
-      })
-    : t("usage.allReset");
+  const headline = headlineWindows(view.windows, now);
+  const part = (window: QuotaWindow) =>
+    windowExpired(window, now)
+      ? t("usage.summaryPartReset", { window: windowLabel(window) })
+      : t("usage.summaryPart", {
+          window: windowLabel(window),
+          percent: String(window.percent),
+          reset: window.resetsAtMs != null ? formatReset(window.resetsAtMs, now) : t("usage.resetUnknown"),
+        });
+  const summary = t("usage.summary", { parts: headline.map(part).join("; ") });
+  const warn = headline.some((window) => effectivePercent(window, now) >= QUOTA_WARN_PERCENT);
   return (
     <span className="agent-quota-wrap">
       <button
         type="button"
-        className={
-          "agent-quota" +
-          (tight && tight.percent >= QUOTA_WARN_PERCENT ? " warn" : "") +
-          (view.stale ? " stale" : "")
-        }
+        className={"agent-quota" + (warn ? " warn" : "") + (view.stale ? " stale" : "")}
         title={summary}
         aria-label={summary}
         aria-expanded={open ? "true" : "false"}
@@ -296,17 +297,20 @@ function QuotaMeter({ session }: { session: AgentSession }) {
           if (e.key === "Escape") setOpen(false);
         }}
       >
-        {tight ? (
-          <>
-            <span className="agent-quota-win">{windowLabel(tight)}</span> {tight.percent}%{" "}
-            <UsageBar usage={{ percent: tight.percent, window: windowLabel(tight) }} />
-            {tight.resetsAtMs != null && (
-              <span className="agent-quota-reset">· {formatReset(tight.resetsAtMs, now)}</span>
-            )}
-          </>
-        ) : (
-          t("usage.allResetShort")
-        )}
+        {headline.map((window, index) => {
+          const expired = windowExpired(window, now);
+          const percent = effectivePercent(window, now);
+          return (
+            <span key={`${window.minutes}-${window.scope ?? ""}`} className="agent-quota-item">
+              {index > 0 && <span className="agent-quota-sep" aria-hidden="true">│</span>}
+              <span className="agent-quota-win">{windowLabel(window)}</span> {percent}%{" "}
+              <UsageBar usage={{ percent, window: windowLabel(window) }} />
+              <span className="agent-quota-reset">
+                · {expired ? t("usage.resetShort") : window.resetsAtMs != null ? formatReset(window.resetsAtMs, now) : "?"}
+              </span>
+            </span>
+          );
+        })}
       </button>
       {open && (
         <div className="agent-quota-pop" role="dialog" aria-label={t("usage.windows")}>
@@ -319,7 +323,16 @@ function QuotaMeter({ session }: { session: AgentSession }) {
               <div key={`${window.minutes}-${window.scope ?? ""}`} className={"agent-quota-row" + (expired ? " expired" : "")}>
                 <span className="agent-quota-win">{windowLabel(window)}</span>
                 {expired ? (
-                  <span className="agent-quota-reset">{t("usage.windowReset")}</span>
+                  <>
+                    <UsageBar usage={{ percent: 0, window: windowLabel(window) }} className="wide" />
+                    <span className="agent-quota-pct">0%</span>
+                    <span className="agent-quota-reset">
+                      {t("usage.windowResetAgo", {
+                        ago: window.resetsAtMs != null ? formatAgo(window.resetsAtMs, now) : t("usage.justNow"),
+                        percent: String(window.percent),
+                      })}
+                    </span>
+                  </>
                 ) : (
                   <>
                     <UsageBar usage={{ percent: window.percent, window: windowLabel(window) }} className="wide" />

@@ -1445,6 +1445,12 @@ fn cli_ensure_hooks(cli_id: String, profile_dir: String) -> Result<bool, AppErro
             return Ok(false);
         }
     };
+    // The live usage meter reads Claude's statusline `rate_limits` (best-effort).
+    if let Ok(saver) = notify::saver_binary_path()
+        && let Err(error) = notify::ensure_claude_statusline(dir, &saver)
+    {
+        eprintln!("Skipping usage statusline: {error}");
+    }
     notify::ensure_claude_hooks(dir, &bin)
 }
 

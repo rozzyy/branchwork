@@ -236,6 +236,33 @@ pub fn ensure_claude_saver_hook(profile_dir: &Path, saver_bin: &Path) -> Result<
     Ok(true)
 }
 
+/// Points the isolated profile's `statusLine` at the saver sidecar, which records Claude's live
+/// `rate_limits` for the usage meter. A statusline the user configured is never replaced.
+/// Returns true when Branchwork's statusline is in place after the call.
+pub fn ensure_claude_statusline(profile_dir: &Path, saver_bin: &Path) -> Result<bool, AppError> {
+    let path = profile_dir.join("settings.json");
+    let mut root = read_profile_settings(&path)?;
+    let command = format!("\"{}\" statusline", saver_bin.to_string_lossy());
+    let Some(object) = root.as_object_mut() else {
+        return Err(AppError::validation("Profile settings.json must be a JSON object"));
+    };
+    if let Some(existing) = object.get("statusLine") {
+        let current = existing.get("command").and_then(|value| value.as_str());
+        if current == Some(command.as_str()) {
+            return Ok(true);
+        }
+        if !current.is_some_and(|value| value.contains("branchwork-saver")) {
+            return Ok(false);
+        }
+    }
+    object.insert(
+        "statusLine".into(),
+        serde_json::json!({ "type": "command", "command": command }),
+    );
+    write_profile_settings(&path, &root)?;
+    Ok(true)
+}
+
 /// Accept one notify line (`<session> <event>`) from a connected client.
 #[cfg(unix)]
 fn handle_client(stream: std::os::unix::net::UnixStream, app: &tauri::AppHandle) {
@@ -418,5 +445,29 @@ mod tests {
         let list = root["hooks"]["PreToolUse"].as_array().unwrap();
         assert_eq!(list.len(), 2);
         assert!(list[1]["hooks"][0]["command"].as_str().unwrap().contains("/Applications/"));
+    }
+
+    #[test]
+    fn claude_statusline_installs_only_when_free_or_ours() {
+        let home = TempDir::fresh("statusline");
+        let profile = home.0.join("claude-x");
+        std::fs::create_dir_all(&profile).unwrap();
+        let bin = PathBuf::from("/opt/branchwork/branchwork-saver");
+        assert!(ensure_claude_statusline(&profile, &bin).unwrap());
+        let root: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(profile.join("settings.json")).unwrap()).unwrap();
+        assert_eq!(root["statusLine"]["type"], "command");
+        assert_eq!(root["statusLine"]["command"], "\"/opt/branchwork/branchwork-saver\" statusline");
+        assert!(ensure_claude_statusline(&profile, &bin).unwrap());
+        // A user's own statusline is never replaced.
+        std::fs::write(
+            profile.join("settings.json"),
+            r#"{"statusLine": {"type": "command", "command": "my-line"}}"#,
+        )
+        .unwrap();
+        assert!(!ensure_claude_statusline(&profile, &bin).unwrap());
+        let root: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(profile.join("settings.json")).unwrap()).unwrap();
+        assert_eq!(root["statusLine"]["command"], "my-line");
     }
 }

@@ -10,6 +10,7 @@ import { createUnpinnedWorktree, createWorktree, listWorktrees, removeWorktree }
 import { listPins, type Project } from "../../ipc/catalog";
 import { ensureProfileDir, probeCli, profileHasCredentials, resolveCliBinary } from "../../ipc/cli";
 import { spawnTerminal, writeTerminal } from "../../ipc/pty";
+import { readProfileQuota } from "../../ipc/quota";
 import { ask } from "../../ui/dialog";
 import { markTerminalAttached } from "../../terminal/attachReady";
 import type { Worktree } from "../../ipc/worktrees";
@@ -187,6 +188,30 @@ describe("AgentsView", () => {
     // The failed Claude pane (no PTY, unsupported fixture) still says so.
     expect(screen.getByText("RTK n/a")).toBeInTheDocument();
     expect(screen.getByText("Caveman n/a")).toBeInTheDocument();
+  });
+
+  it("a 5-hour window past its reset still shows a 0% meter next to weekly", async () => {
+    vi.mocked(readProfileQuota).mockResolvedValueOnce({
+      state: "ok",
+      windows: [
+        { minutes: 300, scope: null, percent: 100, resetsAtMs: Date.now() - 3 * 3_600_000 },
+        { minutes: 10_080, scope: null, percent: 35, resetsAtMs: Date.now() + 50 * 3_600_000 + 30_000 },
+      ],
+      fetchedAtMs: Date.now() - 26 * 3_600_000,
+    });
+    render(<AgentsView />);
+    const meter = await screen.findByRole("button", {
+      name: /Usage 5h 0%, reset, no new report yet; Weekly 35%, resets in 2d 2h/,
+    });
+    expect(meter).toHaveTextContent("5h");
+    expect(meter).toHaveTextContent("0%");
+    expect(meter).toHaveTextContent("reset");
+    expect(meter).toHaveTextContent("Weekly");
+    expect(meter).toHaveTextContent("35%");
+    fireEvent.click(meter);
+    const panel = screen.getByRole("dialog", { name: "Usage windows" });
+    expect(panel).toHaveTextContent("Reset 3h ago · last report 100%");
+    expect(panel).toHaveTextContent("Updated 1d ago");
   });
 
   it("shows loading feedback while agent sessions are being restored", () => {
