@@ -3,6 +3,7 @@ mod cli;
 mod commit;
 mod compare;
 mod conflict;
+mod conversation;
 mod diff;
 mod error;
 mod fs;
@@ -1518,7 +1519,7 @@ fn notify_socket_path() -> Result<String, AppError> {
 #[tauri::command]
 #[specta::specta]
 fn notify_status(app: AppHandle, session_id: String, event: String) -> Result<(), AppError> {
-    let payload = notify::validate_notify_event(&session_id, &event)?;
+    let payload = notify::validate_notify_event(&session_id, &event, None)?;
     app.emit("agent:status", payload).map_err(|error| {
         AppError::internal(format!("Could not emit agent:status event: {error}"))
     })?;
@@ -1542,6 +1543,33 @@ fn agent_write_handover(
 #[specta::specta]
 fn agent_handover_diff(store: State<'_, Store>, worktree_path: String) -> Result<String, AppError> {
     handover::read_diff(&store, Path::new(&worktree_path))
+}
+
+/// Copy one conversation transcript between two profiles of the same CLI so a
+/// profile switch can resume it by ID. False when a Claude pane has no
+/// transcript yet. Only paths inside the two validated profile dirs are used.
+#[tauri::command(async)]
+#[specta::specta]
+fn agent_copy_conversation(
+    cli_id: String,
+    from_slug: String,
+    to_slug: String,
+    conversation_id: String,
+) -> Result<bool, AppError> {
+    conversation::copy(&cli_id, &from_slug, &to_slug, &conversation_id)
+}
+
+/// The single Codex rollout for a worktree touched since `since_ms` in one
+/// profile, excluding IDs other panes already claim; None when ambiguous.
+#[tauri::command(async)]
+#[specta::specta]
+fn agent_find_codex_conversation(
+    slug: String,
+    worktree_path: String,
+    since_ms: u64,
+    exclude: Vec<String>,
+) -> Result<Option<String>, AppError> {
+    conversation::find_codex(&slug, &worktree_path, since_ms, &exclude)
 }
 
 /// Merge agent hook entries into the isolated profile dir for CLIs with
@@ -1768,6 +1796,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             agent_saver_stats,
             agent_write_handover,
             agent_handover_diff,
+            agent_copy_conversation,
+            agent_find_codex_conversation,
             notify_socket_path,
             notify_status
         ])

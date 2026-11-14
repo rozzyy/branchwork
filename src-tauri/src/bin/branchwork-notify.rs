@@ -4,6 +4,39 @@
 //! socket at `BRANCHWORK_NOTIFY_SOCKET` and exits. It never reads the user
 //! config, never prints secrets, and performs no validation beyond cheap
 //! shape caps — the backend re-validates everything.
+//!
+//! When a hook pipes its JSON payload on stdin (Claude Code does), the
+//! conversation `session_id` is appended to the line if it is UUID-shaped.
+//! Any read or parse problem just leaves it out.
+
+/// Hook payloads are small; anything larger is not parsed.
+const MAX_STDIN: u64 = 64 * 1024;
+
+fn uuid_shaped(id: &str) -> bool {
+    let bytes = id.as_bytes();
+    bytes.len() == 36
+        && bytes.iter().enumerate().all(|(index, byte)| match index {
+            8 | 13 | 18 | 23 => *byte == b'-',
+            _ => byte.is_ascii_hexdigit(),
+        })
+}
+
+/// `session_id` from the hook JSON on stdin, when stdin is piped.
+fn conversation_from_stdin() -> Option<String> {
+    use std::io::{IsTerminal, Read};
+    let stdin = std::io::stdin();
+    if stdin.is_terminal() {
+        return None;
+    }
+    let mut text = String::new();
+    stdin.lock().take(MAX_STDIN + 1).read_to_string(&mut text).ok()?;
+    if text.len() as u64 > MAX_STDIN {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let id = value.get("session_id")?.as_str()?;
+    uuid_shaped(id).then(|| id.to_owned())
+}
 
 #[cfg(unix)]
 fn run(session: &std::ffi::OsString, event: &std::ffi::OsString) -> i32 {
@@ -30,7 +63,11 @@ fn run(session: &std::ffi::OsString, event: &std::ffi::OsString) -> i32 {
             return 1;
         }
     };
-    if writeln!(stream, "{session} {event}").is_err() {
+    let line = match conversation_from_stdin() {
+        Some(conversation) => format!("{session} {event} {conversation}"),
+        None => format!("{session} {event}"),
+    };
+    if writeln!(stream, "{line}").is_err() {
         eprintln!("branchwork-notify: could not write event");
         return 1;
     }

@@ -28,6 +28,22 @@ describe("CLI registry", () => {
     expect(CLI_REGISTRY.custom.resumeLine).toBeNull();
   });
 
+  it("exposes id-aware launch/resume for claude and codex only", () => {
+    const id = "42abbe75-0d00-4c98-9fcf-dcc6ef22bf2b";
+    expect(CLI_REGISTRY.claude.launchWithId?.(id)).toEqual(["claude", "--session-id", id]);
+    expect(CLI_REGISTRY.claude.resumeById?.(id)).toEqual(["claude", "--resume", id]);
+    expect(CLI_REGISTRY.codex.launchWithId).toBeNull();
+    expect(CLI_REGISTRY.codex.resumeById?.(id)).toEqual(["codex", "resume", id]);
+    for (const other of ["opencode", "gemini", "copilot", "muse", "custom"] as const) {
+      expect(CLI_REGISTRY[other].launchWithId).toBeNull();
+      expect(CLI_REGISTRY[other].resumeById).toBeNull();
+    }
+    // Overridden commands may not take the vendor's id flags.
+    expect(resolveCli(CLI_REGISTRY.claude, { launch: ["wrapped"] }).launchWithId).toBeNull();
+    expect(resolveCli(CLI_REGISTRY.claude, { resume: ["wrapped"] }).resumeById).toBeNull();
+    expect(resolveCli(CLI_REGISTRY.claude).resumeById?.(id)).toEqual(["claude", "--resume", id]);
+  });
+
   it("marks unverifiable CLIs instead of fabricating verification", () => {
     expect(CLI_REGISTRY.gemini.verifiedAgainst).toBeNull();
     expect(CLI_REGISTRY.custom.verifiedAgainst).toBeNull();

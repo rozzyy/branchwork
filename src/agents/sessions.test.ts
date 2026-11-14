@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useSessions } from "./sessions";
+import { switchTiming, useSessions } from "./sessions";
 import { ensureProfileDir, probeCli, profileHasCredentials, resolveCliBinary, seedClaudeOnboarding } from "../ipc/cli";
 import { ensureAgentHooks, ensureSaverHook, notifySocketPath, onAgentStatus } from "../ipc/notify";
+import { copyConversation, findCodexConversation } from "../ipc/conversations";
 import {
   closeTerminal,
   onTerminalExit,
@@ -50,6 +51,11 @@ vi.mock("../ipc/notify", () => ({
   notifyWhenUnfocused: vi.fn().mockResolvedValue(false),
 }));
 
+vi.mock("../ipc/conversations", () => ({
+  copyConversation: vi.fn(),
+  findCodexConversation: vi.fn(),
+}));
+
 vi.mock("../ui/dialog", () => ({
   ask: vi.fn(),
 }));
@@ -68,7 +74,14 @@ vi.mock("../terminal/attachReady", () => ({
 
 type ExitEvent = { sessionId: string; exitCode: number | null; signal: string | null };
 type OutputEvent = { sessionId: string; data: number[] };
-type StatusEvent = { sessionId: string; event: "waiting" | "done" };
+type StatusEvent = { sessionId: string; event: "waiting" | "done" | "start"; conversationId?: string | null };
+
+const CONV_A = "42abbe75-0d00-4c98-9fcf-dcc6ef22bf2b";
+const CONV_B = "01a1d5e6-eae0-7e90-847c-778bb00e80eb";
+
+function writes(): string[] {
+  return vi.mocked(writeTerminal).mock.calls.map(([, data]) => new TextDecoder().decode(data as Uint8Array));
+}
 
 let exitHandler: ((event: ExitEvent) => void) | null = null;
 let outputHandler: ((event: OutputEvent) => void) | null = null;
@@ -119,6 +132,9 @@ beforeEach(async () => {
   vi.mocked(loadSetting).mockReset().mockResolvedValue(null);
   vi.mocked(saveSetting).mockReset().mockResolvedValue(undefined);
   vi.mocked(ask).mockReset().mockResolvedValue(true);
+  vi.mocked(copyConversation).mockReset().mockResolvedValue(true);
+  vi.mocked(findCodexConversation).mockReset().mockResolvedValue(null);
+  switchTiming.settleMs = 0;
   adoptExisting.mockReset();
   useToasts.setState({ toasts: [] });
   useSettings.setState({ agentAutoSwitch: true, agentTokenSaver: true, agentSaverProtected: [] });
@@ -547,9 +563,76 @@ describe("session status", () => {
     expect(useToasts.getState().toasts.map((item) => item.title)).toContain("Codex stopped");
     expect(useToasts.getState().toasts.filter((item) => item.title === "Codex stopped")).toHaveLength(1);
   });
+
+  it("hook start event updates conversationId without changing status", async () => {
+    const profile = await seedProfile();
+    await useSessions.getState().startSession({ cliId: "codex", profile });
+    const id = useSessions.getState().sessions[0].id;
+    statusHandler?.({ sessionId: id, event: "start", conversationId: CONV_B });
+    expect(useSessions.getState().sessions[0]).toMatchObject({ conversationId: CONV_B, status: "running" });
+    statusHandler?.({ sessionId: id, event: "waiting", conversationId: "../bad" });
+    expect(useSessions.getState().sessions[0].conversationId).toBe(CONV_B);
+  });
+
+  it("returns from a hook done to running when substantial output follows", async () => {
+    const profile = await seedProfile();
+    await useSessions.getState().startSession({ cliId: "codex", profile });
+    const id = useSessions.getState().sessions[0].id;
+    statusHandler?.({ sessionId: id, event: "done" });
+    expect(useSessions.getState().sessions[0].status).toBe("done");
+    emitOutput("pty-1", "x".repeat(2048));
+    expect(useSessions.getState().sessions[0].status).toBe("running");
+  });
+});
+
+describe("conversation ids", () => {
+  it("launches new claude sessions with a pinned --session-id", async () => {
+    await useProfiles.getState().createProfile("claude", "Personal");
+    await useSessions.getState().startSession({ cliId: "claude", profile: { cliId: "claude", slug: "personal" } });
+    const session = useSessions.getState().sessions[0];
+    expect(session.conversationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(writes().join("")).toContain(`'claude' '--session-id' '${session.conversationId}'`);
+  });
+
+  it("persists conversationId and restores claude by id with a fresh fallback", async () => {
+    await useProfiles.getState().createProfile("claude", "Personal");
+    vi.mocked(loadSetting).mockResolvedValueOnce({
+      sessions: [{
+        id: "agent-saved-c",
+        cliId: "claude",
+        profile: { cliId: "claude", slug: "personal" },
+        worktreePath: "/wt/a",
+        slot: "auto",
+        conversationId: CONV_A,
+      }],
+    });
+    resetSessions();
+    await useSessions.getState().load();
+    expect(useSessions.getState().sessions[0].conversationId).toBe(CONV_A);
+    expect(writes().join("")).toMatch(
+      new RegExp(`^'claude' '--resume' '${CONV_A}' .*\\|\\| 'claude' '--session-id' '${CONV_A}' .*\n$`),
+    );
+    await vi.waitFor(() => expect(saveSetting).toHaveBeenCalled());
+    const saved = vi.mocked(saveSetting).mock.calls.slice(-1)[0]?.[1] as { sessions: Array<{ conversationId: string }> };
+    expect(saved.sessions[0].conversationId).toBe(CONV_A);
+  });
+
+  it("restores codex by id when known", async () => {
+    const profile = await seedProfile();
+    vi.mocked(loadSetting).mockResolvedValueOnce({
+      sessions: [{ id: "agent-saved-x", cliId: "codex", profile, worktreePath: "/wt/a", slot: "auto", conversationId: CONV_B }],
+    });
+    resetSessions();
+    await useSessions.getState().load();
+    expect(writes()).toContain(`'codex' 'resume' '${CONV_B}' || 'codex'\n`);
+  });
 });
 
 describe("profile switching", () => {
+  beforeEach(() => {
+    vi.mocked(findCodexConversation).mockResolvedValue(CONV_A);
+  });
+
   async function twoProfiles() {
     const work = await useProfiles.getState().createProfile("codex", "Work");
     const home = await useProfiles.getState().createProfile("codex", "Home");
@@ -566,13 +649,20 @@ describe("profile switching", () => {
     expect(closeTerminal).toHaveBeenCalledWith("pty-1");
     expect(ensureProfileDir).toHaveBeenCalledWith("codex", "home");
     expect(spawnTerminal).toHaveBeenCalledTimes(2);
-    const writes = vi.mocked(writeTerminal).mock.calls.map(([, data]) => new TextDecoder().decode(data));
-    // Raw resume line with the fresh-launch fallback; no decorative line is
-    // typed into the shell.
-    expect(writes.some((text) => text.includes("codex resume --last || codex"))).toBe(true);
-    expect(writes.every((text) => !text.includes("↻"))).toBe(true);
+    // The pane's exact rollout is copied, then resumed by id with no
+    // fresh-launch fallback; no decorative line is typed into the shell.
+    expect(findCodexConversation).toHaveBeenCalledWith("work", "/wt/a", expect.any(Number), []);
+    expect(copyConversation).toHaveBeenCalledWith("codex", "work", "home", CONV_A);
+    expect(writes()).toContain(`'codex' 'resume' '${CONV_A}' || exit\n`);
+    expect(writes().every((text) => !text.includes("↻") && !text.includes("--last"))).toBe(true);
     const session = useSessions.getState().sessions[0];
-    expect(session).toMatchObject({ profile: home, sessionId: "pty-2", status: "running", limitHit: false });
+    expect(session).toMatchObject({
+      profile: home,
+      sessionId: "pty-2",
+      status: "running",
+      limitHit: false,
+      conversationId: CONV_A,
+    });
   });
 
   it("waits for the replacement pane to attach before writing the resume command", async () => {
@@ -592,7 +682,7 @@ describe("profile switching", () => {
     expect(await switching).toBe(id);
     expect(writeTerminal).toHaveBeenCalledTimes(2);
     expect(new TextDecoder().decode(vi.mocked(writeTerminal).mock.calls[1][1])).toContain(
-      "codex resume --last || codex",
+      `'codex' 'resume' '${CONV_A}'`,
     );
   });
 
@@ -633,6 +723,68 @@ describe("profile switching", () => {
     useSessions.getState().moveToDock(id!);
     expect(await useSessions.getState().switchProfile(id!, home)).toBeNull();
     expect(stopTerminal).not.toHaveBeenCalled();
+  });
+
+  it("copies the claude transcript and resumes it by id", async () => {
+    await useProfiles.getState().createProfile("claude", "Work");
+    await useProfiles.getState().createProfile("claude", "Home");
+    const id = await useSessions.getState().startSession({ cliId: "claude", profile: { cliId: "claude", slug: "work" } });
+    const conversationId = useSessions.getState().sessions[0].conversationId!;
+    expect(await useSessions.getState().switchProfile(id!, { cliId: "claude", slug: "home" })).toBe(id);
+    expect(findCodexConversation).not.toHaveBeenCalled();
+    expect(copyConversation).toHaveBeenCalledWith("claude", "work", "home", conversationId);
+    expect(writes().slice(-1)[0]).toMatch(new RegExp(`^'claude' '--resume' '${conversationId}' .* \\|\\| exit\n$`));
+    expect(useSessions.getState().sessions[0]).toMatchObject({ profile: { cliId: "claude", slug: "home" }, conversationId });
+  });
+
+  it("launches claude fresh with the same id when no transcript exists", async () => {
+    useSettings.setState({ agentTokenSaver: false });
+    await useProfiles.getState().createProfile("claude", "Work");
+    await useProfiles.getState().createProfile("claude", "Home");
+    const id = await useSessions.getState().startSession({ cliId: "claude", profile: { cliId: "claude", slug: "work" } });
+    const conversationId = useSessions.getState().sessions[0].conversationId!;
+    vi.mocked(copyConversation).mockResolvedValueOnce(false);
+    expect(await useSessions.getState().switchProfile(id!, { cliId: "claude", slug: "home" })).toBe(id);
+    expect(writes().slice(-1)[0]).toBe(`'claude' '--session-id' '${conversationId}'\n`);
+    expect(useSessions.getState().sessions[0].profile).toEqual({ cliId: "claude", slug: "home" });
+  });
+
+  it("refuses an ambiguous codex switch without stopping", async () => {
+    const { work, home } = await twoProfiles();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
+    vi.mocked(findCodexConversation).mockResolvedValue(null);
+    expect(await useSessions.getState().switchProfile(id!, home)).toBeNull();
+    expect(stopTerminal).not.toHaveBeenCalled();
+    expect(copyConversation).not.toHaveBeenCalled();
+    expect(useSessions.getState().sessions[0]).toMatchObject({ profile: work, sessionId: "pty-1", status: "running" });
+    expect(useToasts.getState().toasts.slice(-1)[0]?.title).toContain("Couldn't find this pane's Codex conversation");
+  });
+
+  it("rolls back to the source profile when the target exits during the settle window", async () => {
+    switchTiming.settleMs = 60_000;
+    const { work, home } = await twoProfiles();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
+    const switching = useSessions.getState().switchProfile(id!, home);
+    await vi.waitFor(() => expect(writes()).toContain(`'codex' 'resume' '${CONV_A}' || exit\n`));
+    expect(useSessions.getState().sessions[0].profile).toEqual(work);
+    exitHandler?.({ sessionId: "pty-2", exitCode: 1, signal: null });
+    expect(await switching).toBeNull();
+    expect(writes().slice(-1)[0]).toBe(`'codex' 'resume' '${CONV_A}' || 'codex'\n`);
+    expect(ensureProfileDir).toHaveBeenLastCalledWith("codex", "work");
+    expect(useSessions.getState().sessions[0]).toMatchObject({ profile: work, sessionId: "pty-3", status: "running" });
+    const titles = useToasts.getState().toasts.map((item) => item.title);
+    expect(titles.some((title) => title.startsWith("Switching to Home failed, so the pane went back to Work"))).toBe(true);
+    expect(titles).not.toContain("Codex stopped");
+  });
+
+  it("rolls back when the copy fails", async () => {
+    const { work, home } = await twoProfiles();
+    const id = await useSessions.getState().startSession({ cliId: "codex", profile: work });
+    vi.mocked(copyConversation).mockRejectedValueOnce(new Error("disk full"));
+    expect(await useSessions.getState().switchProfile(id!, home)).toBeNull();
+    expect(writes().slice(-1)[0]).toBe(`'codex' 'resume' '${CONV_A}' || 'codex'\n`);
+    expect(useSessions.getState().sessions[0]).toMatchObject({ profile: work, sessionId: "pty-2" });
+    expect(useToasts.getState().toasts.slice(-1)[0]?.title).toContain("disk full");
   });
 
   it("cycles to the next profile and toasts when alone", async () => {
@@ -687,6 +839,9 @@ describe("usage limits", () => {
     );
     expect(ask).not.toHaveBeenCalled();
     expect(id).toBeTruthy();
+    // Same by-id flow as a manual switch.
+    const conversationId = useSessions.getState().sessions[0].conversationId!;
+    expect(copyConversation).toHaveBeenCalledWith("claude", "work", "home", conversationId);
   });
 
   it("dismisses the banner without switching", async () => {
@@ -743,7 +898,7 @@ describe("token saver", () => {
   it("saver disabled launches plain argv", async () => {
     useSettings.setState({ agentTokenSaver: false });
     const { written, env, session } = await startClaude();
-    expect(written).toBe("'claude'\n");
+    expect(written).toBe(`'claude' '--session-id' '${session.conversationId}'\n`);
     expect(env.BRANCHWORK_SAVER).toBeUndefined();
     expect(ensureSaverHook).not.toHaveBeenCalled();
     expect(session.savers).toEqual({ rtk: "off", caveman: "off" });

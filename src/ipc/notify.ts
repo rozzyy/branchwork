@@ -12,7 +12,10 @@ const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in 
 /** Status event forwarded by hooks through the notify socket sidecar. */
 export interface AgentStatusEvent {
   sessionId: string;
-  event: "waiting" | "done";
+  /** `start`: the CLI began or switched conversation; no status change. */
+  event: "waiting" | "done" | "start";
+  /** The CLI's own conversation id, when the hook reported one. */
+  conversationId?: string | null;
 }
 
 /** Absolute path of the notify socket hook sidecars should dial. */

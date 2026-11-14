@@ -12,12 +12,19 @@ use tauri::Emitter;
 
 pub const NOTIFY_EVENT_WAITING: &str = "waiting";
 pub const NOTIFY_EVENT_DONE: &str = "done";
+/// The CLI started or switched conversation (Claude `SessionStart`); carries
+/// only the conversation id, no status change.
+pub const NOTIFY_EVENT_START: &str = "start";
 
-/// Payload re-emitted as the `agent:status` app event.
+/// Payload re-emitted as the `agent:status` app event. camelCase: the
+/// frontend reads `sessionId` / `conversationId`.
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentStatusPayload {
     pub session_id: String,
     pub event: String,
+    /// The CLI's own conversation id, when the hook reported a valid one.
+    pub conversation_id: Option<String>,
 }
 
 /// Validate a hook-reported status. Hooks report the agent record id
@@ -27,6 +34,7 @@ pub struct AgentStatusPayload {
 pub fn validate_notify_event(
     session_id: &str,
     event: &str,
+    conversation_id: Option<&str>,
 ) -> Result<AgentStatusPayload, AppError> {
     let valid = if let Some(suffix) = session_id.strip_prefix("pty-") {
         !suffix.is_empty() && suffix.len() <= 20 && suffix.bytes().all(|byte| byte.is_ascii_digit())
@@ -42,12 +50,17 @@ pub fn validate_notify_event(
     if !valid {
         return Err(AppError::validation("Invalid notify session id"));
     }
-    if event != NOTIFY_EVENT_WAITING && event != NOTIFY_EVENT_DONE {
+    if event != NOTIFY_EVENT_WAITING && event != NOTIFY_EVENT_DONE && event != NOTIFY_EVENT_START {
         return Err(AppError::validation("Invalid notify event"));
     }
+    // A malformed conversation id is dropped; the status still counts.
+    let conversation_id = conversation_id
+        .filter(|id| crate::conversation::valid_conversation_id(id))
+        .map(str::to_owned);
     Ok(AgentStatusPayload {
         session_id: session_id.to_owned(),
         event: event.to_owned(),
+        conversation_id,
     })
 }
 
@@ -179,7 +192,8 @@ fn hook_command(entry: &serde_json::Value) -> Option<&str> {
 ///
 /// Reads the existing file when present (must stay a JSON object; other keys
 /// are preserved byte-for-value), ensures `hooks.Notification` and
-/// `hooks.Stop` each carry our notify command once, and writes the file back.
+/// `hooks.Stop` and `hooks.SessionStart` each carry our notify command once,
+/// and writes the file back.
 /// Returns true when the file changed.
 pub fn ensure_claude_hooks(profile_dir: &Path, notify_bin: &Path) -> Result<bool, AppError> {
     let path = profile_dir.join("settings.json");
@@ -192,6 +206,7 @@ pub fn ensure_claude_hooks(profile_dir: &Path, notify_bin: &Path) -> Result<bool
     for (key, event) in [
         ("Notification", NOTIFY_EVENT_WAITING),
         ("Stop", NOTIFY_EVENT_DONE),
+        ("SessionStart", NOTIFY_EVENT_START),
     ] {
         let list = hook_list(&mut root, key)?;
         if !list
@@ -263,6 +278,18 @@ pub fn ensure_claude_statusline(profile_dir: &Path, saver_bin: &Path) -> Result<
     Ok(true)
 }
 
+/// Split the first line of `<session> <event>[ <conversation>]`.
+fn parse_notify_line(text: &str) -> Option<(&str, &str, Option<&str>)> {
+    let mut parts = text.lines().next()?.split_whitespace();
+    let session = parts.next()?;
+    let event = parts.next()?;
+    let conversation = parts.next();
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((session, event, conversation))
+}
+
 /// Accept one notify line (`<session> <event>`) from a connected client.
 #[cfg(unix)]
 fn handle_client(stream: std::os::unix::net::UnixStream, app: &tauri::AppHandle) {
@@ -273,13 +300,10 @@ fn handle_client(stream: std::os::unix::net::UnixStream, app: &tauri::AppHandle)
         Ok(read) => String::from_utf8_lossy(&bytes[..read]).into_owned(),
         Err(_) => return,
     };
-    // First line only; overlong input is dropped rather than parsed.
-    let line = text.lines().next().unwrap_or("").trim();
-    let mut parts = line.splitn(2, char::is_whitespace);
-    let (Some(session), Some(event)) = (parts.next(), parts.next()) else {
+    let Some((session, event, conversation)) = parse_notify_line(&text) else {
         return;
     };
-    match validate_notify_event(session.trim(), event.trim()) {
+    match validate_notify_event(session, event, conversation) {
         Ok(payload) => {
             if let Err(error) = app.emit("agent:status", payload) {
                 eprintln!("Could not emit agent:status event: {error}");
@@ -342,16 +366,53 @@ mod tests {
 
     #[test]
     fn accepts_known_shapes_and_rejects_the_rest() {
-        let ok = validate_notify_event("pty-1", "waiting").unwrap();
+        let ok = validate_notify_event("pty-1", "waiting", None).unwrap();
         assert_eq!(ok.event, "waiting");
-        assert!(validate_notify_event("pty-1", "done").is_ok());
-        assert!(validate_notify_event("agent-abc-123", "done").is_ok());
-        assert!(validate_notify_event("other-1", "waiting").is_err());
-        assert!(validate_notify_event("pty-", "waiting").is_err());
-        assert!(validate_notify_event("pty-1;rm", "waiting").is_err());
-        assert!(validate_notify_event("agent-x;rm", "waiting").is_err());
-        assert!(validate_notify_event("pty-1", "explode").is_err());
-        assert!(validate_notify_event("pty-1", "").is_err());
+        assert!(validate_notify_event("pty-1", "done", None).is_ok());
+        assert!(validate_notify_event("agent-abc-123", "done", None).is_ok());
+        assert!(validate_notify_event("other-1", "waiting", None).is_err());
+        assert!(validate_notify_event("pty-", "waiting", None).is_err());
+        assert!(validate_notify_event("pty-1;rm", "waiting", None).is_err());
+        assert!(validate_notify_event("agent-x;rm", "waiting", None).is_err());
+        assert!(validate_notify_event("pty-1", "explode", None).is_err());
+        assert!(validate_notify_event("pty-1", "", None).is_err());
+    }
+
+    const CONVERSATION: &str = "42abbe75-0d00-4c98-9fcf-dcc6ef22bf2b";
+
+    #[test]
+    fn payload_serializes_camel_case() {
+        let payload = validate_notify_event("agent-a1", "done", Some(CONVERSATION)).unwrap();
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json["sessionId"], "agent-a1");
+        assert_eq!(json["conversationId"], CONVERSATION);
+        assert!(json.get("session_id").is_none());
+    }
+
+    #[test]
+    fn accepts_start_event_with_conversation() {
+        let payload = validate_notify_event("agent-a1", "start", Some(CONVERSATION)).unwrap();
+        assert_eq!(payload.event, "start");
+        assert_eq!(payload.conversation_id.as_deref(), Some(CONVERSATION));
+    }
+
+    #[test]
+    fn drops_bad_conversation_id_keeps_event() {
+        for bad in ["../etc", "x", "42abbe75-0d00-4c98-9fcf-dcc6ef22bf2b0"] {
+            let payload = validate_notify_event("agent-a1", "waiting", Some(bad)).unwrap();
+            assert_eq!(payload.conversation_id, None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn parses_three_part_line() {
+        assert_eq!(parse_notify_line("agent-a done\n"), Some(("agent-a", "done", None)));
+        assert_eq!(
+            parse_notify_line(&format!("agent-a start {CONVERSATION}\nignored")),
+            Some(("agent-a", "start", Some(CONVERSATION)))
+        );
+        assert_eq!(parse_notify_line("agent-a"), None);
+        assert_eq!(parse_notify_line("a b c d"), None);
     }
 
     struct TempDir(PathBuf);
@@ -390,6 +451,8 @@ mod tests {
         assert_eq!(root["theme"], "dark");
         assert_eq!(root["hooks"]["Stop"].as_array().unwrap().len(), 2);
         assert_eq!(root["hooks"]["Notification"].as_array().unwrap().len(), 1);
+        let start = root["hooks"]["SessionStart"][0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(start.ends_with(" start"), "{start}");
         // Second run changes nothing and adds no duplicates.
         assert!(!ensure_claude_hooks(&profile, &bin).unwrap());
         let again: serde_json::Value =

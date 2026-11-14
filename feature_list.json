@@ -1,6 +1,6 @@
 {
-  "milestone": "M7 UI/UX Redesign",
-  "plan": "docs/superpowers/plans/2026-11-14-m7-ui-redesign.md",
+  "milestone": "M8 — Profile switch keeps the conversation",
+  "plan": "docs/superpowers/plans/2026-11-14-m8-profile-switch-session.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -1477,7 +1477,9 @@
       "stage": 34,
       "name": "Compare worktrees IPC",
       "description": ".agent/tasks/m6-task-13-compare-ipc.md",
-      "dependencies": ["m6-task-02-checkout-branch-picks"],
+      "dependencies": [
+        "m6-task-02-checkout-branch-picks"
+      ],
       "status": "done",
       "evidence": "Implemented typed same-repository worktree comparison, tracked dirty snapshots without worktree/index mutation, bounded file/patch output and generated IPC bindings. Focused Rust tests (6), IPC tests (3), binding drift test; final ./init.sh on m7-stage-1 passed (82 Vitest files / 692 tests; Rust 314 passed / 3 ignored; TypeScript and Clippy clean)."
     },
@@ -1486,7 +1488,9 @@
       "stage": 34,
       "name": "Compare screen and race entry points",
       "description": "docs/superpowers/plans/2026-11-12-m6-advanced-git.md#stage-5--compare-worktrees",
-      "dependencies": ["m6-task-13-compare-ipc"],
+      "dependencies": [
+        "m6-task-13-compare-ipc"
+      ],
       "status": "done",
       "evidence": "Implemented accessible Compare dialog with A/B pickers, tracked-uncommitted toggle, bounded file summary, shared diff renderer and Copy patch; wired Graph context menu and Race result Compare while preserving Keep and confirmed Discard flows. Focused CompareDialog, Graph, Agents, and IPC suites passed (54 tests); final ./init.sh passed (82 files / 692 tests). Native M6-S5 checkpoint passed 2026-11-14: S5-01 counts matched git diff; S5-02 staged/unstaged changes in both scratch worktrees remained unchanged (HEAD, index tree, and README hash); S5-03 untracked fixture was excluded; S5-04 copied patch passed git apply --check/apply in a scratch checkout; S5-05 Claude/Codex Race Compare, Keep, and confirmed Discard behaved as specified. Kept Claude result worktree/branch remains for review."
     },
@@ -1495,9 +1499,55 @@
       "stage": 35,
       "name": "Automatically prune stale linked worktree metadata",
       "description": "User-reported stale temporary worktree path prevents repositories from loading worktrees",
-      "dependencies": ["m6-task-14-compare-screen"],
+      "dependencies": [
+        "m6-task-14-compare-screen"
+      ],
       "status": "done",
       "evidence": "Git worktree prune now runs when opening/registering a repository and before worktree list/summary reads. Regression tests cover add and refresh paths; focused Rust tests pass 2/2; ./init.sh passes (Vitest 82 files / 692 tests; Rust 316 passed / 3 ignored; TypeScript and Clippy clean). Native check passed 2026-11-14: created a disposable stale registration, opened the app worktree picker, confirmed the stale path was absent, and verified `git worktree list` pruned it while the three live worktrees remained."
+    },
+    {
+      "id": "m8-task-01-conversation-ipc",
+      "stage": 36,
+      "name": "Transcript copy + Codex discovery IPC",
+      "description": "docs/superpowers/plans/2026-11-14-m8-profile-switch-session.md",
+      "dependencies": [
+        "m7-followup-01-auto-prune-stale-worktrees"
+      ],
+      "status": "done",
+      "evidence": "src-tauri/src/conversation.rs: UUID-validated copy between slug-derived profile dirs (temp+rename, no symlinks), Codex rollout discovery by cwd+mtime with exclusion. 9 Rust tests pass; bindings regenerated. ./init.sh exit 0: Vitest 82 files / 703 tests; Rust 329 passed / 3 ignored; TypeScript and Clippy clean."
+    },
+    {
+      "id": "m8-task-02-hook-conversation-id",
+      "stage": 36,
+      "name": "Hook status carries the conversation id",
+      "description": "docs/superpowers/plans/2026-11-14-m8-profile-switch-session.md",
+      "dependencies": [
+        "m8-task-01-conversation-ipc"
+      ],
+      "status": "done",
+      "evidence": "Fixed AgentStatusPayload serialization (was snake_case; frontend never matched hook events). Added `start` event + SessionStart hook; branchwork-notify reads session_id from hook stdin (64 KiB cap). 9 notify tests pass; sidecar verified against a real socket. ./init.sh exit 0: Vitest 82 files / 703 tests; Rust 329 passed / 3 ignored; TypeScript and Clippy clean."
+    },
+    {
+      "id": "m8-task-03-session-conversation-id",
+      "stage": 36,
+      "name": "Conversation id on sessions (launch, hooks, persistence, restore/undo)",
+      "description": "docs/superpowers/plans/2026-11-14-m8-profile-switch-session.md",
+      "dependencies": [
+        "m8-task-02-hook-conversation-id"
+      ],
+      "status": "done",
+      "evidence": "Claude launches with --session-id; hooks update conversationId; persisted; restore/undo resume by id with fresh fallback; hook 'done' recovers to running on output. Registry + sessions tests pass. ./init.sh exit 0: Vitest 82 files / 703 tests; Rust 329 passed / 3 ignored; TypeScript and Clippy clean."
+    },
+    {
+      "id": "m8-task-04-switch-carry",
+      "stage": 36,
+      "name": "Profile switch copies + resumes by id with settle window and rollback",
+      "description": "docs/superpowers/plans/2026-11-14-m8-profile-switch-session.md",
+      "dependencies": [
+        "m8-task-03-session-conversation-id"
+      ],
+      "status": "done",
+      "evidence": "switchProfile for claude/codex: discover id, stop, copy, resume by id (`|| exit`), 5 s settle, rollback to source on copy/spawn/early-exit failure. 55 sessions tests pass. ./init.sh exit 0: Vitest 82 files / 703 tests; Rust 329 passed / 3 ignored; TypeScript and Clippy clean. Native cross-account checks pending (docs/testing/m8-manual-e2e.md)."
     }
   ]
 }

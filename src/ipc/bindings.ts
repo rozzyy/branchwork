@@ -256,6 +256,17 @@ export const commands = {
 	/**  Capped `git diff HEAD` text of a registered worktree for handover notes. */
 	agentHandoverDiff: (worktreePath: string) => __TAURI_INVOKE<string>("agent_handover_diff", { worktreePath }),
 	/**
+	 *  Copy one conversation transcript between two profiles of the same CLI so a
+	 *  profile switch can resume it by ID. False when a Claude pane has no
+	 *  transcript yet. Only paths inside the two validated profile dirs are used.
+	 */
+	agentCopyConversation: (cliId: string, fromSlug: string, toSlug: string, conversationId: string) => __TAURI_INVOKE<boolean>("agent_copy_conversation", { cliId, fromSlug, toSlug, conversationId }),
+	/**
+	 *  The single Codex rollout for a worktree touched since `since_ms` in one
+	 *  profile, excluding IDs other panes already claim; None when ambiguous.
+	 */
+	agentFindCodexConversation: (slug: string, worktreePath: string, sinceMs: number, exclude: string[]) => __TAURI_INVOKE<string | null>("agent_find_codex_conversation", { slug, worktreePath, sinceMs, exclude }),
+	/**
 	 *  Absolute path of the notify socket hook sidecars should dial.
 	 *  Fails on platforms without socket support; callers fall back to heuristics.
 	 */

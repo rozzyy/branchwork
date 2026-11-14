@@ -29,6 +29,7 @@ function session(patch: Partial<AgentSession> = {}): AgentSession {
     sharedWithDock: false,
     status: "running",
     limitHit: false,
+    conversationId: null,
     savers: { rtk: "active", caveman: "active" },
     ...patch,
   };

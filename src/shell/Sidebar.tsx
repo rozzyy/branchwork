@@ -435,6 +435,10 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <nav className="side-scroll">
+        <div className="side-brand">
+          <span className="app-mark" aria-hidden />
+          <span className="app-name">{t("app.name")}</span>
+        </div>
         <button ref={projectTriggerRef} className="project-picker-trigger group-pop-trigger" type="button" aria-haspopup="menu" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().toggle(); }}>
           <span className="project-mark" aria-hidden style={{ background: activeGroup?.color ?? "var(--accent)" }}>{(activeProject ? projectLabel(activeProject) : "?").trim().charAt(0).toUpperCase()}</span>
           <span className="project-picker-copy"><strong>{activeProject ? projectLabel(activeProject) : t("groups.noProjectSelected")}</strong><small>{t("sidebar.projectsInGroup", { group: activeGroup?.name ?? t("groups.ungrouped"), count: groupProjectCount })}</small></span>

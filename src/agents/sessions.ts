@@ -35,6 +35,7 @@ import { useSettings } from "../state/settings";
 import { useStage } from "../state/stage";
 import { useWorktrees } from "../state/worktrees";
 import { cavemanResumeLine, sessionSavers, withCaveman, type SessionSavers } from "./savers";
+import { copyConversation, findCodexConversation } from "../ipc/conversations";
 
 export type AgentSlot = "left" | "right" | "auto" | "full";
 
@@ -55,6 +56,8 @@ export interface AgentSession {
   limitHit: boolean;
   /** Token-saver state of the running integration (not persisted). */
   savers: SessionSavers;
+  /** The CLI's own conversation id (Claude/Codex), for resume by id. */
+  conversationId: string | null;
 }
 
 export type AgentLayoutMode = "grid" | "full";
@@ -76,6 +79,36 @@ function nextSessionId(): string {
 
 function quoteArg(arg: string): string {
   return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
+/** `8-4-4-4-12` hex: the conversation id shape Claude and Codex use. */
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isConversationId(value: unknown): value is string {
+  return typeof value === "string" && CONVERSATION_ID.test(value);
+}
+
+/** When each record's current PTY was launched (Codex rollout discovery). */
+const launchedAt = new Map<string, number>();
+/** Records whose hook-reported "done" already toasted (once per record). */
+const hookDoneReported = new Set<string>();
+/** PTYs in a profile-switch settle window: exit → callback(failed). */
+const exitWaiters = new Map<string, (failed: boolean) => void>();
+/** How long a switched CLI must stay alive before the switch counts. */
+export const switchTiming = { settleMs: 5000 };
+
+/** Resolves true when the PTY is still alive after the settle window. */
+function settle(ptyId: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      exitWaiters.delete(ptyId);
+      resolve(true);
+    }, switchTiming.settleMs);
+    exitWaiters.set(ptyId, (failed) => {
+      clearTimeout(timer);
+      exitWaiters.delete(ptyId);
+      resolve(!failed);
+    });
+  });
 }
 
 // Sessions whose process already exited. Closing an exited pane skips the
@@ -181,6 +214,8 @@ export interface NewAgentRequest {
   /** Restore an existing session record, resuming its CLI conversation. */
   sessionRecordId?: string;
   resume?: boolean;
+  /** Known conversation id to resume exactly (with `resume`). */
+  conversationId?: string | null;
   slot?: AgentSlot;
   /** Background restores may run while the Agents screen is not mounted. */
   waitForAttach?: boolean;
@@ -192,6 +227,7 @@ interface PersistedAgentSession {
   profile: ProfileRef;
   worktreePath: string;
   slot: AgentSlot;
+  conversationId?: string | null;
 }
 
 interface PersistedAgentState {
@@ -243,7 +279,7 @@ interface SessionsStore {
    * External status signal (hook/notify binary). `waiting` marks a live
    * session; `done` mirrors the PTY exit. Unknown sessions are ignored.
    */
-  notifySessionEvent(sessionId: string, event: "waiting" | "done"): void;
+  notifySessionEvent(sessionId: string, event: "waiting" | "done" | "start", conversationId?: string | null): void;
   /** Binary availability per CLI, resolved on demand for the New Agent flow. */
   checkBinaries(): Promise<Record<CliId, string | null>>;
   startSession(request: NewAgentRequest): Promise<string | null>;
@@ -279,6 +315,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
         profile: session.profile,
         worktreePath: session.worktreePath,
         slot: session.slot,
+        conversationId: session.conversationId,
       })),
       layoutMode: get().layoutMode,
     });
@@ -332,7 +369,8 @@ export const useSessions = create<SessionsStore>((set, get) => {
   const noteSessionActivity = (sessionId: string, text: string) => {
     const session = get().sessions.find((item) => item.sessionId === sessionId);
     if (!session || !session.sessionId || exitedSessions.has(session.sessionId)) return;
-    if (session.status !== "running" && session.status !== "waiting") return;
+    // A hook "done" (end of a turn) leaves the PTY alive; output may follow.
+    if (session.status !== "running" && session.status !== "waiting" && session.status !== "done") return;
     const lines = lineBuffers.get(session.id) ?? [];
     for (const raw of text.split("\n")) {
       const line = raw.replace(/\r$/, "");
@@ -342,7 +380,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
     const tail = (overlaps.get(session.id) ?? "").slice(-OVERLAP_CAP);
     const window = tail + text;
     overlaps.set(session.id, window.slice(-OVERLAP_CAP));
-    if (session.status === "waiting") {
+    if (session.status === "waiting" || session.status === "done") {
       // Fresh output means the agent (or the user) acted: back to running —
       // but only when the output is substantial. Cursor blink and spinner
       // redraws are small bursts and must not fake "running".
@@ -471,6 +509,27 @@ export const useSessions = create<SessionsStore>((set, get) => {
   const withSaverLine = (cliId: CliId, savers: SessionSavers, line: string): string =>
     savers.caveman === "active" ? cavemanResumeLine(cliId, line) : line;
 
+  /**
+   * Resume line for one exact conversation, or null when the CLI or the
+   * override has no id support. `fallback` appends a fresh launch (with the
+   * same id where the CLI can pin it) for restores; a profile switch passes
+   * false so a failed resume never silently becomes a new conversation.
+   */
+  const byIdLine = (cliId: CliId, conversationId: string | null, fallback: boolean): string | null => {
+    if (!isConversationId(conversationId)) return null;
+    let resolved: ReturnType<typeof resolveCli>;
+    try {
+      resolved = resolveCli(CLI_REGISTRY[cliId]);
+    } catch {
+      return null;
+    }
+    if (!resolved.resumeById) return null;
+    const line = resolved.resumeById(conversationId).map(quoteArg).join(" ");
+    if (!fallback) return line;
+    const fresh = resolved.launchWithId ? resolved.launchWithId(conversationId) : resolved.launch;
+    return `${line} || ${fresh.map(quoteArg).join(" ")}`;
+  };
+
   /** Spawn the shell and write one raw command line over a prepared env. */
   const spawnPreparedShell = async (
     worktreePath: string,
@@ -525,6 +584,91 @@ export const useSessions = create<SessionsStore>((set, get) => {
     return "sessionId" in result ? { ...result, savers: ready.savers } : result;
   };
 
+  /**
+   * Steps 4–8 of the M8 switch for Claude Code / Codex, after the old PTY is
+   * stopped: copy the transcript into the target profile, resume it by id,
+   * and commit only when the CLI survives the settle window. Any failure
+   * relaunches the pane on the source profile with its conversation.
+   */
+  const carrySwitch = async (
+    session: AgentSession,
+    profile: ProfileRef,
+    conversationId: string,
+    ready: { env: Record<string, string>; savers: SessionSavers },
+    attach: (sessionId: string) => Promise<void>,
+    fromName: string,
+    toName: string,
+  ): Promise<string | null> => {
+    const { id, cliId } = session;
+    const def = CLI_REGISTRY[cliId];
+    const rollback = async (message: string): Promise<null> => {
+      const back = await prepareAgentShell(id, cliId, session.profile);
+      if ("env" in back) {
+        const line = byIdLine(cliId, conversationId, true) ?? resolveCli(def).resumeLine ?? "";
+        launchedAt.set(id, Date.now());
+        const result = await spawnPreparedShell(
+          session.worktreePath,
+          back.env,
+          withSaverLine(cliId, back.savers, line),
+          [],
+          attach,
+        );
+        if ("sessionId" in result) {
+          exitedSessions.delete(result.sessionId);
+          updateSession(id, {
+            profile: session.profile,
+            sessionId: result.sessionId,
+            error: null,
+            status: "running",
+            savers: back.savers,
+            conversationId,
+          });
+          scheduleIdle(id);
+        } else {
+          updateSession(id, { profile: session.profile, error: result.error, status: "idle" });
+        }
+      }
+      toast({ title: t("agents.switchRolledBack", { from: fromName, to: toName, message }), icon: "⚠" });
+      save();
+      return null;
+    };
+    let copied: boolean;
+    try {
+      copied = await copyConversation(cliId as "claude" | "codex", session.profile.slug, profile.slug, conversationId);
+    } catch (error) {
+      return rollback(errorMessage(error));
+    }
+    const resolved = resolveCli(def);
+    // Copied: resume exactly, and let the shell exit with the CLI's code if
+    // that fails so the settle window sees it. Nothing to copy (a Claude pane
+    // with no message yet): start fresh with the same pinned id.
+    const command =
+      copied || !resolved.launchWithId
+        ? `${withSaverLine(cliId, ready.savers, byIdLine(cliId, conversationId, false) ?? "")} || exit`
+        : withSaverLine(cliId, ready.savers, resolved.launchWithId(conversationId).map(quoteArg).join(" "));
+    let settled: Promise<boolean> = Promise.resolve(true);
+    launchedAt.set(id, Date.now());
+    const result = await spawnPreparedShell(session.worktreePath, ready.env, command, [], async (sessionId) => {
+      settled = settle(sessionId);
+      await attach(sessionId);
+    });
+    if (!("sessionId" in result)) return rollback(result.error);
+    exitedSessions.delete(result.sessionId);
+    if (!(await settled)) return rollback(t("agents.switchEarlyExit", { name: def.name }));
+    updateSession(id, {
+      profile,
+      sessionId: result.sessionId,
+      error: null,
+      status: "running",
+      limitHit: false,
+      savers: ready.savers,
+      conversationId,
+    });
+    scheduleIdle(id);
+    save();
+    return id;
+  };
+
   return {
     sessions: [],
     layoutMode: "grid",
@@ -570,18 +714,28 @@ export const useSessions = create<SessionsStore>((set, get) => {
       return !!sessionId && exitedSessions.has(sessionId);
     },
 
-    notifySessionEvent(sessionId, event) {
+    notifySessionEvent(sessionId, event, conversationId) {
       const session = get().sessions.find(
         (item) => item.id === sessionId || item.sessionId === sessionId,
       );
       if (!session) return;
+      // Hooks report the CLI's current conversation (it changes on /clear or
+      // /resume), so a later switch or restore resumes the right one.
+      if (isConversationId(conversationId) && conversationId !== session.conversationId) {
+        updateSession(session.id, { conversationId });
+        save();
+      }
+      if (event === "start") return;
       if (event === "done") {
-        const firstDone = session.status !== "done";
+        const firstDone = session.status !== "done" && !hookDoneReported.has(session.id);
         exitedSessions.add(sessionId);
         clearSessionWatch(session.id);
         updateSession(session.id, { status: "done" });
         save();
-        if (firstDone) reportDone(session);
+        if (firstDone) {
+          hookDoneReported.add(session.id);
+          reportDone(session);
+        }
         return;
       }
       hookActive.add(session.id);
@@ -634,10 +788,21 @@ export const useSessions = create<SessionsStore>((set, get) => {
       }
       let launch: string[];
       let commandOverride: string | undefined;
+      let conversationId: string | null = null;
       try {
         const resolved = resolveCli(def);
         launch = resolved.launch;
-        if (request.resume) commandOverride = resolved.resumeLine ?? resolved.resume.map(quoteArg).join(" ");
+        if (request.resume) {
+          conversationId = isConversationId(request.conversationId) ? request.conversationId : null;
+          commandOverride =
+            byIdLine(request.cliId, conversationId, true) ??
+            resolved.resumeLine ??
+            resolved.resume.map(quoteArg).join(" ");
+        } else if (resolved.launchWithId) {
+          // Pin the new conversation's id so a profile switch can carry it.
+          conversationId = crypto.randomUUID();
+          launch = resolved.launchWithId(conversationId);
+        }
       } catch (error) {
         toast({ title: errorMessage(error), icon: "⚠" });
         return null;
@@ -654,6 +819,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
         status: "idle",
         limitHit: false,
         savers: sessionSavers(request.cliId, useSettings.getState().agentTokenSaver, false),
+        conversationId,
       };
       const existing = findSession(session.id);
       set({
@@ -661,6 +827,8 @@ export const useSessions = create<SessionsStore>((set, get) => {
           ? get().sessions.map((item) => item.id === session.id ? session : item)
           : [...get().sessions, session],
       });
+      launchedAt.set(session.id, Date.now());
+      hookDoneReported.delete(session.id);
       const result = await spawnAgentShell(
         session.id,
         request.cliId,
@@ -766,15 +934,32 @@ export const useSessions = create<SessionsStore>((set, get) => {
                 toast({ title: t("agents.profileRequired", { name: def.name }), icon: "⚠" });
                 return;
               }
+              let conversationId = removed.conversationId;
+              if (removed.cliId === "codex") {
+                // The rollout may have changed (`/new`); prefer a fresh lookup.
+                const others = get().sessions.flatMap((item) => (item.conversationId ? [item.conversationId] : []));
+                conversationId =
+                  (await findCodexConversation(
+                    removed.profile.slug,
+                    removed.worktreePath,
+                    launchedAt.get(removed.id) ?? 0,
+                    others,
+                  ).catch(() => null)) ?? conversationId;
+              }
               let command: string;
               try {
                 const resolved = resolveCli(def);
-                command = resolved.resumeLine ?? resolved.resume.map(quoteArg).join(" ");
+                command =
+                  byIdLine(removed.cliId, conversationId, true) ??
+                  resolved.resumeLine ??
+                  resolved.resume.map(quoteArg).join(" ");
               } catch (error) {
                 toast({ title: errorMessage(error), icon: "⚠" });
                 return;
               }
-              const ready = await prepareAgentShell(removed.id, removed.cliId, removed.profile);
+              // Hooks report under the new record id, so prepare with it.
+              const newId = nextSessionId();
+              const ready = await prepareAgentShell(newId, removed.cliId, removed.profile);
               if (!("env" in ready)) {
                 if (!ready.loginRequired) {
                   toast({
@@ -784,6 +969,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
                 }
                 return;
               }
+              launchedAt.set(newId, Date.now());
               const result = await spawnPreparedShell(
                 removed.worktreePath,
                 ready.env,
@@ -802,11 +988,12 @@ export const useSessions = create<SessionsStore>((set, get) => {
                   ...get().sessions,
                   {
                     ...removed,
-                    id: nextSessionId(),
+                    id: newId,
                     sessionId: result.sessionId,
                     error: null,
                     sharedWithDock: false,
                     savers: ready.savers,
+                    conversationId,
                   },
                 ],
               });
@@ -853,6 +1040,29 @@ export const useSessions = create<SessionsStore>((set, get) => {
         });
         if (confirmed !== true) return null;
       }
+      // Claude Code and Codex carry the pane's exact conversation: find its
+      // id first, so a pane whose conversation is unknown refuses the switch
+      // while the old session keeps running.
+      let carryId: string | null = null;
+      if (session.cliId === "claude" || session.cliId === "codex") {
+        carryId = session.conversationId;
+        if (session.cliId === "codex") {
+          const others = get().sessions.flatMap((item) =>
+            item.id !== id && item.conversationId ? [item.conversationId] : [],
+          );
+          const found = await findCodexConversation(
+            session.profile.slug,
+            session.worktreePath,
+            launchedAt.get(id) ?? 0,
+            others,
+          ).catch(() => null);
+          carryId = found ?? carryId;
+        }
+        if (!isConversationId(carryId) || byIdLine(session.cliId, carryId, false) === null) {
+          toast({ title: t("agents.switchNoConversation", { name: def.name }), icon: "⚠" });
+          return null;
+        }
+      }
       // Prepare everything first: a resume error or a not-logged-in target
       // must refuse the switch while the old session keeps running. The raw
       // resume line (with its fresh-launch fallback) is preferred so a
@@ -888,18 +1098,22 @@ export const useSessions = create<SessionsStore>((set, get) => {
         }
       }
       clearSessionWatch(id);
+      // Switching replaces the mounted PTY just like an initial launch.
+      // Publish its ID so CliPane can attach before the command is sent.
+      const attach = async (sessionId: string) => {
+        const attachReady = waitForTerminalAttach(sessionId);
+        updateSession(id, { sessionId });
+        await attachReady;
+      };
+      if (carryId) {
+        return carrySwitch(session, profile, carryId, ready, attach, currentName, target.name);
+      }
       const result = await spawnPreparedShell(
         session.worktreePath,
         ready.env,
         withSaverLine(session.cliId, ready.savers, command),
         [],
-        async (sessionId) => {
-          // Switching replaces the mounted PTY just like an initial launch.
-          // Publish its ID so CliPane can attach before the resume command is sent.
-          const attachReady = waitForTerminalAttach(sessionId);
-          updateSession(id, { sessionId });
-          await attachReady;
-        },
+        attach,
       );
       if (!("sessionId" in result)) {
         updateSession(id, { error: result.error, status: "idle" });
@@ -985,6 +1199,14 @@ export const useSessions = create<SessionsStore>((set, get) => {
       if (exitSubscription === null) {
         const subscribed = onTerminalExit((event) => {
           exitedSessions.add(event.sessionId);
+          // A failed resume inside a switch's settle window is rolled back by
+          // the switch itself; it is not a "stopped" agent.
+          const waiter = exitWaiters.get(event.sessionId);
+          const failed = event.exitCode !== 0 || !!event.signal;
+          if (waiter) {
+            waiter(failed);
+            if (failed) return;
+          }
           const session = get().sessions.find((item) => item.sessionId === event.sessionId);
           if (session) {
             const firstDone = session.status !== "done";
@@ -1024,7 +1246,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
       }
       if (statusSubscription === null) {
         const subscribed = onAgentStatus((event) => {
-          get().notifySessionEvent(event.sessionId, event.event);
+          get().notifySessionEvent(event.sessionId, event.event, event.conversationId);
         });
         statusSubscription = subscribed;
         subscribed.catch(() => {
@@ -1055,6 +1277,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
       const unique = [...new Map(entries.map((item) => [item.id, item])).values()];
       const restored: AgentSession[] = unique.map((item) => ({
         ...item,
+        conversationId: isConversationId(item.conversationId) ? item.conversationId : null,
         sessionId: null,
         error: null,
         sharedWithDock: false,
@@ -1082,6 +1305,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
           worktreePath: session.worktreePath,
           sessionRecordId: session.id,
           resume: true,
+          conversationId: session.conversationId,
           slot: session.slot,
           waitForAttach,
         });

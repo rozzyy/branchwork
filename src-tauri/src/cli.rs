@@ -292,6 +292,13 @@ pub fn resolve_binary(binary: &str) -> Result<String, AppError> {
     lookup_binary(binary)
 }
 
+/// Path of an existing-or-not profile dir, validated but never created.
+pub fn profile_dir_for(cli_id: &str, slug: &str) -> Result<PathBuf, AppError> {
+    validate_profile_ref(cli_id, slug)?;
+    let home = system_home().ok_or_else(|| AppError::internal("no home directory"))?;
+    profile_dir(&home, cli_id, slug)
+}
+
 pub fn ensure_profile_dir(cli_id: &str, slug: &str) -> Result<String, AppError> {
     let home = system_home().ok_or_else(|| AppError::internal("no home directory"))?;
     let dir = ensure_in(&home, cli_id, slug)?;

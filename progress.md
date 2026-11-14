@@ -1383,3 +1383,12 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Verification: `pnpm test:e2e` 58 passed (1.2m). First `./init.sh` run had 4 Vitest timeouts under load (RepoScreen etc.); rerun `pnpm test` 82 files / 692 passed; `pnpm typecheck` clean; Clippy clean; Rust 316 passed / 3 ignored.
 - Noise only: Vite logs unhandled `getCurrentWindow` rejections from `src/theme/native.ts` in the browser e2e mock; tests unaffected. Not fixed (out of scope).
 - Remaining: M7 native manual checkpoints (S1–S4) need the user in the desktop app.
+
+## 2026-11-14: M8 Stage 1 — profile switch keeps the conversation (branch `m8-stage-1`)
+
+- Direction change (user): AI assists cancelled; handover optimization dropped; replaced by Orca-style "switch profile, keep the conversation". Spec `docs/superpowers/specs/2026-11-14-agent-profile-switch-session-design.md`, plan `docs/superpowers/plans/2026-11-14-m8-profile-switch-session.md`.
+- Spikes passed cross-account: Codex rollout copied `masmastobat` → `ulahduri` resumed by id; Claude transcript copied `personal` → `devhero3` resumed by id (answered the stored code word). Spike files removed.
+- M8-01..04 implemented: `conversation.rs` copy/discovery IPC; hook payload camelCase fix (existing bug: hook events never matched panes) + `SessionStart`/`start` event + sidecar reads `session_id`; `conversationId` on sessions (Claude `--session-id`, persisted, restore/undo by id); switch flow copy → resume by id (`|| exit`) → 5 s settle → rollback. Side effect handled: hook `done` now returns to running on output (was stuck), and its toast fires once per record.
+- Extra (user request mid-stage): Branchwork logo + name above the sidebar group/project picker (`.side-brand`).
+- Verification: `./init.sh` exit 0 — Vitest 82 files / 703 tests; Rust 329 passed / 3 ignored; TypeScript and Clippy clean. Sidebar tests 40/40 after the brand change.
+- Pending: native checks `docs/testing/m8-manual-e2e.md`; 🛑 checkpoint M8.1. Queued by user: more-than-two split panes and multi-window (spec §12 deferred items) — design proposed, not started.

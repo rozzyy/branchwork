@@ -22,6 +22,10 @@ export interface CliDef {
    * profile has no conversation yet, and the pane must not end at a shell.
    */
   resumeLine: string | null;
+  /** Launch argv that pins a new conversation's id, or null when unsupported. */
+  launchWithId: ((id: string) => string[]) | null;
+  /** Resume argv for one exact conversation, or null when unsupported. */
+  resumeById: ((id: string) => string[]) | null;
   /** Interactive login command, or null when the CLI has none. */
   loginCmd: string | null;
   installGuidance: MsgKey;
@@ -99,6 +103,9 @@ const CLAUDE: CliDef = {
   // Raw resume line with a fresh-launch fallback: `--continue` exits
   // non-zero on a profile with no conversation, and the TUI must not die.
   resumeLine: "claude --continue || claude",
+  // Verified in `claude --help`: `--session-id <uuid>`, `--resume <id>`.
+  launchWithId: (id) => ["claude", "--session-id", id],
+  resumeById: (id) => ["claude", "--resume", id],
   // Sign in through the browser first, then complete Claude's first-run
   // onboarding in the same profile-scoped terminal.
   loginCmd: "claude auth login && claude",
@@ -122,6 +129,9 @@ const CODEX: CliDef = {
   launch: ["codex"],
   resume: ["codex", "resume", "--last"],
   resumeLine: "codex resume --last || codex",
+  // No flag pins a new id; `codex resume <SESSION_ID>` is verified.
+  launchWithId: null,
+  resumeById: (id) => ["codex", "resume", id],
   loginCmd: "codex login",
   installGuidance: "agents.installCodex",
   profileEnv: (profileDir) => ({ CODEX_HOME: profileDir }),
@@ -142,6 +152,8 @@ const OPENCODE: CliDef = {
   launch: ["opencode"],
   resume: ["opencode", "--continue"],
   resumeLine: "opencode --continue || opencode",
+  launchWithId: null,
+  resumeById: null,
   // Shell login verified: `opencode auth login` (interactive provider picker
   // runs in the login PTY; `-p/--provider -m/--method` skip it). No
   // `--standalone` flag in the installed 1.19.3 (OpenCode 2 only).
@@ -163,6 +175,8 @@ const GEMINI: CliDef = {
   launch: ["gemini"],
   resume: ["gemini"],
   resumeLine: null,
+  launchWithId: null,
+  resumeById: null,
   // No shell login argv (installed CLI exposes none): auth completes inside
   // the interactive TUI on first run, so addProfile lands the pane in `gemini`.
   loginCmd: null,
@@ -182,6 +196,8 @@ const COPILOT: CliDef = {
   launch: ["copilot"],
   resume: ["copilot", "--continue"],
   resumeLine: "copilot --continue || copilot",
+  launchWithId: null,
+  resumeById: null,
   loginCmd: "copilot login",
   installGuidance: "agents.installCopilot",
   profileEnv: (profileDir) => ({ HOME: `${profileDir}/home` }),
@@ -200,6 +216,8 @@ const MUSE: CliDef = {
   launch: ["muse"],
   resume: ["muse", "resume", "--last"],
   resumeLine: "muse resume --last || muse",
+  launchWithId: null,
+  resumeById: null,
   loginCmd: "muse login",
   installGuidance: "agents.installMuse",
   // Orca's method: no HOME sandboxing for muse (it has no vendor config-dir
@@ -220,6 +238,8 @@ const CUSTOM: CliDef = {
   launch: [],
   resume: [],
   resumeLine: null,
+  launchWithId: null,
+  resumeById: null,
   loginCmd: null,
   installGuidance: "agents.installCustom",
   profileEnv: () => ({}),
@@ -256,6 +276,9 @@ export interface ResolvedCli {
   resume: string[];
   /** Raw resume line, or null when the resume argv must be quoted instead. */
   resumeLine: string | null;
+  /** Id-aware argv builders; null when unsupported or overridden. */
+  launchWithId: ((id: string) => string[]) | null;
+  resumeById: ((id: string) => string[]) | null;
   loginCmd: string | null;
   guidance: string;
   /** Profile environment for `profileDir`, with overrides merged in. */
@@ -277,6 +300,9 @@ export function resolveCli(def: CliDef, overrides?: CliOverrides): ResolvedCli {
     resume: [...resume],
     // A resume override has no raw line: callers quote the argv instead.
     resumeLine: overrides?.resume ? null : def.resumeLine,
+    // An overridden command may not accept the vendor's id flags.
+    launchWithId: overrides?.launch ? null : def.launchWithId,
+    resumeById: overrides?.resume ? null : def.resumeById,
     loginCmd: def.loginCmd,
     guidance: overrides?.installGuidance ?? t(def.installGuidance),
     envFor: (profileDir) => ({ ...baseEnv(profileDir), ...extraEnv }),

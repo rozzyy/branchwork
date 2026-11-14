@@ -71,6 +71,14 @@ it("context menu offers split directions", async () => {
   expect(useStage.getState().panes).toEqual(["agents", "home"]);
 });
 
+it("shows the app logo and name above the project and group picker", () => {
+  const { container } = render(<Sidebar />);
+  const brand = container.querySelector(".side-brand");
+  expect(brand).toHaveTextContent("Branchwork");
+  expect(brand?.querySelector(".app-mark")).toBeInTheDocument();
+  expect(brand?.nextElementSibling).toHaveClass("project-picker-trigger");
+});
+
 it("keeps Conflicts out of the screen navigation", async () => {
   render(<Sidebar />);
   expect(screen.queryByRole("button", { name: "Conflicts" })).not.toBeInTheDocument();
@@ -90,6 +98,7 @@ it("badges the Agents nav while a session waits", () => {
         sharedWithDock: false,
         status: "waiting",
         limitHit: false,
+        conversationId: null,
         savers: { rtk: "unsupported", caveman: "unsupported" },
       },
     ],
