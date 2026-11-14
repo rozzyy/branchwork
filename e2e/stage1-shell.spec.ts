@@ -1,94 +1,56 @@
 import { test, expect } from "@playwright/test";
 
-const NAV_ITEMS = [
-  "Launchpad",
-  "Graph",
-  "Files & editor",
-  "Changes",
-  "Agents",
-  "Terminal",
-  "Repository",
-  "Inbox",
-];
-const TOOLS_ITEMS = [
-  "Resolve conflicts",
-  "Interactive rebase",
-  "Blame & history",
-  "Compare worktrees",
-];
-const SETTINGS_ITEM = "Settings";
-const PLACEHOLDER_BODY = "This screen arrives in a later milestone.";
+const NAV_ITEMS = ["Home", "Changes", "History", "Files", "Agents", "Terminal", "GitHub"];
 
-test.describe("M0 Stage 1 shell", () => {
-  test("title bar shows app name and search pill", async ({ page }) => {
+test.describe("M7 shell", () => {
+  test("title bar shows workspace location, search, theme, and shortcuts", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".app-name")).toHaveText("Branchwork");
-    await expect(page.getByRole("button", { name: /Search, jump, or ask Claude…/ })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Workspace location" })).toBeVisible();
+    await expect(page.getByText("Search or ask… (end with ?)", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Toggle dark / light" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show keyboard shortcuts" })).toBeVisible();
   });
 
-  test("sidebar lists every nav, tools, and settings item", async ({ page }) => {
+  test("sidebar lists the seven primary screens in order and keeps Settings in the footer", async ({ page }) => {
     await page.goto("/");
-    for (const label of [...NAV_ITEMS, ...TOOLS_ITEMS, SETTINGS_ITEM]) {
-      await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
+    const sidebar = page.locator(".sidebar");
+    const screenButtons = sidebar.locator(".side-scroll .nav");
+    await expect(screenButtons).toHaveCount(NAV_ITEMS.length);
+    for (const [index, label] of NAV_ITEMS.entries()) {
+      await expect(screenButtons.nth(index)).toHaveAccessibleName(label);
     }
+    await expect(sidebar.locator(".side-foot").getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: "Conflicts", exact: true })).toHaveCount(0);
   });
 
-  test("clicking each nav item opens its screen and marks it active", async ({ page }) => {
+  test("each primary screen opens and becomes active", async ({ page }) => {
     await page.goto("/");
-    for (const label of [...NAV_ITEMS, ...TOOLS_ITEMS]) {
+    for (const label of NAV_ITEMS) {
       const navButton = page.getByRole("button", { name: label, exact: true });
       await navButton.click();
-      if (label === "Graph") {
-        await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
-      } else if (label === "Changes") {
-        // Changes now renders a real (empty) state instead of the generic placeholder (M2 Stage 1).
-        await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
-        await expect(page.getByText("Open a worktree to see its changes.")).toBeVisible();
-      } else if (label === "Files & editor") {
-        // Files & editor now renders a real (empty) state instead of the generic placeholder (M2 Stage 3).
-        await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
-        await expect(page.getByText("Open a worktree to see its files.")).toBeVisible();
-      } else if (label === "Terminal") {
-        // Terminal now renders a real screen instead of the generic placeholder (M3 Stage 2).
-        await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
-        await expect(page.getByText("No terminal tabs. Open one with ＋.")).toBeVisible();
-      } else if (label === "Agents") {
-        // Agents now renders the real Sessions screen (M3 Stage 3).
-        await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
-        await expect(page.getByText("No agent sessions. Start one with ＋.")).toBeVisible();
-      } else if (label === "Blame & history") {
-        await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
-        await expect(page.getByRole("heading", { level: 2, name: "No file selected" })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Pick a file" })).toBeVisible();
-      } else if (label === "Repository") {
-        await expect(page.getByText("The active worktree is not on a GitHub repo.")).toBeVisible();
-      } else {
-        await expect(page.getByRole("heading", { level: 2, name: label, exact: true })).toBeVisible();
-        await expect(page.getByText(PLACEHOLDER_BODY)).toBeVisible();
-      }
       await expect(navButton).toHaveClass(/\bon\b/);
+      const title = label === "History" ? "Graph" : label;
+      await expect(page.getByRole("heading", { level: 1, name: title, exact: false })).toBeVisible();
     }
 
-    // Settings is now a real screen (Stage 2), not a placeholder.
-    const settingsButton = page.getByRole("button", { name: SETTINGS_ITEM, exact: true });
+    const settingsButton = page.getByRole("button", { name: "Settings", exact: true });
     await settingsButton.click();
-    await expect(page.getByRole("heading", { name: "Appearance" })).toBeVisible();
     await expect(settingsButton).toHaveClass(/\bon\b/);
+    await expect(page.getByRole("heading", { name: "Appearance" })).toBeVisible();
   });
 
   test("all shell text is English", async ({ page }) => {
     await page.goto("/");
     const bodyText = await page.locator("body").innerText();
-    // Spot-check: no CJK/Cyrillic/Arabic script leaking into the shell copy.
     expect(bodyText).not.toMatch(/[Ѐ-ӿ؀-ۿ぀-ヿ一-鿿]/);
   });
 });
 
-test("perf: time to first render of the Launchpad placeholder", async ({ page }) => {
+test("perf: time to first render of the Home screen", async ({ page }) => {
   const start = Date.now();
   await page.goto("/");
-  await page.getByRole("heading", { level: 2, name: "Launchpad", exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("heading", { level: 1, name: "Home", exact: true }).waitFor({ state: "visible" });
   const elapsed = Date.now() - start;
-  console.log(`[perf] time to first Launchpad placeholder render: ${elapsed}ms`);
+  console.log(`[perf] time to first Home screen render: ${elapsed}ms`);
   expect(elapsed).toBeLessThan(5000);
 });

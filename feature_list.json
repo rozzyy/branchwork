@@ -1488,7 +1488,7 @@
       "description": "docs/superpowers/plans/2026-11-12-m6-advanced-git.md#stage-5--compare-worktrees",
       "dependencies": ["m6-task-13-compare-ipc"],
       "status": "done",
-      "evidence": "Implemented accessible Compare dialog with A/B pickers, tracked-uncommitted toggle, bounded file summary, shared diff renderer and Copy patch; wired Graph context menu and Race result Compare while preserving Keep and confirmed Discard flows. Focused CompareDialog, Graph, Agents, and IPC suites passed (54 tests); final ./init.sh passed (82 files / 692 tests). Manual native M6-S5 checkpoint remains pending."
+      "evidence": "Implemented accessible Compare dialog with A/B pickers, tracked-uncommitted toggle, bounded file summary, shared diff renderer and Copy patch; wired Graph context menu and Race result Compare while preserving Keep and confirmed Discard flows. Focused CompareDialog, Graph, Agents, and IPC suites passed (54 tests); final ./init.sh passed (82 files / 692 tests). Native M6-S5 checkpoint passed 2026-11-14: S5-01 counts matched git diff; S5-02 staged/unstaged changes in both scratch worktrees remained unchanged (HEAD, index tree, and README hash); S5-03 untracked fixture was excluded; S5-04 copied patch passed git apply --check/apply in a scratch checkout; S5-05 Claude/Codex Race Compare, Keep, and confirmed Discard behaved as specified. Kept Claude result worktree/branch remains for review."
     },
     {
       "id": "m7-followup-01-auto-prune-stale-worktrees",
@@ -1497,7 +1497,7 @@
       "description": "User-reported stale temporary worktree path prevents repositories from loading worktrees",
       "dependencies": ["m6-task-14-compare-screen"],
       "status": "done",
-      "evidence": "Git worktree prune now runs when opening/registering a repository and before worktree list/summary reads. Regression tests cover add and refresh paths; focused Rust tests pass 2/2; ./init.sh passes (Vitest 82 files / 692 tests; Rust 316 passed / 3 ignored; TypeScript and Clippy clean)."
+      "evidence": "Git worktree prune now runs when opening/registering a repository and before worktree list/summary reads. Regression tests cover add and refresh paths; focused Rust tests pass 2/2; ./init.sh passes (Vitest 82 files / 692 tests; Rust 316 passed / 3 ignored; TypeScript and Clippy clean). Native check passed 2026-11-14: created a disposable stale registration, opened the app worktree picker, confirmed the stale path was absent, and verified `git worktree list` pruned it while the three live worktrees remained."
     }
   ]
 }

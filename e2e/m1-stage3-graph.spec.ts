@@ -112,7 +112,7 @@ test("browses graph history and inspects the working copy and a commit", async (
 
   await page.goto("/");
   await expect(page.getByRole("button", { name: "main, Clean" })).toBeVisible();
-  await page.getByRole("button", { name: "Graph" }).click();
+  await page.getByRole("button", { name: "History" }).click();
 
   await expect(page.getByRole("heading", { name: "Working copy" })).toBeVisible();
   await expect(page.getByText("staged.ts")).toBeVisible();
@@ -121,7 +121,7 @@ test("browses graph history and inspects the working copy and a commit", async (
   await expect(page.getByRole("tab", { name: "edited.ts (Unstaged diff)" })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".graph-inspector")).toContainText("edited.ts");
   await expect(page.locator(".graph-diff-editor")).toContainText("new content");
-  await page.getByRole("tab", { name: "Graph" }).click();
+  await page.getByRole("tablist", { name: "Graph editor tabs" }).getByRole("tab", { name: "Graph" }).click();
   await expect(page.getByRole("heading", { name: "Working copy" })).toBeVisible();
 
   const commit = page.getByRole("option", { name: /Initial graph commit/ });

@@ -127,9 +127,9 @@ test("opens Blame and views its attributed commit in Graph", async ({ page }) =>
 
   await page.goto("/");
   await expect(page.getByRole("button", { name: "main, Clean" })).toBeVisible();
-  await page.getByRole("button", { name: "Files & editor" }).click();
+  await page.getByRole("button", { name: "Files" }).click();
   await page.locator(".files-tree-node", { hasText: "main.ts" }).click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Blame", exact: true }).click();
+  await page.getByRole("menuitem", { name: "File history", exact: true }).click();
   await expect(page.getByText("const value = 1;")).toBeVisible();
   await expect(page.getByText("Ada Lovelace").first()).toBeVisible();
 

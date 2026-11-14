@@ -44,16 +44,15 @@ test.describe("M0 Stage 2 settings", () => {
     await expect.poll(() => accentVar(page)).toBe("60");
   });
 
-  test("reduce transparency toggles data-solid", async ({ page }) => {
+  test("Text size Large toggles the global type scale", async ({ page }) => {
     await openSettings(page);
-    const toggle = page.getByRole("switch", { name: "Reduce transparency" });
-    await expect(toggle).toHaveAttribute("aria-checked", "false");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-checked", "true");
-    await expect(html(page)).toHaveAttribute("data-solid", "");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-checked", "false");
-    await expect(html(page)).not.toHaveAttribute("data-solid", /.*/);
+    const textSize = page.getByRole("radiogroup", { name: "Text size" });
+    const large = textSize.getByRole("radio", { name: "Large", exact: true });
+    await expect(html(page)).not.toHaveAttribute("data-text");
+    await large.click();
+    await expect(html(page)).toHaveAttribute("data-text", "large");
+    await textSize.getByRole("radio", { name: "Default", exact: true }).click();
+    await expect(html(page)).not.toHaveAttribute("data-text");
   });
 
   test("density Compact sets data-density", async ({ page }) => {
@@ -66,7 +65,7 @@ test.describe("M0 Stage 2 settings", () => {
     await openSettings(page);
     await page.getByRole("radio", { name: "Light", exact: true }).click();
     await page.getByRole("button", { name: "Accent hue 155" }).click();
-    await page.getByRole("switch", { name: "Reduce transparency" }).click();
+    await page.getByRole("radiogroup", { name: "Text size" }).getByRole("radio", { name: "Large", exact: true }).click();
     await page.getByRole("radio", { name: "Compact", exact: true }).click();
 
     await expect(html(page)).toHaveAttribute("data-theme", "light");
@@ -75,14 +74,14 @@ test.describe("M0 Stage 2 settings", () => {
     // Attributes are applied on html as soon as settings load, before any navigation.
     await expect(html(page)).toHaveAttribute("data-theme", "light");
     await expect(html(page)).toHaveAttribute("data-density", "compact");
-    await expect(html(page)).toHaveAttribute("data-solid", "");
+    await expect(html(page)).toHaveAttribute("data-text", "large");
     await expect.poll(() => accentVar(page)).toBe("155");
 
     // The settings panel itself reflects the restored state too.
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(page.getByRole("radio", { name: "Light", exact: true })).toHaveAttribute("aria-checked", "true");
     await expect(page.getByRole("radio", { name: "Compact", exact: true })).toHaveAttribute("aria-checked", "true");
-    await expect(page.getByRole("switch", { name: "Reduce transparency" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByRole("radiogroup", { name: "Text size" }).getByRole("radio", { name: "Large", exact: true })).toHaveAttribute("aria-checked", "true");
   });
 
   test("Show toast displays a toast, and its Undo shows Undone", async ({ page }) => {

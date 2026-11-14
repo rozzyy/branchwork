@@ -49,7 +49,7 @@ test.describe("M0 Stage 3 split view", () => {
 
     await expect(s).toHaveClass(/split-h/);
     await expect(page.getByRole("separator")).toBeVisible();
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 
@@ -57,10 +57,10 @@ test.describe("M0 Stage 3 split view", () => {
     await page.goto("/");
     const s = stage(page);
     const point = await pointAt(s, 0.5, 0.95);
-    await dragSidebarOnto(page, "Graph", s, point);
+    await dragSidebarOnto(page, "History", s, point);
 
     await expect(s).toHaveClass(/split-v/);
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Graph")).toBeVisible();
   });
 
@@ -69,7 +69,7 @@ test.describe("M0 Stage 3 split view", () => {
     await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
 
     await expect(stage(page)).toHaveClass(/split-h/);
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 
@@ -78,7 +78,7 @@ test.describe("M0 Stage 3 split view", () => {
     await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Alt"] });
 
     await expect(stage(page)).toHaveClass(/split-v/);
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 
@@ -92,32 +92,31 @@ test.describe("M0 Stage 3 split view", () => {
 
     await expect(stage(page)).toHaveClass(/split-h/);
     await expect(paneHeading(page, 0, "Changes")).toBeVisible();
-    await expect(paneHeading(page, 1, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 1, "Home")).toBeVisible();
   });
 
-  test("⊞ Split with… menu opens a right split when a screen row is clicked", async ({ page }) => {
+  test("Open beside menu opens a right split when a screen is selected", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Split with…", exact: true }).click();
+    await page.getByRole("button", { name: "Open beside", exact: true }).click();
 
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
-    const agentsRow = menu.getByRole("menuitem").filter({ hasText: "Agents" });
-    await agentsRow.getByText("Agents", { exact: true }).click();
+    await menu.getByRole("menuitem", { name: /^Agents/ }).click();
 
     await expect(stage(page)).toHaveClass(/split-h/);
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Agents")).toBeVisible();
   });
 
   test("pane controls: swap, toggle orientation, and close", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
 
     await pane(page, 0).getByRole("button", { name: "Swap panes", exact: true }).click();
     await expect(paneHeading(page, 0, "Changes")).toBeVisible();
-    await expect(paneHeading(page, 1, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 1, "Home")).toBeVisible();
 
     await expect(stage(page)).toHaveClass(/split-h/);
     await pane(page, 0).getByRole("button", { name: "Toggle orientation", exact: true }).click();
@@ -133,12 +132,12 @@ test.describe("M0 Stage 3 split view", () => {
     await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
     await expect(pane(page, 1)).toHaveClass(/focus/);
 
-    await page.getByRole("button", { name: "Launchpad", exact: true }).click();
+    await page.getByRole("button", { name: "Home", exact: true }).click();
 
     await expect(page.locator("[data-pane]")).toHaveCount(2);
     await expect(pane(page, 0)).toHaveClass(/focus/);
     await expect(pane(page, 1)).not.toHaveClass(/focus/);
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 
@@ -189,7 +188,7 @@ test.describe("M0 Stage 3 split view", () => {
     await page.reload();
 
     await expect(stage(page)).toHaveClass(/split-h/);
-    await expect(paneHeading(page, 0, "Launchpad")).toBeVisible();
+    await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 });

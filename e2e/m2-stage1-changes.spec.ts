@@ -213,7 +213,7 @@ async function seedChangesBackend(
 
 async function openChangesScreen(page: Page) {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "main, 2 changed" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "main, 2 changes" })).toBeVisible();
   await page.getByRole("button", { name: "Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Changes 1", exact: true })).toBeVisible();
 }

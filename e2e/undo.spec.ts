@@ -121,7 +121,7 @@ function invokeCalls(page: Page, command: string): Promise<InvokeCall[]> {
 test("commit then Undo Last Commit restores the staged changes", async ({ page }) => {
   await seedUndoBackend(page);
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "main, 1 changed" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "main, 1 changes" })).toBeVisible();
   await page.getByRole("button", { name: "Changes", exact: true }).click();
   await page.locator(".changes-commit-box textarea").fill("undoable commit");
   await page.getByRole("button", { name: "✓ Commit", exact: true }).click();
@@ -137,7 +137,7 @@ test("commit then Undo Last Commit restores the staged changes", async ({ page }
 test("delete then Undo restores the file", async ({ page }) => {
   await seedUndoBackend(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Files & editor" }).click();
+  await page.getByRole("button", { name: "Files" }).click();
   const fileRow = page.locator(".files-tree-node", { hasText: DELETE_PATH });
   await expect(fileRow).toBeVisible();
   await fileRow.click({ button: "right" });

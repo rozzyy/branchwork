@@ -140,7 +140,7 @@ test.describe("M1 Stage 2 worktree sidebar", () => {
 
   test("shows a created, auto-pinned worktree and restores selection and pin after reload", async ({ page }) => {
     await gotoWorktreeApp(page);
-    const created = page.getByRole("button", { name: "feature/sidebar, 2 changed" });
+    const created = page.getByRole("button", { name: "feature/sidebar, 2 changes" });
     await expect(created).toBeVisible();
     await page.getByRole("button", { name: "Browse worktrees" }).click();
 
@@ -151,7 +151,7 @@ test.describe("M1 Stage 2 worktree sidebar", () => {
     await expect(created).toHaveAttribute("aria-current", "true");
 
     await page.reload();
-    const selected = page.getByRole("button", { name: "feature/sidebar, 2 changed" });
+    const selected = page.getByRole("button", { name: "feature/sidebar, 2 changes" });
     await expect(selected).toHaveAttribute("aria-current", "true");
     await page.getByRole("button", { name: "Browse worktrees" }).click();
     await expect(

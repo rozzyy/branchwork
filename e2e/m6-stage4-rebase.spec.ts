@@ -111,7 +111,7 @@ test("rebases from a Graph commit: reorder, change an action, start, then the in
   await seedRebaseBackend(page);
   await page.goto("/");
   await expect(page.getByRole("button", { name: "main, Clean" })).toBeVisible();
-  await page.getByRole("button", { name: "Graph" }).click();
+  await page.getByRole("button", { name: "History" }).click();
 
   await page.getByRole("option", { name: /Base commit/ }).click({ button: "right" });
   await page.getByRole("menuitem", { name: /Rebase from here/ }).click();

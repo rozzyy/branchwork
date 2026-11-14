@@ -161,7 +161,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await expect(page.getByRole("button", { name: "main, Clean" })).toBeVisible();
 
     // Open the Files & editor screen and the fixture file.
-    await page.getByRole("button", { name: "Files & editor" }).click();
+    await page.getByRole("button", { name: "Files" }).click();
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await expect(fileRow).toBeVisible();
     await fileRow.click();
@@ -177,14 +177,14 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await page.keyboard.press("Meta+s");
 
     // The sidebar's worktree badge reflects the post-save dirty count (via git:changed).
-    await expect(page.getByRole("button", { name: "main, 1 changed" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "main, 1 changes" })).toBeVisible();
   });
 
   test("Diff vs HEAD toggle shows the diff for an edited file", async ({ page }) => {
     await seedEditorBackend(page);
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Files & editor" }).click();
+    await page.getByRole("button", { name: "Files" }).click();
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await fileRow.click();
 
@@ -194,7 +194,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await page.keyboard.press("Meta+End");
     await page.keyboard.type("edited");
     await page.keyboard.press("Meta+s");
-    await expect(page.getByRole("button", { name: "main, 1 changed" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "main, 1 changes" })).toBeVisible();
 
     // Flip to Diff vs HEAD — the editor pane swaps for the DiffRenderer showing the file's hunk.
     await page.getByRole("radio", { name: "Diff vs HEAD" }).click();
@@ -207,7 +207,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await seedEditorBackend(page);
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Files & editor" }).click();
+    await page.getByRole("button", { name: "Files" }).click();
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await expect(fileRow).toBeVisible();
     await fileRow.click({ button: "right" });
@@ -233,7 +233,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await seedEditorBackend(page);
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Files & editor" }).click();
+    await page.getByRole("button", { name: "Files" }).click();
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await expect(fileRow).toBeVisible();
     await fileRow.click({ button: "right" });
