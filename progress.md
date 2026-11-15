@@ -2,6 +2,44 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-15: Remove the stage-tab rename button
+
+- Removed the visible rename icon/button as requested; tabs rename by double-click, with F2 retained as a keyboard alternative. The close and new-tab controls remain.
+- Updated the design spec, implementation plan, task note and M12 manual checklist; adjusted the UI test to exercise F2 and double-click.
+- Verification: `pnpm exec vitest run src/stage/Stage.test.tsx` passed (5/5); `pnpm typecheck`, `git diff --check`, and `python3 -m json.tool feature_list.json` passed. No persistence/security/performance path changed; only one control was removed and the rename entry gesture updated.
+- Next: continue at the existing M12.1 manual checkpoint.
+
+## 2026-11-15: M12 Stage tabs released
+
+- User approved the manual checkpoint and ordered commit, push, merge, and version tag.
+- Stage commit `a1efc97` (`feat: add stage tabs`) was pushed on `m12-stage-1` and fast-forwarded to `main`; the local stage branch was deleted per workflow.
+- Release version bumped to `0.12.0` in package.json, Cargo.toml, Cargo.lock, and tauri.conf.json. Added annotated tag `v0.12.0` (`M12: Stage tabs`).
+- Verification before commit: focused M12 suite 35/35, `pnpm typecheck`, `git diff --check`, and feature JSON validation passed. Full `./init.sh` limitation is documented above: 10 Rust FSEvent startup failures.
+- Next: wait for the next task; existing M8–M11 handover manual-spec edits remain outside these commits.
+
+## 2026-11-15: Place close control inside each tab card
+
+- Moved the close control from the tab-strip toolbar into each individual tab card. Closing the selected tab still activates its previous neighbor; the final tab remains non-closable.
+- Updated the M12 spec and manual checklist to match.
+- Verification: `pnpm exec vitest run src/stage/Stage.test.tsx` passed (5/5); `pnpm typecheck` and `git diff --check` passed.
+- Next: continue at M12.1 manual checkpoint.
+
+## 2026-11-15: M12 stage tabs implementation — manual checkpoint
+
+- Implemented stage-level tabs on `m12-stage-1`. Each tab saves an independent split tree and pane focus. Added up to 8 tabs, sidebar “Open in new tab”, rename via double-click or control, Enter/blur commit, Escape cancel, input validation, roving keyboard navigation, close behavior, and focus restoration after rename.
+- Migrated stage persistence to v3 while retaining v2 and legacy migration; each worktree stores its own workspace under the existing window-scoped `stage` setting. Loaded workspaces validate tab IDs, names, counts, active selection and embedded stage layouts. Only the selected tab’s panes mount.
+- Updated the prototype, design spec, plan, feature list, handoff and `docs/testing/m12-manual-e2e.md`. Performance estimate: workspace updates O(T), T ≤ 8; selected stage render O(P), P ≤ 4; saved per-worktree layouts remain capped at 200. No new IPC/security boundary.
+- **Reviews:** spec PASS; code PASS after fixes for tab keyboard navigation, limit feedback and focus return; E2E checklist review ready.
+- **Verification:** focused M12 suite 35/35 passed; final `pnpm typecheck`, `git diff --check`, and feature JSON validation passed. `./init.sh`: Vitest 85 files / 733 tests passed; Clippy passed; Rust 327 passed / 10 failed / 3 ignored because macOS FSEvent streams could not start. `RUST_TEST_THREADS=1 ./init.sh` reproduced the same 10 FSEvent failures. The baseline before edits passed fully (85 files / 724 tests; Rust 337 / 3 ignored).
+- **Next:** 🛑 Manual checkpoint M12.1 — user runs `docs/testing/m12-manual-e2e.md`. Do not commit, push, or start another stage before approval and explicit commit order.
+
+## 2026-11-15: Prototype top-level stage tabs
+
+- Updated `docs/design/prototype.html` with top-level stage tabs. Each tab retains its own pane list, focus, split direction, and ratio; users can switch tabs without losing the existing split, open a sidebar view in a new tab, add a blank Launchpad tab, and close tabs (up to 8).
+- Kept this as prototype-only design work; no app implementation or feature-list task was started. Existing unrelated working-tree changes from the handover were preserved.
+- **Verification:** `git diff --check -- docs/design/prototype.html` passed. No app tests or visual browser check were run.
+- **Next:** review the prototype direction before turning it into a spec and implementation task.
+
 ## 2026-11-14: Automatically recover stale linked worktrees
 
 - Release closeout: stage commit `43a9a80` and release commit `58deca6` are on `main`; `v0.6.0` is an annotated tag at `58deca6`. Both `origin/main` and `origin/v0.6.0` were pushed and verified. Local `m7-stage-1` was deleted after merge. Working tree was clean at verification. M6-S5 and other native desktop checklists remain pending.
@@ -1419,3 +1457,9 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - M11 (placement as a stage screen is my default; user did not choose): spec `docs/superpowers/specs/2026-11-14-m11-browser-design.md`, plan `docs/superpowers/plans/2026-11-14-m11-browser.md`. Native child webview per tab (Tauri `unstable`), React chrome (tabs, address bar, back/forward/reload), rAF-followed bounds, hidden under app overlays, window-scoped tabs. Security: capability now lists webviews (`main`, `ws-*`) so `browser-*` webviews get none; navigation guard allows only http/https/about for browser webviews; http(s)-only parsing in TS and Rust.
 - Verification: `./init.sh` exit 0 — Vitest 85 files / 724 tests; Rust 337 passed / 3 ignored; Clippy clean. Playwright 60/60. Native page rendering, positioning and isolation not exercised (no desktop automation).
 - M11 review (`.agent/reviews/m11-stage-1-review.md`) fixed: own-origin refusal (dev IPC escape), per-window state events, permission denial, stale webview cleanup, title throttle, bounds clamp. Default search engine Google (user). Committed + pushed and released as v0.11.0 on user order (native checks M8–M11 still pending).
+
+## 2026-11-14: Session close — v0.11.0 released
+
+- App icon replaced with the Branchwork mark (`src-tauri/icons/source/app-icon.png`, generated with `tauri icon`); `v0.11.0` re-pointed to `f97676a` (it was never pushed before) and pushed with `main`.
+- The user reported the manual desktop checks for M8–M11 as done. No open blockers.
+- Follow-ups (not started): app ACL manifest as defense in depth for browser tabs; optional search-engine setting / "Open in Chrome"; Codex conversation discovery is per window (two windows with Codex panes in one worktree+profile could pick the same rollout); `inboxState` is last-writer-wins across windows.
