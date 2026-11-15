@@ -137,8 +137,8 @@
   .pane-tool:has(.history-tabs) > .history-tabs { justify-content: flex-start; }
   .pane-tool:has(.history-tabs) > .pane-ctl { padding-left: 0; border-left: 0; }
 }
-.stage-tabs { display: flex; flex: 0 0 42px; align-items: stretch; gap: 2px; min-width: 0; margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border); background: var(--surface); }
-.stage-tablist { display: flex; flex: 0 0 auto; align-items: stretch; gap: 2px; min-width: 0; margin: 0; padding: 0; }
+.stage-tabs { display: flex; flex: 0 0 42px; align-items: stretch; column-gap: 8px; min-width: 0; margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border); background: var(--surface); }
+.stage-tablist { display: flex; flex: 0 0 auto; align-items: stretch; gap: 2px; width: max-content; min-width: max-content; margin: 0; padding: 0; }
 .stage-tab-card { display: flex; flex: 0 0 172px; align-items: center; gap: 0; min-width: 0; height: 100%; margin: 0; padding: 0 10px; border: 1px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0; color: var(--fg2); }
 .stage-tab-card.active { border-color: var(--border); border-bottom-color: transparent; background: var(--surface); color: var(--fg); }
 .stage-tab { display: block; flex: 1 1 auto; min-width: 0; max-width: none; height: 28px; margin: 0; overflow: hidden; border: 0; border-radius: 4px; padding: 0 4px; background: transparent; color: inherit; text-overflow: ellipsis; white-space: nowrap; }
@@ -148,6 +148,7 @@
 .stage-tab-close:disabled, .stage-tab-new:disabled { opacity: .35; cursor: default; }
 .stage-tab-input { width: min(210px, 26vw); min-width: 0; height: 28px; margin: 0; border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; outline: 2px solid color-mix(in oklch, var(--accent) 35%, transparent); background: var(--surface); color: var(--fg); }
 .stage-tab-input.invalid { border-color: var(--danger); }
-.stage-tab-new { flex-basis: 28px; width: 28px; height: 28px; align-self: center; font-size: 17px; }
+.stage-tab-new-slot { display: grid; flex: 0 0 34px; width: 34px; height: 100%; margin-left: 6px; place-items: center; }
+.stage-tab-new { flex: 0 0 28px; width: 28px; height: 28px; font-size: 17px; }
 .stage-tab-feedback { display: none; }
 .stage-tab-feedback.invalid { display: block; flex: 0 0 auto; margin: 0; padding: 0; border: 1px solid var(--danger); border-radius: 5px; background: var(--surface); color: var(--danger); font-size: var(--fs-meta); }

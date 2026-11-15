@@ -106,8 +106,10 @@ export function StageTabs() {
           </div>
         );
       })}
+        <div className="stage-tab-new-slot" role="presentation">
+          <button type="button" className="stage-tab-new" aria-label={t("stage.tabs.new")} title={t("stage.tabs.new")} onClick={() => newTab()}>＋</button>
+        </div>
       </div>
-      <button type="button" className="stage-tab-new" aria-label={t("stage.tabs.new")} title={t("stage.tabs.new")} onClick={() => newTab()}>＋</button>
       <span className={invalid ? "stage-tab-feedback invalid" : "stage-tab-feedback"} id={invalid ? "stage-tab-name-error" : "stage-tab-rename-hint"} aria-live="polite">
         {invalid ? t("stage.tabs.nameInvalid") : editing ? t("stage.tabs.renameHint") : ""}
       </span>

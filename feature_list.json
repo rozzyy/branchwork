@@ -1658,6 +1658,17 @@
       ],
       "status": "review",
       "evidence": "Files context menu adds Open in browser for .html/.htm; opens a Browser tab and selects Browser. Browser persistence/navigation accept bounded local HTML file URLs; Rust validates existing regular HTML files and retains app-origin navigation protection. git diff --check, pnpm typecheck, and cargo check --manifest-path src-tauri/Cargo.toml passed. Manual native WebKit verification remains pending."
+    },
+    {
+      "id": "post-release-stage-tab-add-position",
+      "stage": 42,
+      "name": "Keep stage-tab add control after all tabs",
+      "description": "User-requested layout correction based on tabs.png (2026-11-15)",
+      "dependencies": [
+        "m12-task-01-stage-tabs"
+      ],
+      "status": "review",
+      "evidence": "The + control is the final fixed-width flex item inside the Stage tab list, after all tab cards; the tab list uses max-content width and overflows within the strip. This preserves tab 1, tab 2, + without sibling overlap. pnpm typecheck, feature JSON validation, and git diff --check passed. Impeccable detector reported an existing bounce-easing warning at unchanged stage.css:17. Manual desktop review remains pending."
     }
   ]
 }

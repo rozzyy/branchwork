@@ -2,6 +2,12 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-15: Keep the stage-tab add button after all tabs
+
+- Corrected the target surface to the top-level Stage tabs shown in `tabs.png`. The `+` control is now the final flex item inside the tab-list row, after all tab cards, with its own fixed-width slot. This makes the row calculate `tab 1 → tab 2 → +` as one sequence instead of positioning `+` as a separate flex sibling that can overlap the last card. The list uses its max-content width and overflows within the tab strip.
+- Verification: `pnpm typecheck` and `git diff --check` passed. The Impeccable detector reported a bounce-easing warning at unchanged `stage.css:17`, outside the edited tab rules. No tests were run. No state, persistence, IPC, or security behavior changed.
+- Next: review the tab strip in the desktop app with multiple stage tabs and at a narrow width.
+
 ## 2026-11-15: Open local HTML files in Browser
 
 - Added the Files context-menu action “Open in browser” for `.html` and `.htm` files. It creates/selects a Browser tab and navigates the active stage to Browser; at the 20-tab limit it reuses the selected tab.
