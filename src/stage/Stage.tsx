@@ -86,42 +86,42 @@ export function Stage() {
 
   return (
     <div className="stage-stack">
-    <StageTabs />
-    <OperationBanner />
-    <div
-      ref={ref}
-      className={"stage" + (count > 1 ? " split split-" + dir : "")}
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(SCREEN_MIME)) return;
-        e.preventDefault();
-        const target = targetAt(e);
-        setDrop((current) => (current?.paneId === target?.paneId && current?.side === target?.side ? current : target));
-      }}
-      onDragLeave={(e) => { if (!ref.current!.contains(e.relatedTarget as Node)) setDrop(null); }}
-      onDrop={(e) => {
-        const id = e.dataTransfer.getData(SCREEN_MIME) as ScreenId;
-        const target = targetAt(e);
-        setDrop(null);
-        if (!id || !target) return;
-        e.preventDefault();
-        const stage = useStage.getState();
-        const index = stage.panes.indexOf(stage.screens[target.paneId]);
-        stage.openSplit(id, target.side, index >= 0 ? index : undefined);
-      }}
-    >
-      <div ref={canvas} className="stage-canvas">
-        <DropContext.Provider value={drop}>
-          {paneIds.map((paneId) => {
-            const box = panes.get(paneId)!;
-            // Pane IDs can overlap between tabs; including the tab ID prevents
-            // one tab's screen-local state from leaking into another.
-            return <Pane key={`${activeTabId}:${paneId}`} paneId={paneId} x={box.x} y={box.y} w={box.w} h={box.h} />;
-          })}
-        </DropContext.Provider>
-        {gutters.map((gutter) => <Divider key={`${gutter.split.id}:${gutter.index}`} gutter={gutter} canvas={canvas} />)}
+      <StageTabs />
+      <OperationBanner />
+      <div
+        ref={ref}
+        className={"stage" + (count > 1 ? " split split-" + dir : "")}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(SCREEN_MIME)) return;
+          e.preventDefault();
+          const target = targetAt(e);
+          setDrop((current) => (current?.paneId === target?.paneId && current?.side === target?.side ? current : target));
+        }}
+        onDragLeave={(e) => { if (!ref.current!.contains(e.relatedTarget as Node)) setDrop(null); }}
+        onDrop={(e) => {
+          const id = e.dataTransfer.getData(SCREEN_MIME) as ScreenId;
+          const target = targetAt(e);
+          setDrop(null);
+          if (!id || !target) return;
+          e.preventDefault();
+          const stage = useStage.getState();
+          const index = stage.panes.indexOf(stage.screens[target.paneId]);
+          stage.openSplit(id, target.side, index >= 0 ? index : undefined);
+        }}
+      >
+        <div ref={canvas} className="stage-canvas">
+          <DropContext.Provider value={drop}>
+            {paneIds.map((paneId) => {
+              const box = panes.get(paneId)!;
+              // Pane IDs can overlap between tabs; including the tab ID prevents
+              // one tab's screen-local state from leaking into another.
+              return <Pane key={`${activeTabId}:${paneId}`} paneId={paneId} x={box.x} y={box.y} w={box.w} h={box.h} />;
+            })}
+          </DropContext.Provider>
+          {gutters.map((gutter) => <Divider key={`${gutter.split.id}:${gutter.index}`} gutter={gutter} canvas={canvas} />)}
+        </div>
+        {drop && full && <span className="dz-hint dz-full">{t("split.dropFull")}</span>}
       </div>
-      {drop && full && <span className="dz-hint dz-full">{t("split.dropFull")}</span>}
-    </div>
     </div>
   );
 }

@@ -2,6 +2,12 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-15: Align stage tabs with the selected reference
+
+- Returned stage tabs to their original position above the stage. Applied the selected reference style: a shared bottom rule with the active tab raised and visually joined to the stage surface. Cards are fixed at 172px wide with 10px of internal horizontal padding and no outer margin/padding.
+- No tests were run for this layout adjustment.
+- Next: wait for the next task.
+
 ## 2026-11-15: Remove the stage-tab rename button
 
 - Removed the visible rename icon/button as requested; tabs rename by double-click, with F2 retained as a keyboard alternative. The close and new-tab controls remain.

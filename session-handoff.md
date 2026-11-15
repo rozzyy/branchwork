@@ -2,7 +2,7 @@
 
 - **Last updated:** 2026-11-15
 - **Current stage:** Released **v0.12.0** (M12 Stage tabs). M7–M12 are done.
-- **Branch:** `main`; M12 commit `a1efc97` is merged. Local stage branch was deleted after merge. Push the release commit and `v0.12.0` tag to finish synchronization.
+- **Branch:** `main`, synchronized with `origin/main`; M12 commit `a1efc97` and release `9ad5460` are pushed. Tag `v0.12.0` is pushed.
 - **Active task:** none. User approved the M12 manual checkpoint and ordered release.
 - **Specs / plans:** `docs/superpowers/specs/2026-11-14-{agent-profile-switch-session,m9-split-panes,m10-multi-window,m11-browser}-design.md`; plans `docs/superpowers/plans/2026-11-14-{m8-profile-switch-session,m9-split-panes,m10-multi-window,m11-browser}.md`; reviews `.agent/reviews/m8…m11-stage-1-review.md` (all findings fixed or explicitly accepted).
 - **Cancelled by the user:** AI assists (spec §6.9) and the handover-optimization idea.
@@ -18,5 +18,6 @@
 - **Verification:** Baseline `./init.sh` passed (Vitest 85 files / 724 tests; Rust 337 passed / 3 ignored; TypeScript and Clippy clean). Final run after implementation: TypeScript and Clippy passed; Vitest 85 files / 733 tests passed; Rust 327 passed / 10 failed / 3 ignored because macOS FSEvent streams could not start. `RUST_TEST_THREADS=1 ./init.sh` reproduced the 10 FSEvent failures. Focused M12 suite 35/35 passed after the last UI fix; `pnpm typecheck`, `git diff --check` and feature JSON validation passed. Spec review PASS, code review PASS, E2E checklist ready.
 - **Branch:** `main`. Existing handover changes to M8–M11 manual specs remain uncommitted in the worktree; they were preserved and excluded from the M12 feature commit.
 - **Latest UI adjustment:** Removed the visible rename button at the user's request. Rename now uses double-click or F2; close and new-tab buttons remain. `pnpm exec vitest run src/stage/Stage.test.tsx` passed (5/5), `pnpm typecheck`, `git diff --check`, and feature JSON validation passed.
-- **Latest tab-close adjustment:** The close control is now inside each tab card; the final tab remains non-closable. Focused Stage UI tests (5/5), typecheck, and `git diff --check` passed.
-- **Next action:** Push the release commit and annotated `v0.12.0` tag, then verify remote refs. No other active feature.
+- **Latest tab-close adjustment:** The close control is inside each tab card; the final tab remains non-closable. Focused Stage UI tests (5/5), typecheck, and `git diff --check` passed.
+- **Latest layout adjustment:** Stage tabs are back above the stage. They use the selected `tabs-example.png` style: shared bottom rule, raised active tab joined to the stage surface, fixed 172px card width, and 10px internal horizontal padding.
+- **Next action:** Wait for the next task. Four unrelated M8–M11 manual-spec edits remain in the worktree.
