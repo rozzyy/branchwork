@@ -8,6 +8,7 @@ import type { ScreenId } from "../screens/registry";
 import { t } from "../i18n/t";
 import { OperationBanner } from "../shell/OperationBanner";
 import { useWorktrees } from "../state/worktrees";
+import { StageTabs } from "./StageTabs";
 
 /** A divider drag never shrinks a pane below this many pixels. */
 const MIN_PANE_PX = 200;
@@ -58,6 +59,7 @@ function Divider({ gutter, canvas }: { gutter: Gutter; canvas: RefObject<HTMLDiv
 
 export function Stage() {
   const tree = useStage((s) => s.tree);
+  const activeTabId = useStage((s) => s.activeTabId);
   const count = useStage((s) => s.panes.length);
   const dir = useStage((s) => s.dir);
   const activePath = useWorktrees((s) => s.activePath);
@@ -84,6 +86,7 @@ export function Stage() {
 
   return (
     <div className="stage-stack">
+    <StageTabs />
     <OperationBanner />
     <div
       ref={ref}
@@ -110,7 +113,9 @@ export function Stage() {
         <DropContext.Provider value={drop}>
           {paneIds.map((paneId) => {
             const box = panes.get(paneId)!;
-            return <Pane key={paneId} paneId={paneId} x={box.x} y={box.y} w={box.w} h={box.h} />;
+            // Pane IDs can overlap between tabs; including the tab ID prevents
+            // one tab's screen-local state from leaking into another.
+            return <Pane key={`${activeTabId}:${paneId}`} paneId={paneId} x={box.x} y={box.y} w={box.w} h={box.h} />;
           })}
         </DropContext.Provider>
         {gutters.map((gutter) => <Divider key={`${gutter.split.id}:${gutter.index}`} gutter={gutter} canvas={canvas} />)}

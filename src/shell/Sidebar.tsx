@@ -370,7 +370,7 @@ export function Sidebar() {
     if (!projectOpen && wasProjectOpen.current && document.activeElement === document.body) projectTriggerRef.current?.focus();
     wasProjectOpen.current = projectOpen;
   }, [projectOpen]);
-  const { go, openSplit, closePane } = useStage.getState();
+  const { go, newTab, openSplit, closePane } = useStage.getState();
 
   const glyph = (id: ScreenId) => {
     const i = panes.indexOf(id);
@@ -388,6 +388,7 @@ export function Sidebar() {
 
   const menuItems = (id: ScreenId): MenuItem[] => [
     { kind: "item", label: t("split.openHere"), onSelect: () => go(id) },
+    { kind: "item", icon: "＋", label: t("stage.tabs.openInNew"), onSelect: () => { newTab(id); setCtx(null); } },
     { kind: "item", icon: "◨", label: t("split.right"), kbd: "⌘-click", onSelect: () => openSplit(id, "right") },
     { kind: "item", icon: "◧", label: t("split.left"), onSelect: () => openSplit(id, "left") },
     { kind: "item", icon: "⬒", label: t("split.top"), onSelect: () => openSplit(id, "top") },

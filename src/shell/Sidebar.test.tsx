@@ -71,6 +71,18 @@ it("context menu offers split directions", async () => {
   expect(useStage.getState().panes).toEqual(["agents", "home"]);
 });
 
+it("opens a sidebar screen in a separate stage tab from its context menu", async () => {
+  render(<Sidebar />);
+  useStage.getState().go("agents");
+  useStage.getState().openSplit("changes", "right");
+  const active = useStage.getState().activeTabId;
+  fireEvent.contextMenu(screen.getByRole("button", { name: /History/ }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "Open in new tab" }));
+  expect(useStage.getState().panes).toEqual(["history"]);
+  useStage.getState().activateTab(active);
+  expect(useStage.getState().panes).toEqual(["agents", "changes"]);
+});
+
 it("shows the app logo and name above the project and group picker", () => {
   const { container } = render(<Sidebar />);
   const brand = container.querySelector(".side-brand");

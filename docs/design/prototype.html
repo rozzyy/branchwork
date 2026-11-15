@@ -144,6 +144,12 @@ kbd{font:500 10.5px "SF Mono","JetBrains Mono",monospace;min-width:18px;text-ali
 
 /* stage */
 .stage{border-radius:18px;background:var(--surf);box-shadow:var(--spec),0 0 0 .5px var(--line2);display:grid;grid-template-rows:52px 1fr;min-height:0;min-width:0;overflow:hidden}
+.stage-area{display:grid;grid-template-rows:38px minmax(0,1fr);min-height:0;min-width:0;gap:8px}
+.stagetabs{display:flex;align-items:center;gap:5px;min-width:0;padding:0 8px;border-radius:12px;background:var(--surf);box-shadow:var(--spec),0 0 0 .5px var(--line2);overflow:auto}
+.stagetab{display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--fg2);white-space:nowrap;cursor:pointer}
+.stagetab:hover{background:var(--s2);color:var(--fg)}.stagetab.on{background:var(--s3);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line2)}
+.stagetab .close{font-size:15px;color:var(--fg3);padding:0 2px}.stagetab .close:hover{color:var(--fg)}
+.stagetab.add{width:28px;justify-content:center;padding:0;font-size:17px;color:var(--fg3)}
 .tool{display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid var(--line)}
 .tool h1{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
 .tool .sub{color:var(--fg3);font-weight:400;font-size:12.5px}
@@ -666,7 +672,7 @@ input[type=range]{accent-color:var(--acc);width:180px}
       <div class="sscroll" id="side"></div>
       <div class="sfoot"><div class="ghacc"><span class="av" style="--c:var(--acc)">R</span><div><b style="color:var(--fg)">rozzyVive</b><div class="m" style="font-size:11px">GitHub · connected</div></div><button class="btn ghost sm" style="margin-left:auto" onclick="go('settings')">⚙</button></div></div>
     </aside>
-    <div class="stagew" id="stagew"></div>
+    <div class="stage-area"><div class="stagetabs" id="stagetabs"></div><div class="stagew" id="stagew"></div></div>
     <aside class="project-rail lg" id="projectRail" aria-label="Projects"></aside>
   </div>
 </div>
@@ -822,13 +828,20 @@ function newWT(name,quiet){
 /* ================= router ================= */
 const V={};
 /* ================= router + split view (ala Arc) ================= */
-S.panes=['launchpad'];S.fp=0;S.sdir='h';S.ratio=.5;
+const stageTabs=[{id:'stage-1',name:'Launchpad',panes:['launchpad'],fp:0,sdir:'h',ratio:.5}];let activeStageTab='stage-1',stageTabSeq=1;
+const activeStage=()=>stageTabs.find(t=>t.id===activeStageTab)||stageTabs[0];
+for(const key of ['panes','fp','sdir','ratio'])Object.defineProperty(S,key,{get(){return activeStage()[key]},set(v){activeStage()[key]=v},configurable:true});
 Object.defineProperty(S,'screen',{get(){return S.panes[S.fp]},set(v){S.panes[S.fp]=v},configurable:true});
 const shown=id=>S.panes.includes(id);
 const SCR=()=>[...NAV,...TOOLS,['settings','⚙','Settings']];
 function pctl(i){const two=S.panes.length>1;
   return `<div class="pctl">${two?(i===0?`<button class="ib2" title="Tukar posisi" onclick="swapSplit()">⇄</button><button class="ib2" title="${S.sdir==='h'?'Susun atas / bawah':'Susun kiri / kanan'}" onclick="S.sdir=S.sdir==='h'?'v':'h';renderStage()">${S.sdir==='h'?'⬒':'◫'}</button>`:'')+`<button class="ib2" title="Tutup pane ini" onclick="closeSplit(${i})">✕</button>`:`<button class="ib2" title="Split view (⌘\\)" onclick="splitMenu(event)">⊞</button>`}</div>`}
-function renderStage(){const w=$('#stagew'),two=S.panes.length>1;w.className='stagew'+(two?' split-'+S.sdir:'');w.style.setProperty('--r',S.ratio);
+function renderStageTabs(){const host=$('#stagetabs');host.innerHTML=stageTabs.map(t=>`<button class="stagetab ${t.id===activeStageTab?'on':''}" onclick="switchStageTab('${t.id}')"><span>${t.name}</span>${stageTabs.length>1?`<span class="close" title="Tutup tab" onclick="event.stopPropagation();closeStageTab('${t.id}')">×</span>`:''}</button>`).join('')+`<button class="stagetab add" title="Tab baru" aria-label="Tab baru" onclick="addStageTab()">＋</button>`}
+function stageName(id){return (SCR().find(x=>x[0]===id)||[,,id])[2]}
+function switchStageTab(id){if(!stageTabs.some(t=>t.id===id)||id===activeStageTab)return;clearTimers();activeStageTab=id;renderStage()}
+function addStageTab(screen='launchpad'){if(stageTabs.length>=8)return toast('Batas tab tercapai','Maksimal 8 tab stage','＋');clearTimers();const id='stage-'+(++stageTabSeq),label=stageName(screen),count=stageTabs.filter(t=>t.name===label).length;stageTabs.push({id,name:count?`${label} ${count+1}`:label,panes:[screen],fp:0,sdir:'h',ratio:.5});activeStageTab=id;renderStage()}
+function closeStageTab(id){if(stageTabs.length<2)return toast('Tab terakhir tidak bisa ditutup','Buka tab baru untuk mengganti layout','×');const i=stageTabs.findIndex(t=>t.id===id);if(i<0)return;stageTabs.splice(i,1);if(activeStageTab===id)activeStageTab=stageTabs[Math.max(0,i-1)].id;renderStage()}
+function renderStage(){renderStageTabs();const w=$('#stagew'),two=S.panes.length>1;w.className='stagew'+(two?' split-'+S.sdir:'');w.style.setProperty('--r',S.ratio);
   w.innerHTML=S.panes.map((id,i)=>`<main class="stage ${two&&i===S.fp?'focus':''}" data-i="${i}" onmousedown="paneFocus(${i})"><div class="tool"></div><div class="view"></div></main>`).join(two?'<div class="sdiv" title="Drag untuk resize · double-click reset" onmousedown="sdivDrag(event)" ondblclick="S.ratio=.5;renderStage()"></div>':'');
   S.panes.forEach((_,i)=>renderPane(i));renderChrome()}
 function renderPane(i){const id=S.panes[i],v=V[id],st=$(`.stage[data-i="${i}"]`);if(!st)return;st.querySelector('.tool').innerHTML=v.tool()+pctl(i);st.querySelector('.view').innerHTML=`<div class="vin">${v.render()}</div>`;v.mount&&v.mount()}
@@ -850,7 +863,7 @@ function splitMenu(e){e.stopPropagation();closeMenu();const m=document.createEle
 function navClick(e,id){if(e.altKey)openSplit(id,'bottom');else if(e.metaKey||e.shiftKey||e.ctrlKey)openSplit(id,'right');else go(id)}
 function navCtx(e,id){e.preventDefault();closeMenu();const m=document.createElement('div');m.className='menu';m.id='menu';m.style.left=e.clientX+'px';m.style.top=e.clientY+'px';
   const it=(l,k,f)=>`<button onclick="closeMenu();${f}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
-  m.innerHTML=it('Buka di pane ini','',`go('${id}')`)+it('◨ Buka di split kanan','⌘-klik',`openSplit('${id}','right')`)+it('◧ Buka di split kiri','',`openSplit('${id}','left')`)+it('⬒ Buka di split atas','',`openSplit('${id}','top')`)+it('⬓ Buka di split bawah','⌥-klik',`openSplit('${id}','bottom')`)+(S.panes.length>1&&shown(id)?'<hr>'+it('✕ Tutup dari split','',`closeSplit(${S.panes.indexOf(id)})`):'');
+  m.innerHTML=it('Buka di pane ini','',`go('${id}')`)+it('＋ Buka di tab baru','',`addStageTab('${id}')`)+it('◨ Buka di split kanan','⌘-klik',`openSplit('${id}','right')`)+it('◧ Buka di split kiri','',`openSplit('${id}','left')`)+it('⬒ Buka di split atas','',`openSplit('${id}','top')`)+it('⬓ Buka di split bawah','⌥-klik',`openSplit('${id}','bottom')`)+(S.panes.length>1&&shown(id)?'<hr>'+it('✕ Tutup dari split','',`closeSplit(${S.panes.indexOf(id)})`):'');
   document.body.append(m);setTimeout(()=>addEventListener('click',closeMenu,{once:true}),0)}
 function sdivDrag(e){e.preventDefault();const sw=$('#stagew'),r=sw.getBoundingClientRect();sw.classList.add('resizing');
   const mv=ev=>{S.ratio=Math.min(.8,Math.max(.2,S.sdir==='h'?(ev.clientX-r.left)/r.width:(ev.clientY-r.top)/r.height));sw.style.setProperty('--r',S.ratio)};

@@ -16,7 +16,17 @@ interface Derived {
   dir: M.Dir;
 }
 
-interface StageStore extends M.StageState, Derived {
+export interface StageTab {
+  id: string;
+  name: string;
+  stage: M.StageState;
+}
+interface StageWorkspace {
+  tabs: StageTab[];
+  activeTabId: string;
+}
+
+interface StageStore extends M.StageState, Derived, StageWorkspace {
   go(id: ScreenId): void;
   focusPane(index: number): void;
   /** Split pane `targetIndex` (default: focused) toward `side`, showing `id`. */
@@ -31,6 +41,10 @@ interface StageStore extends M.StageState, Derived {
   setGutter(splitId: string, index: number, leftShare: number, minShare?: number): void;
   equalize(splitId: string): void;
   equalizeAll(): void;
+  newTab(screen?: ScreenId): string | null;
+  activateTab(id: string): void;
+  closeTab(id: string): boolean;
+  renameTab(id: string, name: string): boolean;
   moveFocus(dir: M.FocusDir): void;
   setLayout(panes: ScreenId[]): void;
   /**
@@ -51,25 +65,44 @@ const derive = (s: M.StageState, prev?: ScreenId[]): M.StageState & Derived => {
   const same = prev && prev.length === panes.length && prev.every((id, i) => id === panes[i]);
   return { ...pick(s), panes: same ? prev : panes, focus: M.focusIndex(s), dir: M.rootDir(s) };
 };
-/** Full store slice (state + derived) for a stage; also used by tests. */
-export const stageSnapshot = (s: M.StageState): M.StageState & Derived => derive(s);
+/** Full active-workspace snapshot for a stage; also used to reset tests. */
+export const stageSnapshot = (s: M.StageState): M.StageState & Derived & StageWorkspace => {
+  const workspace = makeWorkspace(s);
+  return { ...derive(s), ...workspace };
+};
 /** Default screens ⌘\ offers, in order, skipping visible ones. */
 const SPLIT_DEFAULTS: ScreenId[] = ["changes", "agents", "history", "files", "terminal", "home", "github"];
+export const MAX_STAGE_TABS = 8;
+export const MAX_STAGE_TAB_NAME = 40;
+const validTabName = (name: string): boolean => {
+  if (name.length > MAX_STAGE_TAB_NAME * 2 || name.trim() !== name) return false;
+  let count = 0;
+  for (const _character of name) if (++count > MAX_STAGE_TAB_NAME) return false;
+  return count > 0;
+};
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
-let layouts: Record<string, M.StageState> = {};
-let legacyDefault: M.StageState | null = null;
+const emptyLayouts = (): Record<string, StageWorkspace> => Object.create(null) as Record<string, StageWorkspace>;
+let layouts: Record<string, StageWorkspace> = emptyLayouts();
+let legacyDefault: StageWorkspace | null = null;
 let activeLayoutPath: string | null = null;
 let switchedOnce = false;
-const saveLayout = (path: string, stage: M.StageState) => {
+let tabCounter = 0;
+const newTabId = () => `stage-tab-${Date.now().toString(36)}-${++tabCounter}`;
+const makeWorkspace = (stage: M.StageState = M.initialStage, name?: string): StageWorkspace => {
+  const id = newTabId();
+  return { tabs: [{ id, name: name ?? t(screenById(stage.screens[stage.focusId]).label), stage: pick(stage) }], activeTabId: id };
+};
+const activeTab = (workspace: StageWorkspace) => workspace.tabs.find((tab) => tab.id === workspace.activeTabId) ?? workspace.tabs[0];
+const saveLayout = (path: string, workspace: StageWorkspace) => {
   delete layouts[path];
-  layouts[path] = stage;
+  layouts[path] = workspace;
   while (Object.keys(layouts).length > 200) delete layouts[Object.keys(layouts)[0]];
 };
-const persist = (s: M.StageState) => {
-  if (activeLayoutPath) saveLayout(activeLayoutPath, s);
+const persist = (workspace: StageWorkspace) => {
+  if (activeLayoutPath) saveLayout(activeLayoutPath, workspace);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => void saveSetting("stage", { version: 2, current: s, layouts }), 300);
+  saveTimer = setTimeout(() => void saveSetting("stage", { version: 3, current: workspace, layouts }), 300);
 };
 
 /** Pre-M9 saved shape `{ panes, focus, dir, ratio }` (legacy ids included). */
@@ -112,13 +145,46 @@ function readStage(raw: unknown): { stage: M.StageState; mode: HistoryMode } | n
   return Array.isArray(record.panes) ? migrateLegacy(record) : null;
 }
 
+function readWorkspace(raw: unknown): StageWorkspace | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  if (Array.isArray(record.tabs)) {
+    if (!record.tabs.length || record.tabs.length > MAX_STAGE_TABS) return null;
+    const tabs: StageTab[] = [];
+    const ids = new Set<string>();
+    for (const value of record.tabs) {
+      if (!value || typeof value !== "object") return null;
+      const tab = value as Record<string, unknown>;
+      if (typeof tab.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(tab.id) || ids.has(tab.id)) return null;
+      if (typeof tab.name !== "string" || !validTabName(tab.name)) return null;
+      const stage = readStage(tab.stage);
+      if (!stage) return null;
+      ids.add(tab.id);
+      tabs.push({ id: tab.id, name: tab.name, stage: stage.stage });
+    }
+    const activeTabId = typeof record.activeTabId === "string" && ids.has(record.activeTabId) ? record.activeTabId : tabs[0].id;
+    return { tabs, activeTabId };
+  }
+  const migrated = readStage(raw);
+  return migrated ? makeWorkspace(migrated.stage) : null;
+}
+
+const workspaceOf = (store: StageStore): StageWorkspace => ({ tabs: store.tabs, activeTabId: store.activeTabId });
+const workspaceSnapshot = (workspace: StageWorkspace): M.StageState & Derived & StageWorkspace => {
+  const selected = activeTab(workspace);
+  return { ...derive(selected.stage), tabs: workspace.tabs, activeTabId: selected.id } as M.StageState & Derived & StageWorkspace;
+};
+
 export const useStage = create<StageStore>((set, get) => {
   const apply = (f: (s: M.StageState) => M.StageState) => {
     const current = pick(get());
     const next = f(current);
     if (next === current) return;
-    set(derive(next, get().panes));
-    persist(next);
+    const workspace = workspaceOf(get());
+    const tabs = workspace.tabs.map((tab) => tab.id === workspace.activeTabId ? { ...tab, stage: next } : tab);
+    const updated = { tabs, activeTabId: workspace.activeTabId };
+    set({ ...derive(next, get().panes), ...updated });
+    persist(updated);
   };
   /** Pane id at `index` (default: focused); null for out-of-range indexes. */
   const paneAt = (index?: number): string | null => (index === undefined ? get().focusId : M.leafIds(get())[index] ?? null);
@@ -136,7 +202,7 @@ export const useStage = create<StageStore>((set, get) => {
     apply((st) => M.openSplit(st, id, side, targetId));
   };
   return {
-    ...derive(M.initialStage),
+    ...workspaceSnapshot(makeWorkspace()),
     go: (id) => apply((s) => M.navigate(s, id)),
     focusPane: (i) => { const id = paneAt(i); if (id) apply((s) => M.setFocus(s, id)); },
     openSplit: (id, side, targetIndex) => split(id, side, paneAt(targetIndex) ?? get().focusId),
@@ -149,6 +215,50 @@ export const useStage = create<StageStore>((set, get) => {
     swap: (i) => { const id = paneAt(i); if (id) apply((s) => M.swap(s, id)); },
     toggleDir: (i) => { const id = paneAt(i); if (id) apply((s) => M.toggleDir(s, id)); },
     equalizeAll: () => apply(M.equalizeAll),
+    newTab: (screen = "home") => {
+      const workspace = workspaceOf(get());
+      if (workspace.tabs.length >= MAX_STAGE_TABS) {
+        toast({ title: t("stage.tabs.max", { count: MAX_STAGE_TABS }), icon: "＋" });
+        return null;
+      }
+      const id = newTabId();
+      const stage = M.navigate(M.initialStage, screen);
+      const tab = { id, name: screen === "home" ? t("stage.tabs.new") : t(screenById(screen).label), stage };
+      const next = { tabs: [...workspace.tabs, tab], activeTabId: id };
+      set(workspaceSnapshot(next));
+      persist(next);
+      return id;
+    },
+    activateTab: (id) => {
+      const workspace = workspaceOf(get());
+      if (id === workspace.activeTabId || !workspace.tabs.some((tab) => tab.id === id)) return;
+      const next = { ...workspace, activeTabId: id };
+      set(workspaceSnapshot(next));
+      persist(next);
+    },
+    closeTab: (id) => {
+      const workspace = workspaceOf(get());
+      const index = workspace.tabs.findIndex((tab) => tab.id === id);
+      if (index < 0 || workspace.tabs.length <= 1) return false;
+      const tabs = workspace.tabs.filter((tab) => tab.id !== id);
+      const activeTabId = workspace.activeTabId === id ? tabs[Math.max(0, index - 1)].id : workspace.activeTabId;
+      const next = { tabs, activeTabId };
+      set(workspaceSnapshot(next));
+      persist(next);
+      return true;
+    },
+    renameTab: (id, name) => {
+      if (name.length > MAX_STAGE_TAB_NAME * 2) return false;
+      const normalized = name.trim();
+      if (!validTabName(normalized)) return false;
+      const workspace = workspaceOf(get());
+      if (!workspace.tabs.some((tab) => tab.id === id)) return false;
+      const tabs = workspace.tabs.map((tab) => tab.id === id ? { ...tab, name: normalized } : tab);
+      const next = { ...workspace, tabs };
+      set({ tabs });
+      persist(next);
+      return true;
+    },
     setGutter: (splitId, index, leftShare, minShare) => apply((s) => M.setGutter(s, splitId, index, leftShare, minShare)),
     equalize: (splitId) => apply((s) => M.equalize(s, splitId)),
     moveFocus: (dir) => apply((s) => M.moveFocus(s, dir)),
@@ -173,14 +283,14 @@ export const useStage = create<StageStore>((set, get) => {
     },
     switchWorktree: (path) => {
       if (path === activeLayoutPath) return;
-      const current = pick(get());
+      const current = workspaceOf(get());
       if (activeLayoutPath) saveLayout(activeLayoutPath, current);
-      const next = path ? layouts[path] ?? (switchedOnce ? legacyDefault ?? M.initialStage : current) : current;
+      const next = path ? layouts[path] ?? (switchedOnce ? legacyDefault ?? makeWorkspace() : current) : current;
       if (!switchedOnce && path) legacyDefault = current;
       switchedOnce = switchedOnce || !!path;
       activeLayoutPath = path;
-      set(derive(next));
-      const panes = M.panesOf(next);
+      set(workspaceSnapshot(next));
+      const panes = M.panesOf(activeTab(next).stage);
       useHistory.getState().setMode(panes.includes("history") ? useHistory.getState().mode : "graph");
       if (path) saveLayout(path, next);
       persist(next);
@@ -190,25 +300,34 @@ export const useStage = create<StageStore>((set, get) => {
       if (!saved || typeof saved !== "object") return;
       const raw = saved as Record<string, unknown>;
       if (raw.current && typeof raw.current === "object") {
-        const current = readStage(raw.current) ?? { stage: M.initialStage, mode: "graph" as HistoryMode };
-        layouts = {};
+        const migratedCurrent = readStage(raw.current);
+        const current = readWorkspace(raw.current) ?? makeWorkspace();
+        layouts = emptyLayouts();
         if (raw.layouts && typeof raw.layouts === "object") {
-          layouts = Object.fromEntries(Object.entries(raw.layouts as Record<string, unknown>).slice(0, 200).flatMap(([path, value]) => {
-            const read = path ? readStage(value) : null;
-            return read ? [[path, read.stage]] : [];
-          }));
+          layouts = emptyLayouts();
+          let count = 0;
+          const sourceLayouts = raw.layouts as Record<string, unknown>;
+          for (const path in sourceLayouts) {
+            if (!Object.prototype.hasOwnProperty.call(sourceLayouts, path)) continue;
+            if (count++ >= 200) break;
+            const value = sourceLayouts[path];
+            const read = path ? readWorkspace(value) : null;
+            if (read) layouts[path] = read;
+          }
         }
-        const stage = activeLayoutPath ? layouts[activeLayoutPath] ?? current.stage : current.stage;
-        set(derive(stage));
-        useHistory.getState().setMode(current.mode);
-        if (activeLayoutPath && !layouts[activeLayoutPath]) saveLayout(activeLayoutPath, stage);
+        const workspace = activeLayoutPath ? layouts[activeLayoutPath] ?? current : current;
+        set(workspaceSnapshot(workspace));
+        const activeStage = activeTab(workspace).stage;
+        useHistory.getState().setMode(M.panesOf(activeStage).includes("history") ? migratedCurrent?.mode ?? useHistory.getState().mode : "graph");
+        if (activeLayoutPath && !layouts[activeLayoutPath]) saveLayout(activeLayoutPath, workspace);
       } else if (Array.isArray(raw.panes)) {
         const migrated = migrateLegacy(raw);
-        layouts = {};
-        set(derive(migrated.stage));
+        layouts = emptyLayouts();
+        const workspace = makeWorkspace(migrated.stage);
+        set(workspaceSnapshot(workspace));
         useHistory.getState().setMode(migrated.mode);
-        legacyDefault = migrated.stage;
-        if (activeLayoutPath) saveLayout(activeLayoutPath, migrated.stage);
+        legacyDefault = workspace;
+        if (activeLayoutPath) saveLayout(activeLayoutPath, workspace);
       }
     },
   };
