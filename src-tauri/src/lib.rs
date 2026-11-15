@@ -1947,8 +1947,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri::plugin::Builder::<tauri::Wry>::new("navigation-guard")
-                // Browser tabs (M11) may visit http(s) sites; every app webview
-                // stays on the bundled app.
+                // Browser tabs may visit http(s) sites and selected local HTML
+                // files; every app webview stays on the bundled app.
                 .on_navigation(|webview, url| {
                     if webview.label().starts_with(browser::LABEL_PREFIX) {
                         browser::allows_navigation(url)

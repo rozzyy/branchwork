@@ -2,8 +2,8 @@
 
 - **Last updated:** 2026-11-15
 - **Current stage:** Released **v0.12.0** (M12 Stage tabs). M7–M12 are done.
-- **Branch:** `main`, synchronized with `origin/main`; M12 commit `a1efc97` and release `9ad5460` are pushed. Tag `v0.12.0` is pushed.
-- **Active task:** responsive split-view header fix; user ordered commit and push. Next implement context-menu “Open in browser” for HTML files.
+- **Branch:** `main` at `fbd98f7` (`origin/main`); responsive-header fix is committed and pushed. HTML browser follow-up changes are uncommitted. Existing M8–M11 manual-spec edits and reference images remain untouched.
+- **Active task:** user-requested Files context-menu action “Open in browser” for HTML files; implementation is complete and awaiting manual native WebKit verification.
 - **Specs / plans:** `docs/superpowers/specs/2026-11-14-{agent-profile-switch-session,m9-split-panes,m10-multi-window,m11-browser}-design.md`; plans `docs/superpowers/plans/2026-11-14-{m8-profile-switch-session,m9-split-panes,m10-multi-window,m11-browser}.md`; reviews `.agent/reviews/m8…m11-stage-1-review.md` (all findings fixed or explicitly accepted).
 - **Cancelled by the user:** AI assists (spec §6.9) and the handover-optimization idea.
 - **Known limitations / follow-ups (not started, ask first):**
@@ -27,4 +27,5 @@
 - **History left alignment:** Mode/action row begins at the left side in compact panes; for panes wider than 760px, the active title (e.g. “Graph main”) is ordered at the leading edge before tabs.
 - **History spacing:** Mode tabs stay left, actions stay right with a flexible center gap, and pane controls/close remain at the far-right edge. Checked 280px, 384px, and 664px panes; no page overflow.
 - **Latest responsive History layout:** title and pane controls (including close) are on row one; mode tabs and active-mode actions share row two, tabs left and actions right with flexible space between. Wide panes put the active title (e.g. “Graph main”) at the left edge. Compact mode uses short labels and icons with accessible names. Browser checked 280px, 384px, 664px, 704px; TypeScript and focused suites (33/33) passed.
-- **Next action:** Complete the user-ordered responsive-header commit/push, then implement HTML context-menu “Open in browser”. Preserve the existing uncommitted M8–M11 manual-spec edits and `agents-menu.png`, `history-menu.png`, `tabs-example.png` references.
+- **Latest feature:** Right-clicking `.html`/`.htm` in Files offers “Open in browser”, creates or reuses a Browser tab and navigates the active stage to Browser. Rust accepts only bounded `file://` URLs for existing regular HTML files and keeps app-origin navigation denied. `git diff --check`, `pnpm typecheck`, and `cargo check --manifest-path src-tauri/Cargo.toml` passed; test suites were not run. Manual verification of native local-file loading remains pending.
+- **Next action:** Manually verify opening `.html` and `.htm` files (including a path with spaces) and confirm the menu is absent for non-HTML files. If accepted, user may order commit/push. Preserve the unrelated M8–M11 manual-spec edits and reference images.

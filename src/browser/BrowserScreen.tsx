@@ -20,7 +20,7 @@ import { t } from "../i18n/t";
 import "./browser.css";
 
 /** Tabs whose native webview exists in this window. */
-const opened = new Set<string>();
+const opened = new Map<string, string>();
 const OVERLAY = '[role="dialog"], [role="menu"], .dlg-backdrop';
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -82,14 +82,17 @@ export function BrowserView() {
       const r = box.current?.getBoundingClientRect();
       return r && r.width > 1 && r.height > 1 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
     };
-    for (const id of opened) if (id !== visibleId) void browserShow(id, false).catch(() => undefined);
+    for (const id of opened.keys()) if (id !== visibleId) void browserShow(id, false).catch(() => undefined);
     if (visibleId && active) {
       const rect = rectOf();
       const show = async () => {
         if (!rect || cancelled) return;
         if (!opened.has(visibleId)) {
           await browserOpen(visibleId, active.url, rect);
-          opened.add(visibleId);
+          opened.set(visibleId, active.url);
+        } else if (opened.get(visibleId) !== active.url) {
+          await browserNavigate(visibleId, active.url);
+          opened.set(visibleId, active.url);
         }
         if (!cancelled) await browserShow(visibleId, true);
       };
@@ -112,7 +115,7 @@ export function BrowserView() {
   }, [native, active?.id, active?.url, overlay]);
 
   // Leaving the screen hides every page (kept alive for when it returns).
-  useEffect(() => () => { for (const id of opened) void browserShow(id, false).catch(() => undefined); }, []);
+  useEffect(() => () => { for (const id of opened.keys()) void browserShow(id, false).catch(() => undefined); }, []);
 
   const go = (tab: BrowserTab, input: string) => {
     const url = toAddress(input);
@@ -121,6 +124,7 @@ export function BrowserView() {
     const first = !tab.url;
     store.setUrl(tab.id, url);
     if (!native || first || !opened.has(tab.id)) return;
+    opened.set(tab.id, url);
     void browserNavigate(tab.id, url).catch((error: unknown) => toast({ title: message(error), icon: "⚠" }));
   };
 

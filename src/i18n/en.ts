@@ -1093,6 +1093,7 @@ export const en = {
   "files.deleted": "Deleted {path}",
   "files.revealInFinder": "Reveal in Finder",
   "files.copyPath": "Copy path",
+  "files.openInBrowser": "Open in browser",
   "files.copied": "Copied {path}",
   "files.blame": "Blame",
   "files.whoChanged": "Who changed this?",

@@ -1647,6 +1647,17 @@
       ],
       "status": "done",
       "evidence": "Implemented bounded top-level tabs with independent M9 split trees; add/switch/close/rename, keyboard navigation and focus restoration; sidebar open-in-new-tab; v3 per-window/per-worktree persistence with v2/legacy migration and validation. Visible rename button removed per user request; double-click and F2 rename. Close control is inside each tab card. Manual checkpoint approved; spec review PASS, code review PASS. Focused M12 suite 35/35 and pnpm typecheck pass. Full ./init.sh had 10 Rust test failures from macOS FSEvent stream startup (327 passed, 10 failed, 3 ignored); serial retry reproduced those environment failures. Committed as a1efc97, merged to main, released as v0.12.0."
+    },
+    {
+      "id": "post-release-open-html-in-browser",
+      "stage": 41,
+      "name": "Open local HTML files in Browser",
+      "description": "User-requested follow-up feature (2026-11-15)",
+      "dependencies": [
+        "m11-task-02-browser-screen"
+      ],
+      "status": "review",
+      "evidence": "Files context menu adds Open in browser for .html/.htm; opens a Browser tab and selects Browser. Browser persistence/navigation accept bounded local HTML file URLs; Rust validates existing regular HTML files and retains app-origin navigation protection. git diff --check, pnpm typecheck, and cargo check --manifest-path src-tauri/Cargo.toml passed. Manual native WebKit verification remains pending."
     }
   ]
 }

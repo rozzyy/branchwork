@@ -1,7 +1,8 @@
 //! Browser screen (M11): one native child webview per tab, placed by the
 //! frontend over the Browser pane. Browser webviews are labelled
 //! `browser-<window>-<tab>`, carry no capability (see `capabilities/`), may
-//! only navigate to http(s), and every command acts only on the calling
+//! only navigate to http(s) or an existing local HTML file explicitly opened
+//! from Files, and every command acts only on the calling
 //! window's own browser webviews.
 
 use std::sync::{Arc, Mutex};
@@ -15,6 +16,7 @@ use crate::error::AppError;
 
 pub const LABEL_PREFIX: &str = "browser-";
 const MAX_URL_LEN: usize = 2048;
+const MAX_FILE_URL_LEN: usize = 4096;
 /// Logical px bound for webview position and size.
 const MAX_COORD: f64 = 20_000.0;
 /// Title updates from one page are sent at most this often.
@@ -51,12 +53,48 @@ pub fn parse_url(raw: &str) -> Result<Url, AppError> {
     Ok(url)
 }
 
+/// File navigation is reserved for an explicitly selected local HTML document.
+/// The main app never passes arbitrary file URLs through the address bar.
+fn is_local_html_file(url: &Url) -> bool {
+    if url.scheme() != "file"
+        || url.host_str().is_some_and(|host| !host.is_empty())
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.as_str().len() > MAX_FILE_URL_LEN
+    {
+        return false;
+    }
+    let Ok(path) = url.to_file_path() else { return false };
+    let is_html = path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("html") || extension.eq_ignore_ascii_case("htm"));
+    is_html && std::fs::metadata(path).is_ok_and(|metadata| metadata.is_file())
+}
+
+/// Accept remote URLs plus existing local HTML files for the Files context action.
+fn parse_browser_url(raw: &str) -> Result<Url, AppError> {
+    if raw.len() > MAX_FILE_URL_LEN {
+        return Err(AppError::validation("Invalid address"));
+    }
+    let url = Url::parse(raw.trim()).map_err(|_| AppError::validation("Invalid address"))?;
+    if url.scheme() == "file" {
+        return if is_local_html_file(&url) {
+            Ok(url)
+        } else {
+            Err(AppError::validation("Only existing local HTML files can be opened"))
+        };
+    }
+    parse_url(raw)
+}
+
 /// Navigation policy for browser webviews: http(s) and `about:`, but never
 /// the app's own origin — Tauri trusts that origin (in dev the Vite server at
 /// `localhost:1420`) with every command, so a page redirecting a tab there
 /// would gain full IPC.
 pub fn allows_navigation(url: &Url) -> bool {
-    matches!(url.scheme(), "http" | "https" | "about") && !crate::is_local_navigation(url)
+    (matches!(url.scheme(), "http" | "https" | "about") && !crate::is_local_navigation(url))
+        || is_local_html_file(url)
 }
 
 fn clamp(value: f64) -> f64 {
@@ -102,7 +140,7 @@ fn tab_of(label: &str, window_label: &str) -> String {
 
 /// Create the tab's webview (hidden) at the given logical bounds, or reuse it.
 pub fn open(window: &Window, tab_id: &str, url: &str, bounds: (f64, f64, f64, f64)) -> Result<(), AppError> {
-    let url = parse_url(url)?;
+    let url = parse_browser_url(url)?;
     if find(window, tab_id).is_ok() {
         return Ok(());
     }
@@ -162,7 +200,7 @@ pub fn show(window: &Window, tab_id: &str, visible: bool) -> Result<(), AppError
 }
 
 pub fn navigate(window: &Window, tab_id: &str, url: &str) -> Result<(), AppError> {
-    let url = parse_url(url)?;
+    let url = parse_browser_url(url)?;
     find(window, tab_id)?.navigate(url).map_err(|error| AppError::internal(error.to_string()))
 }
 

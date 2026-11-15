@@ -2,6 +2,13 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-15: Open local HTML files in Browser
+
+- Added the Files context-menu action “Open in browser” for `.html` and `.htm` files. It creates/selects a Browser tab and navigates the active stage to Browser; at the 20-tab limit it reuses the selected tab.
+- Browser persistence and active-webview navigation now accept bounded `file://` URLs for HTML paths. Rust revalidates the URL, requires a local existing regular HTML file, and continues to reject app-origin navigation. URL payloads are bounded to 4 KiB; path encoding preserves file names with spaces and URL punctuation. Work per action is O(1) aside from one filesystem metadata lookup at the native validation boundary; no tree traversal or per-file fan-out was added.
+- Verification: `git diff --check`, `pnpm typecheck`, and `cargo check --manifest-path src-tauri/Cargo.toml` passed. Test suites were not run. Manual desktop verification is still needed for native WebKit local-file loading.
+- Next: manually verify right-click open on `.html`/`.htm`, including paths with spaces, and confirm non-HTML files have no menu item.
+
 ## 2026-11-15: Make split-view headers responsive
 
 - Fixed the Agents toolbar so segmented layout labels do not wrap in split view; audited Home, Changes, Files, History (Graph/Blame/Rebase), Terminal, GitHub, Browser, and Settings headers. Added responsive wrapping/stacking to shared pane toolbars and narrow content layouts for Files, Changes, Blame, Rebase, Repo, Settings, and Inbox. Conflicts already uses the shared wrapping behavior; it could not be mounted without an active conflict context.

@@ -23,6 +23,8 @@ import { readStatus, type StatusSummary } from "../../ipc/status";
 import { onGitChanged } from "../../ipc/worktrees";
 import { useDock } from "../../terminal/dock";
 import { useTerminalScreen } from "../../terminal/screen";
+import { useBrowser } from "../../browser/store";
+import { useStage } from "../../state/stage";
 import { errorMessage } from "../../ipc/errors";
 import { rank } from "../../palette/fuzzy";
 import { DiffRenderer } from "../../diff/DiffRenderer";
@@ -698,6 +700,19 @@ export function FilesView() {
     openHistory("file", { path });
   };
 
+  const openInBrowser = async (path: string) => {
+    const root = useWorktrees.getState().activePath;
+    if (!root) return;
+    try {
+      await useBrowser.getState().load();
+      const encodedPath = `${root}/${path}`.split("/").map(encodeURIComponent).join("/");
+      useBrowser.getState().newTab(`file://${encodedPath}`);
+      useStage.getState().go("browser");
+    } catch (error) {
+      toast({ title: errorMessage(error), icon: "⚠" });
+    }
+  };
+
   const contextMenuItems = (path: string, isDir: boolean): MenuItem[] => {
     const base = isDir ? path : path.split("/").slice(0, -1).join("/");
     const items: MenuItem[] = [
@@ -730,6 +745,9 @@ export function FilesView() {
     });
     items.push({ kind: "item", label: t("files.revealInFinder"), icon: "⌘", onSelect: () => void handleReveal(path) });
     items.push({ kind: "item", label: t("files.copyPath"), icon: "⧉", onSelect: () => handleCopyPath(path) });
+    if (!isDir && /\.html?$/i.test(path)) {
+      items.push({ kind: "item", label: t("files.openInBrowser"), icon: "↗", onSelect: () => void openInBrowser(path) });
+    }
     items.push({ kind: "separator" });
     if (!isDir) {
       items.push({ kind: "item", label: t("files.whoChanged"), icon: "≡", onSelect: () => goToBlame(path) });

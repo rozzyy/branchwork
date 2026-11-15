@@ -33,7 +33,17 @@ const MAX_TABS = 20;
 let counter = 0;
 const nextId = () => `tab-${Date.now().toString(36)}-${(counter += 1)}`;
 const validId = (id: unknown): id is string => typeof id === "string" && /^[a-z0-9-]{1,40}$/.test(id);
-const httpUrl = (url: unknown): url is string => typeof url === "string" && /^https?:\/\//i.test(url) && url.length <= 2048;
+const browserUrl = (value: unknown): value is string => {
+  if (typeof value !== "string") return false;
+  if (/^https?:\/\//i.test(value)) return value.length <= 2048;
+  if (!value.startsWith("file://") || value.length > 4096) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "file:" && !url.host && !url.search && !url.hash && /\.html?$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+};
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -60,7 +70,7 @@ export const useBrowser = create<BrowserStore>((set, get) => {
         .slice(0, MAX_TABS)
         .map((tab) => ({
           id: tab.id as string,
-          url: httpUrl(tab.url) ? tab.url : "",
+          url: browserUrl(tab.url) ? tab.url : "",
           title: typeof tab.title === "string" ? tab.title.slice(0, 300) : "",
           loading: false,
         }));
@@ -68,7 +78,15 @@ export const useBrowser = create<BrowserStore>((set, get) => {
       set({ tabs, activeId, loaded: true });
     },
     newTab(url = "") {
-      if (get().tabs.length >= MAX_TABS) return get().activeId ?? "";
+      if (!browserUrl(url) && url !== "") return get().activeId ?? "";
+      if (get().tabs.length >= MAX_TABS) {
+        const activeId = get().activeId ?? "";
+        if (activeId && url) {
+          patch(activeId, { url, title: "", loading: true });
+          persist();
+        }
+        return activeId;
+      }
       const tab: BrowserTab = { id: nextId(), url, title: "", loading: false };
       set({ tabs: [...get().tabs, tab], activeId: tab.id });
       persist();
@@ -89,7 +107,7 @@ export const useBrowser = create<BrowserStore>((set, get) => {
       persist();
     },
     setUrl(id, url) {
-      if (!httpUrl(url)) return;
+      if (!browserUrl(url)) return;
       patch(id, { url, loading: true });
       persist();
     },
@@ -97,7 +115,7 @@ export const useBrowser = create<BrowserStore>((set, get) => {
       const tab = get().tabs.find((item) => item.id === tabId);
       if (!tab) return;
       patch(tabId, {
-        ...(httpUrl(url) ? { url } : {}),
+        ...(browserUrl(url) ? { url } : {}),
         ...(typeof title === "string" ? { title: title.slice(0, 300) } : {}),
         ...(typeof loading === "boolean" ? { loading } : {}),
       });
