@@ -1735,6 +1735,17 @@
       ],
       "status": "done",
       "evidence": "Added a reusable overlay over the main content, triggered by the worktree loader or active/worktree project ID mismatch. It preserves the previous screen beneath a translucent blurred surface, blocks pointer input, announces loading, and fades out after loading ends. Focused overlay test, typecheck, and the combined focused suite (110 tests) passed. Manual project-switch check remains pending. User manually verified the fix and confirmed all tracked issues are resolved (2026-11-15)."
+    },
+    {
+      "id": "post-release-first-launch-onboarding",
+      "stage": 49,
+      "name": "First-launch onboarding",
+      "description": "docs/superpowers/specs/2026-11-06-branchwork-design.md §6.1.10; user-requested (2026-11-15)",
+      "dependencies": [
+        "github-issue-4-project-switch-loading-overlay"
+      ],
+      "status": "done",
+      "evidence": "Added a one-time first-launch modal for welcome, optional GitHub device-flow/PAT connection, and opening or cloning repositories into a selected or newly created group. Existing installations with registered projects are marked complete without interruption; completion/skip persists in app-wide settings. pnpm typecheck, git diff --check, and feature JSON validation passed. Automated tests and native manual walkthrough were not run. After user confirmation, cleared 3 project registrations, 2 groups, 4 pins, repo selection settings, and undo history; confirmed all 3 local repo roots remain. Removed 1 Branchwork GitHub Keychain item, signed out 2 isolated Claude profiles, and removed 6 Codex auth files while preserving profile/session data. Muse uses device-wide credentials and remains connected pending separate authorization."
     }
   ]
 }

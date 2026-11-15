@@ -1,5 +1,7 @@
 # M9 Manual E2E — More than two split panes
 
+> **2026-11-14:** The user reported the manual desktop checks for this stage as done (passed). Individual items were not itemized back to the agent.
+
 Run in the desktop app (`pnpm tauri dev`) on `m9-stage-1`. Mark `[x]` when it behaves as described.
 
 ## Stage 1 (Checkpoint M9.1)

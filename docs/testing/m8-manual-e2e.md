@@ -1,5 +1,7 @@
 # M8 Manual E2E — Profile switch keeps the conversation
 
+> **2026-11-14:** The user reported the manual desktop checks for this stage as done (passed). Individual items were not itemized back to the agent.
+
 Run in the desktop app (`pnpm tauri dev`) on `m8-stage-1`. Needs two logged-in profiles per CLI (Claude: `personal` + `devhero3`; Codex: e.g. `ulahduri` + one with quota). Mark `[x]` when it behaves as described.
 
 ## Stage 1 (Checkpoint M8.1)

@@ -1,0 +1,34 @@
+.onboarding-backdrop { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; padding: 20px; overflow: auto; background: oklch(0 0 0 / .56); animation: fade var(--dur); }
+.onboarding-card { width: min(620px, 100%); max-height: min(820px, calc(100vh - 40px)); overflow: auto; padding: 28px; border: 1px solid var(--border-strong); border-radius: var(--r-panel); background: var(--overlay); box-shadow: var(--shadow); animation: dlg-in var(--dur) var(--spring); }
+.onboarding-progress { display: flex; justify-content: center; gap: 6px; margin: 0 0 24px; }
+.onboarding-progress span { width: 24px; height: 4px; border-radius: 3px; background: var(--border-strong); transition: width var(--dur), background var(--dur); }
+.onboarding-progress span.active { width: 36px; background: var(--accent); }
+.onboarding-mark { display: grid; width: 60px; height: 60px; place-items: center; margin: 0 auto 16px; border-radius: 18px; background: linear-gradient(135deg, var(--accent), var(--purple, var(--accent))); color: white; font-size: 28px; box-shadow: 0 12px 32px color-mix(in oklch, var(--accent) 28%, transparent); }
+.onboarding-mark.github { background: var(--raised); color: var(--text); }
+.onboarding-card h2 { margin: 0 0 7px; text-align: center; font-size: 23px; letter-spacing: -.025em; }
+.onboarding-lead { max-width: 490px; margin: 0 auto 20px; color: var(--text-2); line-height: 1.55; text-align: center; }
+.onboarding-benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 24px 0 4px; text-align: left; }
+.onboarding-benefits article { min-width: 0; padding: 13px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); }
+.onboarding-benefits article > span { color: var(--accent); font-size: 18px; }
+.onboarding-benefits b { display: block; margin: 7px 0 3px; font-size: 13px; }
+.onboarding-benefits p { margin: 0; color: var(--text-2); font-size: 12px; line-height: 1.45; }
+.onboarding-auth { display: grid; gap: 8px; }
+.onboarding-auth .opt { border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); }
+.onboarding-connected { margin: -8px 0 14px; color: var(--success); font-size: 12px; text-align: center; }
+.onboarding-field { display: grid; gap: 6px; margin: 16px 0 9px; color: var(--text-2); font-size: 12px; }
+.onboarding-field .input { width: 100%; }
+.onboarding-create-group, .onboarding-clone { display: flex; gap: 8px; margin: 8px 0; }
+.onboarding-create-group .input, .onboarding-clone .input { min-width: 0; flex: 1; }
+.onboarding-repo-actions { display: flex; margin: 12px 0 8px; }
+.onboarding-status { margin: 10px 0; color: var(--text-2); font-size: 12px; }
+.onboarding-added { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 12px 0 0; list-style: none; }
+.onboarding-added li { padding: 4px 9px; border-radius: 999px; background: var(--selected); color: var(--text); font-size: 12px; }
+.onboarding-error { margin: 12px 0 0; color: var(--danger); font-size: 12px; }
+.onboarding-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+.onboarding-footer-right { display: flex; gap: 8px; }
+@media (max-width: 560px) {
+  .onboarding-backdrop { padding: 10px; }
+  .onboarding-card { max-height: calc(100vh - 20px); padding: 20px; }
+  .onboarding-benefits { grid-template-columns: 1fr; }
+  .onboarding-create-group, .onboarding-clone { flex-direction: column; }
+}

@@ -26,6 +26,7 @@ import { toast } from "./ui/toast";
 import { startWindowSync } from "./state/windows";
 import { useWorktrees } from "./state/worktrees";
 import { ProjectLoadingOverlay } from "./shell/ProjectLoadingOverlay";
+import { Onboarding } from "./onboarding/Onboarding";
 
 export default function App() {
   useGlobalKeys();
@@ -104,6 +105,7 @@ export default function App() {
       <Toaster />
       <DialogHost />
       <Palette />
+      <Onboarding />
     </div>
   );
 }

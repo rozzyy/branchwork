@@ -1,5 +1,7 @@
 # M11 Manual E2E — Browser screen
 
+> **2026-11-14:** The user reported the manual desktop checks for this stage as done (passed). Individual items were not itemized back to the agent.
+
 Run in the desktop app (`pnpm tauri dev`) on `m11-stage-1`.
 
 - [ ] **M11-01 Open pages.** Browser in the sidebar → type `example.com`, a local dev server such as `localhost:3000`, and a phrase (Google search). Pages render inside the pane.

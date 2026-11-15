@@ -129,7 +129,7 @@ function errorForPoll(poll: DevicePoll): string | null {
 }
 
 /** Device-flow sign-in box: start → code + URI → interval polling. */
-function DeviceFlowBox() {
+export function DeviceFlowBox() {
   const [flow, setFlow] = useState<FlowState | null>(null);
   const [starting, setStarting] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
@@ -255,7 +255,7 @@ function DeviceFlowBox() {
 }
 
 /** PAT entry: password field, verified before anything is stored. */
-function PatBox() {
+export function PatBox() {
   const [token, setToken] = useState("");
   const [patError, setPatError] = useState<string | null>(null);
 

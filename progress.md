@@ -1543,3 +1543,18 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 ## 2026-11-15: Publish and close verified issues
 
 - Committed the manually verified fixes as `d898733` (`fix: resolve reported GitHub issues`) and pushed `main` to `origin` successfully. Direct `gh issue close` was rejected because the authenticated GitHub account lacks `CloseIssue` permission. Link all six issues to this default-branch commit using GitHub closing keywords; this relies on the existing write-enabled Git push access.
+
+## 2026-11-15: First-launch onboarding
+
+- Added a one-time onboarding dialog: welcome, optional GitHub device-flow/PAT sign-in, then add local or cloned repositories to an existing or newly created group. Sign-in reuses the existing Settings components and credential flow.
+- It opens only in the main window on an uncompleted first launch with an empty project catalog. Existing installations that already have projects are marked complete without being interrupted; Skip setup and Finish persist completion.
+- Verification: `npm run typecheck`, `git diff --check`, and `feature_list.json` JSON validation passed. Automated tests and native manual walkthrough were not run.
+- User requested clearing connected credentials and repositories after feature development, but explicitly required confirmation first. No data was cleared; wait for the user's confirmation before proceeding.
+
+## 2026-11-15: Clear Branchwork connections after confirmation
+
+- User confirmed the cleanup scope: remove Branchwork-managed credentials and repository/group registrations without deleting repository folders.
+- Cleared 3 project registrations, 2 groups, 4 worktree pins, repo/worktree selection settings, and operation-log rows. Verified all 3 repository root folders still exist.
+- Removed 1 GitHub token from Branchwork's dedicated Keychain service and cleared its account index; signed out 2 isolated Claude profiles; removed 6 declared Codex `auth.json` files. Agent profile metadata and session data remain.
+- Muse's one profile uses device-wide vendor credentials. Left it connected because `muse logout` signs the user out of Muse outside Branchwork; ask before that broader action.
+- Post-cleanup checks: database counts for groups/projects/pins/oplog are all zero; repo-selection/GitHub-account settings are absent; 7 Codex profile records remain but zero `auth.json` files exist.

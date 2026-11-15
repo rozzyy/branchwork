@@ -1,5 +1,7 @@
 # M10 Manual E2E — Multi-window
 
+> **2026-11-14:** The user reported the manual desktop checks for this stage as done (passed). Individual items were not itemized back to the agent.
+
 Run in the desktop app (`pnpm tauri dev`) on `m10-stage-1`.
 
 - [ ] **M10-01 New window.** ⌘⇧N (or palette "New window") opens a second window with **no project or group selected** ("No project selected"), showing Home; the first window is unchanged.
