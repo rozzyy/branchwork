@@ -15,7 +15,7 @@ import {
   removeProfileData,
   seedClaudeOnboarding,
 } from "../ipc/cli";
-import { parseClaudeAuth, parseMuseUsage } from "./probe";
+import { parseClaudeAuth, parseMuseLoginStatus, parseMuseUsage } from "./probe";
 import { waitTerminalReady, writeTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { errorMessage } from "../ipc/errors";
@@ -341,14 +341,13 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
       }
       if (ref.cliId === "muse") {
         try {
-          const usage = parseMuseUsage(await probeCli("muse"));
-          if (!usage) {
-            get().setCliProbe("muse", { linked: false, identity: null });
-            return false;
-          }
-          get().setCliProbe("muse", { linked: true, identity: null });
-          get().setProfileUsage(ref, usage);
-          return true;
+          const raw = await probeCli("muse");
+          const usage = parseMuseUsage(raw);
+          const linked = parseMuseLoginStatus(raw);
+          if (linked === null) return null;
+          get().setCliProbe("muse", { linked, identity: null });
+          if (usage) get().setProfileUsage(ref, usage);
+          return linked;
         } catch {
           return null;
         }

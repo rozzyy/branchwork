@@ -5,7 +5,7 @@ import { CLI_IDS, CLI_REGISTRY, type CliId } from "../../agents/registry";
 import { CliIcon } from "../../agents/cliIcons";
 import { useProfiles, usageKey } from "../../agents/profiles";
 import { GithubAccounts } from "./GithubAccounts";
-import { parseClaudeAuth, parseMuseUsage, PROBED_CLIS } from "../../agents/probe";
+import { parseClaudeAuth, parseMuseLoginStatus, parseMuseUsage, PROBED_CLIS } from "../../agents/probe";
 import { probeCli, profileHasCredentials } from "../../ipc/cli";
 
 /** Outcome of one vendor probe round; null when the probe itself failed. */
@@ -36,8 +36,10 @@ async function probeOnce(cliId: CliId): Promise<ProbeOutcome | null> {
   if (cliId === "muse") {
     const usage = parseMuseUsage(raw);
     if (!usage) {
-      store.setCliProbe(cliId, { linked: false, identity: null });
-      return { linked: false, identity: null };
+      const linked = parseMuseLoginStatus(raw);
+      if (linked === null) return null;
+      store.setCliProbe(cliId, { linked, identity: null });
+      return { linked, identity: null };
     }
     store.setCliProbe(cliId, { linked: true, identity: null });
     for (const profile of store.profiles.filter((item) => item.cliId === cliId)) {

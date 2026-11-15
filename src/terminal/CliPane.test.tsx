@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   exit: null as ((event: { sessionId: string; exitCode: number | null; signal: string | null }) => void) | null,
   error: null as ((event: { sessionId: string; message: string }) => void) | null,
   input: null as ((data: string) => void) | null,
+  keyHandler: null as ((event: KeyboardEvent) => boolean) | null,
+  activateLink: null as ((event: MouseEvent, value: string) => void) | null,
   writes: [] as number[][],
   terminals: [] as Array<{ cols: number; rows: number }>,
   setupOrder: [] as string[],
@@ -18,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   terminalDisposals: 0,
   inputDisposals: 0,
   fitDisposals: 0,
+  fitCalls: 0,
   webglDisposals: 0,
   observerDisconnections: 0,
   dragDrop: null as ((event: { payload: { type: string; paths?: string[]; position?: { x: number; y: number } } }) => void) | null,
@@ -36,7 +39,7 @@ vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     cols = 80;
     rows = 24;
-    options: { disableStdin?: boolean };
+    options: { disableStdin?: boolean; linkHandler?: { activate: (event: MouseEvent, value: string) => void } | null };
 
     constructor(options: { disableStdin?: boolean }) {
       this.options = options;
@@ -53,6 +56,9 @@ vi.mock("@xterm/xterm", () => ({
       mocks.input = callback;
       return { dispose: () => { mocks.inputDisposals += 1; } };
     }
+    attachCustomKeyEventHandler(callback: (event: KeyboardEvent) => boolean) {
+      mocks.keyHandler = callback;
+    }
     dispose() {
       mocks.terminalDisposals += 1;
     }
@@ -61,7 +67,7 @@ vi.mock("@xterm/xterm", () => ({
 
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {
-    fit() {}
+    fit() { mocks.fitCalls += 1; }
     dispose() {
       mocks.fitDisposals += 1;
     }
@@ -75,6 +81,17 @@ vi.mock("@xterm/addon-webgl", () => ({
     }
   },
 }));
+
+vi.mock("@xterm/addon-web-links", () => ({
+  WebLinksAddon: class {
+    constructor(callback: typeof mocks.activateLink) {
+      mocks.activateLink = callback;
+    }
+    dispose() {}
+  },
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(async () => {}) }));
 
 vi.mock("../ipc/pty", () => ({
   waitTerminalReady: vi.fn(async () => true),
@@ -144,6 +161,8 @@ beforeEach(() => {
     exit: null,
     error: null,
     input: null,
+    keyHandler: null,
+    activateLink: null,
     writes: [],
     terminals: [],
     setupOrder: [],
@@ -156,6 +175,7 @@ beforeEach(() => {
     terminalDisposals: 0,
     inputDisposals: 0,
     fitDisposals: 0,
+    fitCalls: 0,
     webglDisposals: 0,
     observerDisconnections: 0,
     dragDrop: null,
@@ -220,6 +240,55 @@ describe("CliPane", () => {
     expect(writeTerminal).toHaveBeenCalledWith("pty-1", new TextEncoder().encode("echo\n"));
     expect(resizeTerminal).toHaveBeenCalledTimes(1);
     expect(mocks.resizeCalls).toEqual([{ sessionId: "pty-1", columns: 80, rows: 24 }]);
+  });
+
+  it("sends Shift+Enter as a distinct key only in agent panes", async () => {
+    const view = await renderAttached();
+    const shiftEnter = new KeyboardEvent("keydown", { code: "Enter", shiftKey: true, cancelable: true });
+    expect(mocks.keyHandler?.(shiftEnter)).toBe(true);
+    expect(writeTerminal).not.toHaveBeenCalled();
+
+    view.unmount();
+    vi.mocked(attachTerminal).mockClear();
+    render(<CliPane sessionId="agent-pty" agentInput />);
+    await waitFor(() => expect(attachTerminal).toHaveBeenCalledWith("agent-pty", expect.any(Number)));
+    const agentShiftEnter = new KeyboardEvent("keydown", { code: "Enter", shiftKey: true, cancelable: true });
+    expect(mocks.keyHandler?.(agentShiftEnter)).toBe(false);
+    expect(agentShiftEnter.defaultPrevented).toBe(true);
+    expect(writeTerminal).toHaveBeenCalledWith("agent-pty", new TextEncoder().encode("\u001b[13;2u"));
+  });
+
+  it("opens only modifier-clicked HTTP(S) terminal links", async () => {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await renderAttached();
+    const isMac = /Mac/.test(navigator.platform);
+    const modifierEvent = new MouseEvent("click", { metaKey: isMac, ctrlKey: !isMac });
+    mocks.activateLink?.(modifierEvent, "https://example.com/path");
+    expect(openUrl).toHaveBeenCalledWith("https://example.com/path");
+    mocks.activateLink?.(modifierEvent, "javascript:alert(1)");
+    expect(openUrl).toHaveBeenCalledTimes(1);
+    mocks.activateLink?.(new MouseEvent("click"), "https://example.com/");
+    expect(openUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("refits after the stage pane entry animation ends", async () => {
+    render(<div className="pane-view"><CliPane sessionId="pty-1" /></div>);
+    await waitFor(() => expect(attachTerminal).toHaveBeenCalledWith("pty-1", expect.any(Number)));
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+    const callsBeforeAnimationEnd = mocks.fitCalls;
+    fireEvent.animationEnd(document.querySelector(".pane-view")!);
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+    expect(mocks.fitCalls).toBe(callsBeforeAnimationEnd + 1);
+  });
+
+  it("shows bounded detached-history loss as a status notice, not a terminal error", async () => {
+    await renderAttached();
+    act(() => mocks.error?.({
+      sessionId: "pty-1",
+      message: "Detached terminal output exceeded the 256 KiB scrollback limit; older detached output was dropped",
+    }));
+    expect(screen.getByRole("status")).toHaveTextContent("Some output produced while this terminal was detached was dropped");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("inserts dropped file paths into the pane without submitting them", async () => {

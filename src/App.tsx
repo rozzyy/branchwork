@@ -24,12 +24,18 @@ import { useProfiles } from "./agents/profiles";
 import { errorMessage } from "./ipc/errors";
 import { toast } from "./ui/toast";
 import { startWindowSync } from "./state/windows";
+import { useWorktrees } from "./state/worktrees";
+import { ProjectLoadingOverlay } from "./shell/ProjectLoadingOverlay";
 
 export default function App() {
   useGlobalKeys();
   const collapsed = useSidebar((s) => s.collapsed);
   const dockMode = useDock((s) => s.mode);
   const dockOpen = useDock((s) => s.open);
+  const activeProjectId = useRepos((s) => s.activeProjectId);
+  const worktreeProjectId = useWorktrees((s) => s.projectId);
+  const projectLoading = useWorktrees((s) => s.loading) ||
+    (activeProjectId !== null && worktreeProjectId !== activeProjectId);
   useEffect(() => {
     void useSettings.getState().load();
     void useSidebar.getState().load();
@@ -85,9 +91,10 @@ export default function App() {
       <TitleBar />
       <div className="body">
         <Sidebar />
-        <div className={"main main-dock-" + dockFlow}>
+        <div className={"main main-dock-" + dockFlow} aria-busy={projectLoading}>
           <Stage />
           <TerminalDock />
+          <ProjectLoadingOverlay loading={projectLoading} />
         </div>
       </div>
       <StatusBar />

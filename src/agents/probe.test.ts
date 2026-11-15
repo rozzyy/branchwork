@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseClaudeAuth, parseMuseUsage, PROBED_CLIS } from "./probe";
+import { parseClaudeAuth, parseMuseLoginStatus, parseMuseUsage, PROBED_CLIS } from "./probe";
 
 // Fixtures below are shape-only examples (redacted): they lock the parser
 // against the verified vendor output without recording any real account.
@@ -55,6 +55,20 @@ describe("parseMuseUsage", () => {
     expect(parseMuseUsage("not json")).toBeNull();
     expect(parseMuseUsage(JSON.stringify({ allowance: { window: { usedPercent: "72" } } }))).toBeNull();
     expect(parseMuseUsage(JSON.stringify({ allowance: {} }))).toBeNull();
+  });
+});
+
+describe("parseMuseLoginStatus", () => {
+  it("treats valid credentials without subscription allowance as logged in", () => {
+    expect(parseMuseLoginStatus(JSON.stringify({ allowance: null, reason: "api_key" }))).toBe(true);
+    expect(parseMuseLoginStatus(JSON.stringify({ allowance: null, reason: "no_allowance" }))).toBe(true);
+    expect(parseMuseLoginStatus(JSON.stringify({ allowance: null, reason: "server_sent_no_usage" }))).toBe(true);
+  });
+
+  it("keeps signed-out and unknown results distinct", () => {
+    expect(parseMuseLoginStatus(JSON.stringify({ allowance: null, reason: "logged_out" }))).toBe(false);
+    expect(parseMuseLoginStatus(JSON.stringify({ allowance: null, reason: "future_status" }))).toBeNull();
+    expect(parseMuseLoginStatus("not json")).toBeNull();
   });
 });
 

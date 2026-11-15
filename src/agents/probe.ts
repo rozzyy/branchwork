@@ -69,3 +69,24 @@ export function parseMuseUsage(raw: string): MuseUsage | null {
     percent: Math.min(100, Math.max(0, Math.round(percent))),
   };
 }
+
+/**
+ * Resolve authentication separately from subscription quota. Muse can have a
+ * valid credential with no subscription allowance (for example API-key
+ * billing), so absence of usage data alone is not a logged-out signal.
+ */
+export function parseMuseLoginStatus(raw: string): boolean | null {
+  if (parseMuseUsage(raw)) return true;
+  let root: unknown;
+  try {
+    root = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof root !== "object" || root === null || Array.isArray(root)) return null;
+  const value = root as Record<string, unknown>;
+  if (value.allowance !== null || typeof value.reason !== "string") return null;
+  if (value.reason === "logged_out" || value.reason === "not_logged_in") return false;
+  if (value.reason === "api_key" || value.reason === "no_allowance" || value.reason === "server_sent_no_usage") return true;
+  return null;
+}

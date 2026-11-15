@@ -38,6 +38,11 @@
   background: color-mix(in oklch, var(--red) 10%, var(--surf));
 }
 
+.cli-pane-notice {
+  color: var(--fg2);
+  background: var(--s2);
+}
+
 .cli-pane-exit {
   color: var(--fg2);
   background: var(--s2);

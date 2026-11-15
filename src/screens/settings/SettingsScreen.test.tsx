@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SettingsView } from "./SettingsScreen";
@@ -373,6 +373,20 @@ it("shows real muse usage from the probe without a Logout button", async () => {
   render(<SettingsView />);
   expect(await screen.findByText("Limit resets in 12m · 25%")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Log out" })).not.toBeInTheDocument();
+});
+
+it("shows Muse as logged in when credentials have no subscription allowance", async () => {
+  useProfiles.setState({
+    profiles: [{ cliId: "muse", slug: "work", name: "Work", createdAt: 1 }],
+    globalDefault: null,
+    cliDefaults: {},
+    loaded: true,
+    usage: {},
+    cliProbes: {},
+  });
+  vi.mocked(probeCli).mockResolvedValue(JSON.stringify({ allowance: null, reason: "api_key" }));
+  render(<SettingsView />);
+  await waitFor(() => expect(useProfiles.getState().cliProbes.muse).toEqual({ linked: true, identity: null }));
 });
 
 it("offers login for an unprobed provider without claiming it is linked", async () => {

@@ -154,6 +154,16 @@ describe("addProfile", () => {
     expect(useToasts.getState().toasts.some((item) => item.title.includes("Codex"))).toBe(true);
   });
 
+  it("finishes Muse login when a valid API-key result has no subscription allowance", async () => {
+    vi.mocked(probeCli).mockResolvedValue(JSON.stringify({ allowance: null, reason: "api_key" }));
+    await useProfiles.getState().addProfile("muse", "Work");
+    await vi.waitFor(() => {
+      expect(useProfiles.getState().loginPending["muse:work"]).toBeUndefined();
+    });
+    expect(useProfiles.getState().cliProbes.muse).toEqual({ linked: true, identity: null });
+    expect(useToasts.getState().toasts.some((item) => item.title.includes("Muse"))).toBe(true);
+  });
+
   it("runs the real shell login for opencode (interactive picker in the PTY)", async () => {
     const profile = await useProfiles.getState().addProfile("opencode", "Work");
     expect(profile).toMatchObject({ cliId: "opencode", slug: "work" });

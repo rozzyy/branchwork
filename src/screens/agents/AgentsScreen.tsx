@@ -144,7 +144,7 @@ function AgentPaneBody({ session }: { session: AgentSession }) {
           </button>
         </div>
       )}
-      <CliPane key={session.sessionId} sessionId={session.sessionId} interceptInput={interceptInput} />
+      <CliPane key={session.sessionId} sessionId={session.sessionId} interceptInput={interceptInput} agentInput />
     </>
   );
 }

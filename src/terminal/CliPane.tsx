@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { t } from "../i18n/t";
 import {
   attachTerminal,
@@ -63,26 +65,46 @@ export interface CliPaneHooks {
   interceptInput?: (data: string) => boolean;
   /** Report the fitted terminal size after each resize. */
   onResize?: (cols: number, rows: number) => void;
+  /** Agent TUIs use the enhanced keyboard sequence to distinguish Shift+Enter from Enter. */
+  agentInput?: boolean;
 }
 
-export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: string } & CliPaneHooks) {
+function openTerminalLink(event: MouseEvent, value: string): void {
+  const isMac = /Mac/.test(navigator.platform);
+  if (!(isMac ? event.metaKey : event.ctrlKey)) return;
+  let url: URL;
+  try {
+    url = new URL(value.startsWith("www.") ? `https://${value}` : value);
+  } catch {
+    return;
+  }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || !url.hostname || url.username || url.password) return;
+  void openUrl(url.href).catch((reason: unknown) => {
+    console.error("Could not open terminal link", reason);
+  });
+}
+
+export function CliPane({ sessionId, interceptInput, onResize, agentInput = false }: { sessionId: string } & CliPaneHooks) {
   const containerRef = useRef<HTMLDivElement>(null);
   const exitedRef = useRef(false);
   // The effect below is keyed on sessionId only, so route optional hooks
   // through a ref to always call the latest callbacks.
-  const hooksRef = useRef({ interceptInput, onResize });
-  hooksRef.current = { interceptInput, onResize };
+  const hooksRef = useRef({ interceptInput, onResize, agentInput });
+  hooksRef.current = { interceptInput, onResize, agentInput };
   const [exit, setExit] = useState<PtyExit | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const paneView = container.closest(".pane-view");
 
     const attachmentId = nextAttachmentId();
     exitedRef.current = false;
     setExit(null);
     setError(null);
+    setNotice(null);
     let disposed = false;
     let attached = false;
     let attachPromise: Promise<void> | null = null;
@@ -102,6 +124,7 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
     });
     const fitAddon = new FitAddon();
     const webglAddon = new WebglAddon();
+    const webLinksAddon = new WebLinksAddon(openTerminalLink);
     let resizeObserver: ResizeObserver | null = null;
     let inputSubscription: { dispose: () => void } | null = null;
     let dragDropUnlisten: (() => void) | null = null;
@@ -141,6 +164,13 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(syncSize, RESIZE_DEBOUNCE_MS);
     };
+    // Stage navigation remounts the screen with a short pane-in animation.
+    // Refit at the end of that animation as well as on ResizeObserver: the
+    // parent can finish its layout after xterm's initial geometry read.
+    const onPaneAnimationEnd = (event: Event) => {
+      if (event.target === paneView) scheduleResize();
+    };
+    paneView?.addEventListener("animationend", onPaneAnimationEnd);
 
     const setupListeners = async () => {
       const outputUnlisten = await onTerminalOutput((event: PtyOutput) => {
@@ -169,7 +199,11 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
 
       const errorUnlisten = await onTerminalError((event: PtyErrorEvent) => {
         if (disposed || event.sessionId !== sessionId) return;
-        setError(event.message);
+        if (event.message.startsWith("Detached terminal output exceeded ")) {
+          setNotice(t("terminal.historyTruncated"));
+        } else {
+          setError(event.message);
+        }
       });
       if (disposed) {
         errorUnlisten();
@@ -206,6 +240,16 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
       terminal.open(container);
       fitAddon.fit();
       terminal.loadAddon(webglAddon);
+      terminal.loadAddon(webLinksAddon);
+      terminal.options.linkHandler = { activate: openTerminalLink };
+      terminal.attachCustomKeyEventHandler((event) => {
+        if (hooksRef.current.agentInput && event.type === "keydown" && event.code === "Enter" && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+          event.preventDefault();
+          void writeTerminal(sessionId, new TextEncoder().encode("\u001b[13;2u")).catch(showError);
+          return false;
+        }
+        return true;
+      });
       inputSubscription = terminal.onData((data) => {
         if (disposed || exitedRef.current) return;
         if (hooksRef.current.interceptInput?.(data)) return;
@@ -225,10 +269,12 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
       disposed = true;
       window.clearTimeout(resizeTimer);
       resizeObserver?.disconnect();
+      paneView?.removeEventListener("animationend", onPaneAnimationEnd);
       inputSubscription?.dispose();
       dragDropUnlisten?.();
       unsubscribe();
       webglAddon.dispose();
+      webLinksAddon.dispose();
       fitAddon.dispose();
       terminal.dispose();
       if (attached) {
@@ -251,6 +297,7 @@ export function CliPane({ sessionId, interceptInput, onResize }: { sessionId: st
           {t("terminal.error", { message: error })}
         </div>
       )}
+      {notice && <div className="cli-pane-message cli-pane-notice" role="status">{notice}</div>}
       {exit && (
         <div className="cli-pane-message cli-pane-exit" role="status">
           {exitMessage(exit)}

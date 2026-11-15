@@ -2,6 +2,46 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-15: GitHub #4 — project-switch loading overlay
+
+- Added a reusable overlay over the main content area. It activates while worktrees are loading or the active project ID has changed before the worktree store catches up, so the old view is covered during the transition. The translucent blurred overlay blocks pointer interaction, announces “Loading project…” to assistive technology, and fades away after loading finishes. Activation/teardown are O(1) state checks with one bounded 140 ms timer; no polling or project-sized work was added.
+- Verification: `pnpm typecheck` passed; the combined focused suite (7 files / 110 tests) passed, including overlay fade lifecycle. `git diff --check` passed. Desktop project switching was not manually exercised.
+- Next: run final diff and scoped verification review for issues #4, #6–#10; preserve all unrelated working-tree content. No commit or push was requested.
+
+## 2026-11-15: GitHub #10 — Muse login stays pending
+
+- Root cause: Muse's `muse usage --json` probe was used as both a quota parser and an auth check. Successful results without a subscription allowance (such as API-key billing) parse to no quota and were incorrectly marked logged out, so login polling never completed.
+- Fix: added a separate auth-status parser for known Muse success/no-allowance reasons and explicit logged-out results. Login monitoring and the Settings status now use it independently from quota parsing; quota remains absent when Muse reports no allowance. Time/space are O(response bytes) / O(parsed JSON) for a probe, with the backend's existing 64 KiB probe output cap and 1-second bounded poll interval.
+- Verification: `pnpm typecheck` passed; focused probes/profile/settings/terminal/Agents suites passed (5 files / 108 tests). The targeted PTY replay Rust test passed. `rustfmt --check --edition 2024 src-tauri/src/pty.rs` and `git diff --check` passed after touched-file formatting. Full `cargo fmt --check` reports formatting drift in many pre-existing Rust files and was not applied repo-wide.
+- Next: add a main-content loading overlay during project switches.
+
+## 2026-11-15: GitHub #9 — terminal output history cap
+
+- Root cause: the PTY retained the last 256 KiB of output even while a mounted xterm already consumed the stream live. The retained queue represented the entire session lifetime, so reattaching after a long session could emit a history-truncation error despite no output having been missed while attached.
+- Fix: stream attached output directly without retaining it; buffer only output produced while detached. Replayed output is cleared from the pending queue after attach, while exit/error events are retained for reattachment. Detached output remains capped at 256 KiB. If that detached-only cap is crossed, the existing event is rendered as a status notice, not a terminal error. Time/space are O(bytes emitted while detached), bounded by 256 KiB plus event overhead; attached output is O(1) additional retained memory.
+- Verification: `pnpm typecheck`, focused `CliPane.test.tsx` and `AgentsScreen.test.tsx` (2 files / 46 tests), targeted Rust test `attached_output_does_not_consume_the_detached_replay_budget` (1 passed), and `git diff --check` passed. Full Rust suite was not rerun.
+- Next: fix GitHub #10 Muse login status detection.
+
+## 2026-11-15: GitHub #6 — refit agent terminal after navigation
+
+- Cause path: the Agents view is unmounted during screen navigation and enters through the Stage pane's `pane-in` animation on return. `CliPane` already fits at attach and observes container dimensions, but had no explicit fit after the parent pane's entry animation completed.
+- Fix: listen to the containing `.pane-view`'s own `animationend` and schedule one debounced fit/PTY resize. This does not stop or recreate the agent process. Work is O(1) per animation event, with one listener per mounted terminal and the existing 120 ms debounce; no extra retained history or polling.
+- Verification: `pnpm typecheck` passed; focused `CliPane.test.tsx` and `AgentsScreen.test.tsx` passed (2 files / 45 tests), including a regression test that asserts a fit after `animationend`; `git diff --check` passed. Desktop navigation reproduction remains pending.
+- Next: fix GitHub #9 terminal output history retention.
+
+## 2026-11-15: GitHub #8 — agent keyboard and modifier links
+
+- Agent panes now intercept only unmodified Shift+Enter and send the CSI-u sequence (`ESC [ 13;2u`) so agent TUIs can distinguish it from Enter; ordinary terminal panes retain xterm's normal input path. Terminal hyperlinks now use xterm's web-links addon and open on Cmd+Click for macOS (Ctrl+Click elsewhere), restricted to parsed HTTP(S) URLs. This uses O(1) work and O(1) extra state per key/link activation; no input or output history is retained. External link launch is delegated to Tauri's existing opener capability, and unsupported schemes are rejected.
+- Verification: `pnpm typecheck` passed; focused `CliPane.test.tsx` and `AgentsScreen.test.tsx` passed (2 files / 44 tests); `git diff --check` passed. No native manual verification was run, so Shift+Enter compatibility across installed agent CLIs remains pending.
+- Next: investigate GitHub #6 (agent terminal layout after navigation).
+
+## 2026-11-15: GitHub #7 — split-pane content clipping
+
+- Root cause: `.pane` is a CSS grid with an implicit `auto` column, while `.pane-tool` and `.pane-view` were allowed to retain their min-content width. Long screen content could therefore exceed a resized pane's usable width and be hidden by the pane's overflow clipping.
+- Fix: give the pane an explicit `minmax(0, 1fr)` column and allow both direct grid children to shrink to the pane width. The content view keeps its own overflow scrolling. Complexity remains O(1) per pane; no extra layout passes or retained state were added.
+- Verification: baseline `./init.sh` TypeScript passed and Vitest passed (85 files / 733 tests). Rust clippy passed; Rust tests had 10 environment failures because macOS FSEvent streams could not start (327 passed / 10 failed / 3 ignored). After the fix, `pnpm typecheck`, `pnpm exec vitest run src/stage/Stage.test.tsx` (5/5), and `git diff --check` passed.
+- Next: refit agent terminal after returning to Agents, then investigate GitHub #9.
+
 ## 2026-11-15: Keep the stage-tab add button after all tabs
 
 - Corrected the target surface to the top-level Stage tabs shown in `tabs.png`. The `+` control is now the final flex item inside the tab-list row, after all tab cards, with its own fixed-width slot. This makes the row calculate `tab 1 → tab 2 → +` as one sequence instead of positioning `+` as a separate flex sibling that can overlap the last card. The list uses its max-content width and overflows within the tab strip.
@@ -1490,3 +1530,12 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - App icon replaced with the Branchwork mark (`src-tauri/icons/source/app-icon.png`, generated with `tauri icon`); `v0.11.0` re-pointed to `f97676a` (it was never pushed before) and pushed with `main`.
 - The user reported the manual desktop checks for M8–M11 as done. No open blockers.
 - Follow-ups (not started): app ACL manifest as defense in depth for browser tabs; optional search-engine setting / "Open in Chrome"; Codex conversation discovery is per window (two windows with Codex panes in one worktree+profile could pick the same rollout); `inboxState` is last-writer-wins across windows.
+## 2026-11-15: GitHub issue #10 Muse login follow-up
+
+- User reported Muse login still fails after the first #10 patch. Reproduced locally on Muse 1.4.20: signed-out `muse usage --json` exits 1 and writes `muse usage: not logged in: run `muse login` first` to stderr; stdout is empty. The Rust probe discarded stderr, causing the app's login monitor to treat the status as unverifiable and stop polling.
+- `src-tauri/src/cli.rs` now translates only that known signed-out message to `{"allowance":null,"reason":"not_logged_in"}`; unrelated errors remain errors and raw stderr is not exposed. This lets the existing monitor retry until browser approval is detected.
+- Verification: focused Rust regression test passed (1); probe/profile/Settings Vitest suites passed (62); `git diff --check` passed. Native app login round-trip still needs manual confirmation.
+
+## 2026-11-15: User manual verification of GitHub issues
+
+- User confirmed issues #4, #6, #7, #8, #9, and #10 all work in manual checks and asked to commit, push, and close them. Feature records are marked done; remaining action is remote publication and issue closure.

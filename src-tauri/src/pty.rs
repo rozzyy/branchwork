@@ -95,8 +95,15 @@ impl PtySessionState {
         events.completed |= completed;
 
         if let PtyEvent::Output(output) = &event {
-            events.output_bytes += output.data.len();
             events.last_output = Some(std::time::Instant::now());
+            // A mounted xterm already owns its scrollback. Retain only bytes
+            // produced while detached, so the replay cap measures pending
+            // output instead of the session's entire lifetime.
+            if events.attachment_id.is_some() {
+                (self.event_sink)(event);
+                return;
+            }
+            events.output_bytes += output.data.len();
         }
         events.history.push_back(event.clone());
         while events.output_bytes > MAX_PENDING_OUTPUT_BYTES {
@@ -126,13 +133,19 @@ impl PtySessionState {
         if events.history_truncated {
             (self.event_sink)(PtyEvent::Error(PtyErrorEvent {
                 session_id: self.session_id.clone(),
-                message: "Terminal output history exceeded 256 KiB; older output is not available"
-                    .to_owned(),
+                message: "Detached terminal output exceeded the 256 KiB scrollback limit; older detached output was dropped".to_owned(),
             }));
         }
         for event in &events.history {
             (self.event_sink)(event.clone());
         }
+        // The view has received its pending replay. Start a fresh bounded
+        // detached buffer while retaining terminal exit/error state.
+        events
+            .history
+            .retain(|event| !matches!(event, PtyEvent::Output(_)));
+        events.output_bytes = 0;
+        events.history_truncated = false;
     }
 
     fn detach(&self, attachment_id: u64) {
@@ -1368,6 +1381,57 @@ mod tests {
         }
         assert!(received_detached_output, "detached output was not replayed");
 
+        manager.close(&session.session_id).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn attached_output_does_not_consume_the_detached_replay_budget() {
+        use std::{ffi::OsStr, sync::mpsc, time::Duration};
+
+        let manager = PtyManager::default();
+        let (sender, receiver) = mpsc::channel();
+        let sink = Arc::new(move |event| {
+            sender.send(event).unwrap();
+        });
+        let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
+        command.args([
+            "-c",
+            "head -c 300000 /dev/zero; printf 'attached-complete\\n'; read value",
+        ]);
+        let session = manager.spawn_command(command, 80, 24, sink).unwrap();
+        manager.attach(&session.session_id, 1).unwrap();
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut received_bytes = 0;
+        let mut complete = false;
+        while !complete && std::time::Instant::now() < deadline {
+            match receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(PtyEvent::Output(output)) => {
+                    received_bytes += output.data.len();
+                    complete |= String::from_utf8_lossy(&output.data).contains("attached-complete");
+                }
+                Ok(PtyEvent::Exit(_)) => panic!("shell exited before it could be held open"),
+                Ok(PtyEvent::Error(error)) => panic!("unexpected PTY error: {}", error.message),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(error) => panic!("PTY event channel failed: {error}"),
+            }
+        }
+        assert!(complete, "large attached output did not finish");
+        assert!(received_bytes > MAX_PENDING_OUTPUT_BYTES);
+        let state = manager.session(&session.session_id).unwrap();
+        let buffered = state.events.lock().unwrap();
+        assert_eq!(buffered.output_bytes, 0);
+        assert!(!buffered.history_truncated);
+        drop(buffered);
+
+        manager.detach(&session.session_id, 1).unwrap();
+        manager.attach(&session.session_id, 2).unwrap();
+        assert!(receiver.try_iter().all(|event| !matches!(
+            event,
+            PtyEvent::Error(PtyErrorEvent { message, .. })
+                if message.starts_with("Detached terminal output exceeded ")
+        )));
         manager.close(&session.session_id).unwrap();
     }
 

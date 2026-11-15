@@ -5,16 +5,16 @@
    tree) so splits never remount a screen; dividers sit on the boundaries. */
 .stage-canvas { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; }
 .stage-canvas > .pane { position: absolute; }
-.pane { display: grid; grid-template-rows: minmax(44px, max-content) minmax(0, 1fr); min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); box-shadow: none; overflow: hidden; container-type: inline-size; transition: box-shadow .15s; }
+.pane { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(44px, max-content) minmax(0, 1fr); min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); box-shadow: none; overflow: hidden; container-type: inline-size; transition: box-shadow .15s; }
 .stage.split,
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen),
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) { padding: 0; }
 .stage.split .pane,
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen) .pane,
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) .pane { border: 0; border-radius: 0; }
-.pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); }
+.pane-tool { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); }
 .pane-title { min-width: 0; margin: 0; font-size: var(--fs-title); font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
-.pane-view { min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
+.pane-view { min-width: 0; min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
 @keyframes pane-in { from { opacity: 0; transform: translateY(6px); } }
 .placeholder { height: 100%; display: grid; place-content: center; text-align: center; color: var(--fg3); gap: 6px; }
 .placeholder-icon { font-size: 34px; color: var(--acc); }

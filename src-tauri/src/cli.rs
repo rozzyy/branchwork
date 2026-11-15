@@ -462,6 +462,12 @@ pub fn probe(
         .output()
         .map_err(|error| AppError::io(format!("could not run status probe: {error}")))?;
     if !output.status.success() {
+        // `muse usage --json` reports a signed-out account on stderr and exits
+        // non-zero. Convert only Muse's known authentication message into a
+        // small, non-sensitive status payload; all other failures stay errors.
+        if cli_id == "muse" && muse_reports_logged_out(&output.stderr) {
+            return Ok(r#"{"allowance":null,"reason":"not_logged_in"}"#.to_owned());
+        }
         return Err(AppError::io("status probe failed"));
     }
     let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -472,9 +478,23 @@ pub fn probe(
     Ok(text)
 }
 
+fn muse_reports_logged_out(stderr: &[u8]) -> bool {
+    let message = String::from_utf8_lossy(stderr);
+    message.contains("muse usage: not logged in:") && message.contains("muse login")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognizes_only_muses_signed_out_probe_message() {
+        assert!(muse_reports_logged_out(
+            b"muse usage: not logged in: run `muse login` first\n"
+        ));
+        assert!(!muse_reports_logged_out(b"muse usage: network error\n"));
+        assert!(!muse_reports_logged_out(b"not logged in: run `muse login` first\n"));
+    }
 
     #[test]
     fn rejects_non_segment_binary_names() {

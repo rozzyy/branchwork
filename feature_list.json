@@ -1669,6 +1669,72 @@
       ],
       "status": "review",
       "evidence": "The + control is the final fixed-width flex item inside the Stage tab list, after all tab cards; the tab list uses max-content width and overflows within the strip. This preserves tab 1, tab 2, + without sibling overlap. pnpm typecheck, feature JSON validation, and git diff --check passed. Impeccable detector reported an existing bounce-easing warning at unchanged stage.css:17. Manual desktop review remains pending."
+    },
+    {
+      "id": "github-issue-7-split-pane-clipping",
+      "stage": 43,
+      "name": "Prevent split-pane content clipping during resize",
+      "description": "https://github.com/rozzyy/branchwork/issues/7",
+      "dependencies": [
+        "m9-task-02-split-tree-ui"
+      ],
+      "status": "done",
+      "evidence": "Explicit minmax(0, 1fr) pane column and min-width: 0 on toolbar/content grid items prevent min-content widths from exceeding a resized pane; content retains local scrolling. pnpm typecheck, Stage.test.tsx (5/5), and git diff --check passed. Baseline ./init.sh had 10 Rust FSEvent startup failures (327 passed / 10 failed / 3 ignored). User manually verified the fix and confirmed all tracked issues are resolved (2026-11-15)."
+    },
+    {
+      "id": "github-issue-8-agent-keyboard-and-links",
+      "stage": 44,
+      "name": "Fix agent Shift+Enter and Cmd-click links",
+      "description": "https://github.com/rozzyy/branchwork/issues/8",
+      "dependencies": [
+        "github-issue-7-split-pane-clipping"
+      ],
+      "status": "done",
+      "evidence": "Agent panes now send Shift+Enter as CSI-u while regular shell panes retain xterm input behavior; terminal hyperlinks open on platform modifier-click only after strict HTTP(S) URL validation. pnpm typecheck and focused CliPane/AgentsScreen Vitest (44 tests) passed; git diff --check passed. Native/manual checks across supported agent CLIs remain pending. User manually verified the fix and confirmed all tracked issues are resolved (2026-11-15)."
+    },
+    {
+      "id": "github-issue-6-agent-terminal-navigation-layout",
+      "stage": 45,
+      "name": "Refit agent terminal after stage navigation animation",
+      "description": "https://github.com/rozzyy/branchwork/issues/6",
+      "dependencies": [
+        "github-issue-8-agent-keyboard-and-links"
+      ],
+      "status": "done",
+      "evidence": "CliPane now refits on the containing stage pane's animationend, in addition to ResizeObserver and the initial attachment fit. This remeasures layout without recreating the PTY. pnpm typecheck, focused CliPane/AgentsScreen Vitest (45 tests), and git diff --check passed; desktop navigation reproduction remains pending. User manually verified the fix and confirmed all tracked issues are resolved (2026-11-15)."
+    },
+    {
+      "id": "github-issue-9-terminal-output-history-cap",
+      "stage": 46,
+      "name": "Bound terminal history to detached output only",
+      "description": "https://github.com/rozzyy/branchwork/issues/9",
+      "dependencies": [
+        "github-issue-6-agent-terminal-navigation-layout"
+      ],
+      "status": "done",
+      "evidence": "PTY output is streamed without retention while attached; only detached output consumes the 256 KiB replay cap. A cap overflow remains nonfatal and appears as an informational status notice instead of a terminal error. pnpm typecheck, focused Vitest (46 tests), and the targeted Rust regression test passed; git diff --check passed. User manually verified the fix and confirmed all tracked issues are resolved (2026-11-15)."
+    },
+    {
+      "id": "github-issue-10-muse-login-pending",
+      "stage": 47,
+      "name": "Separate Muse login state from subscription quota",
+      "description": "https://github.com/rozzyy/branchwork/issues/10",
+      "dependencies": [
+        "github-issue-9-terminal-output-history-cap"
+      ],
+      "status": "done",
+      "evidence": "Muse auth probe distinguishes login state from quota. Follow-up fix: local Muse 1.4.20 confirmed that signed-out `muse usage --json` exits 1 and reports `muse usage: not logged in: run `muse login` first` on stderr; Rust now maps only that recognized message to a normalized not_logged_in status, allowing the login monitor to keep polling. Rust regression test passed; focused probe/profile/settings tests passed (62). Manual desktop login confirmation remains pending. User manually verified the fix and confirmed all tracked issues are resolved (2026-11-15)."
+    },
+    {
+      "id": "github-issue-4-project-switch-loading-overlay",
+      "stage": 48,
+      "name": "Show blocking overlay while a project loads",
+      "description": "https://github.com/rozzyy/branchwork/issues/4",
+      "dependencies": [
+        "github-issue-10-muse-login-pending"
+      ],
+      "status": "done",
+      "evidence": "Added a reusable overlay over the main content, triggered by the worktree loader or active/worktree project ID mismatch. It preserves the previous screen beneath a translucent blurred surface, blocks pointer input, announces loading, and fades out after loading ends. Focused overlay test, typecheck, and the combined focused suite (110 tests) passed. Manual project-switch check remains pending. User manually verified the fix and confirmed all tracked issues are resolved (2026-11-15)."
     }
   ]
 }
