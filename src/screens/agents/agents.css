@@ -25,6 +25,11 @@
   font-size: 12.5px;
 }
 
+.agent-toolbar { display: flex; flex: 1 1 auto; align-items: center; gap: 8px; min-width: 0; }
+.agent-toolbar-actions { display: flex; align-items: center; gap: 6px; min-width: 0; margin-left: auto; }
+.agent-toolbar-actions .seg { flex: 0 0 auto; }
+.agent-toolbar-actions .seg button { flex-shrink: 0; white-space: nowrap; }
+
 /* Segmented layout group in the toolbar, mirroring the prototype. */
 .agent-grp {
   display: flex;
@@ -87,6 +92,7 @@
   background: var(--surface);
   box-shadow: none;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .agent-pane[data-slot="left"] {
@@ -135,6 +141,7 @@
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   padding: 4px 8px;
   border-bottom: 1px solid var(--border);
@@ -143,22 +150,66 @@
   min-width: 0;
 }
 
-.agent-phd > * {
-  flex-shrink: 0;
+.agent-phd-id,
+.agent-phd-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
-.agent-phd .sp {
-  flex: 1;
-  flex-shrink: 1;
-  min-width: 0;
+.agent-phd-id {
+  flex: 1 1 220px;
+  gap: 6px;
+}
+
+.agent-phd-actions {
+  flex: 0 1 auto;
+  gap: 4px;
+}
+
+.agent-phd-id > *,
+.agent-phd-actions > * {
+  flex-shrink: 0;
 }
 
 /* Text items give way before the actions do: in a narrow split pane the
  * worktree name and CLI switcher truncate, the buttons stay visible. */
-.agent-phd .agent-wt,
-.agent-phd .agent-cli-switch {
+.agent-phd-id .agent-wt,
+.agent-phd-id .agent-cli-switch {
   flex-shrink: 1;
   min-width: 0;
+}
+
+@container (max-width: 760px) {
+  .agent-toolbar-actions > .faint { display: none; }
+  .agent-toolbar-actions .agent-action-label { display: none; }
+}
+
+@container (max-width: 480px) {
+  /* The Agents toolbar lives in `.pane-tool`, outside `.agent-pane`; keep its
+   * controls on their own rows when that stage pane is split narrow. */
+  .agent-toolbar { flex: 1 1 100%; flex-wrap: wrap; gap: 6px; }
+  .agent-toolbar-actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; gap: 4px; margin-left: 0; }
+  .agent-toolbar-actions .btn { padding-inline: 6px; white-space: nowrap; }
+
+  .agent-phd {
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding: 4px 6px;
+  }
+
+  .agent-phd-id,
+  .agent-phd-actions {
+    flex: 1 1 100%;
+  }
+
+  .agent-phd-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .agent-phd-id .agent-wt { max-width: 28cqi; }
+  .agent-phd-id .agent-cli-switch { max-width: 30cqi; }
 }
 
 /* Secondary strip under the header for live meters (account quota, token

@@ -110,12 +110,14 @@ export function BlameToolbar() {
         />
         <Button
           disabled={!current}
+          aria-label={t("blame.openInEditor")}
+          title={t("blame.openInEditor")}
           onClick={() => {
             setMode("editor");
             go("files");
           }}
         >
-          {"▤ "}{t("blame.openInEditor")}
+          {"▤ "}<span className="blame-open-label">{t("blame.openInEditor")}</span>
         </Button>
       </div>
     </>

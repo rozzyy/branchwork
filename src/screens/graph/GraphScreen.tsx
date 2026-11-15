@@ -221,13 +221,15 @@ export function GraphToolbar() {
   const syncDisabled = !activePath || worktreesProjectId !== projectId || running !== undefined;
   const syncButton = (operation: SyncOperation, labelKey: "graph.fetch" | "graph.pull" | "graph.push", count?: number, title?: string) => (
     <button
-      className="btn sm"
+      className="btn sm graph-sync-action"
       disabled={syncDisabled}
-      title={title}
+      title={title ?? t(labelKey)}
+      aria-label={count ? `${t(labelKey)} ${count}` : t(labelKey)}
       aria-busy={running === operation}
       onClick={() => { if (activePath) void runSync(activePath, operation); }}
     >
-      {running === operation ? t("sync.running", { action: t(labelKey) }) : t(labelKey)}
+      <span className="graph-action-icon" aria-hidden="true">{operation === "fetch" ? "↻" : operation === "pull" ? "↓" : "↑"}</span>
+      <span className="graph-action-label">{running === operation ? t("sync.running", { action: t(labelKey) }) : t(labelKey)}</span>
       {count ? <span className="graph-sync-count">{count}</span> : null}
     </button>
   );
@@ -245,6 +247,7 @@ export function GraphToolbar() {
         <button
           className="btn primary"
           disabled={selection.kind !== "commit" || !selectedCommit || !project || !activePath || worktreesProjectId !== projectId}
+          aria-label={t("graph.worktreeToolbar")}
           title={selectedCommit ? t("graph.createAtCommitTitle") : t("graph.selectCommitToCreateWorktree")}
           onClick={() => {
             if (selection.kind === "commit" && selectedCommit && project && activePath) {
@@ -252,7 +255,8 @@ export function GraphToolbar() {
             }
           }}
         >
-          {t("graph.worktreeToolbar")}
+          <span className="graph-worktree-icon" aria-hidden="true">＋</span>
+          <span className="graph-worktree-label">{t("graph.worktreeToolbar")}</span>
         </button>
       </div>
     </>

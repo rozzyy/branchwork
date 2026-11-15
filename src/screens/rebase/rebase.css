@@ -26,7 +26,7 @@
 .rebase-state h2 { margin: 0; font-size: 15px; }
 .rebase-actions { display: flex; gap: 8px; justify-content: center; }
 @container (max-width: 760px) {
-  .rebase { grid-template-columns: 1fr; }
+  .rebase { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(160px, 38%); }
   .rebase-side { border-left: 0; border-top: 1px solid var(--line); }
   .rebase-row { grid-template-columns: 18px 96px minmax(0, 1fr) auto; }
   .rebase-who, .rebase-sha { display: none; }

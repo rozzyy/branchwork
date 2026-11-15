@@ -5,7 +5,7 @@
    tree) so splits never remount a screen; dividers sit on the boundaries. */
 .stage-canvas { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; }
 .stage-canvas > .pane { position: absolute; }
-.pane { display: grid; grid-template-rows: 44px minmax(0, 1fr); min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); box-shadow: none; overflow: hidden; container-type: inline-size; transition: box-shadow .15s; }
+.pane { display: grid; grid-template-rows: minmax(44px, max-content) minmax(0, 1fr); min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); box-shadow: none; overflow: hidden; container-type: inline-size; transition: box-shadow .15s; }
 .stage.split,
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen),
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) { padding: 0; }
@@ -13,7 +13,7 @@
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen) .pane,
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) .pane { border: 0; border-radius: 0; }
 .pane-tool { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); }
-.pane-title { margin: 0; font-size: var(--fs-title); font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
+.pane-title { min-width: 0; margin: 0; font-size: var(--fs-title); font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
 .pane-view { min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
 @keyframes pane-in { from { opacity: 0; transform: translateY(6px); } }
 .placeholder { height: 100%; display: grid; place-content: center; text-align: center; color: var(--fg3); gap: 6px; }
@@ -21,8 +21,8 @@
 .placeholder h2 { margin: 0; color: var(--fg); font-size: 18px; }
 .placeholder p { margin: 0; }
 .pane.focus { box-shadow: inset 0 2px var(--accent); }
-.pane-ctl { display: flex; gap: 2px; margin-left: auto; padding-left: 8px; }
-.pane-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.pane-ctl { display: flex; min-width: 0; gap: 2px; margin-left: auto; padding-left: 8px; }
+.pane-actions { display: flex; min-width: 0; align-items: center; gap: 8px; margin-left: auto; }
 /* When the toolbar already has its own right-aligned action group (prototype's `.acts`), that
  * group's own auto margin does the push — giving pane-ctl auto margin too would split the free
  * space between both, leaving a gap between the actions and the split control instead of flush
@@ -51,7 +51,92 @@
 .dirs { display: flex; gap: 2px; margin-left: 8px; }
 .dir { width: 22px; height: 20px; display: grid; place-items: center; border-radius: 5px; opacity: .65; }
 .dir:hover { opacity: 1; background: oklch(1 0 0 / .25); }
-@container (max-width: 560px) { .pane-title { overflow: hidden; text-overflow: ellipsis; } }
+@container (max-width: 560px) {
+  .pane-tool { flex-wrap: wrap; min-height: 44px; height: auto; gap: 4px 8px; padding: 4px 8px; }
+  .pane-title { flex: 1 1 120px; overflow: hidden; text-overflow: ellipsis; }
+  .pane-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .pane-tool > [role="tablist"] { flex: 1 1 auto; min-width: 0; max-width: 100%; overflow-x: auto; }
+  .pane-actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .pane-ctl { flex: 0 1 auto; flex-wrap: wrap; margin-left: auto; padding-left: 0; }
+  .pane-actions ~ .pane-ctl,
+  .pane-ctl ~ .pane-ctl { margin-left: auto; border-left: 0; }
+}
+@container (max-width: 360px) {
+  .pane-title { flex-basis: 100%; }
+  .pane-actions { margin-left: 0; justify-content: flex-start; }
+}
+/* In compact History panes, keep the pane controls above the content and
+   right-align the mode labels directly above the mode action buttons. */
+@container (max-width: 760px) {
+  .pane-tool:has(.history-tabs) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 4px 16px;
+    padding: 4px 8px;
+  }
+  .pane-tool:has(.history-tabs) > .history-tabs {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    width: auto;
+    justify-content: flex-start;
+  }
+  .pane-tool:has(.history-tabs) > .pane-title {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    width: auto;
+  }
+  .pane-tool:has(.history-tabs) > .pane-actions,
+  .pane-tool:has(.history-tabs) > .graph-toolbar-actions {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    width: max-content;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    justify-self: end;
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .pane-tool:has(.history-tabs) > .pane-actions > *,
+  .pane-tool:has(.history-tabs) > .graph-toolbar-actions > * { flex: 0 0 auto; white-space: nowrap; }
+  .pane-tool:has(.history-tabs) > .blame-toolbar-actions { gap: 4px; }
+  .pane-tool:has(.history-tabs) > .blame-toolbar-actions .seg button,
+  .pane-tool:has(.history-tabs) > .blame-toolbar-actions > .btn { padding-inline: 4px; }
+  .pane-tool:has(.history-tabs) > .pane-ctl {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+    padding-left: 8px;
+    border-left: 1px solid var(--line);
+    flex-wrap: nowrap;
+    justify-self: end;
+  }
+  .pane-tool:has(.history-tabs) > .pane-ctl .icon-btn { flex: 0 0 22px; width: 22px; min-width: 22px; height: 22px; }
+}
+@container (min-width: 761px) {
+  .pane-tool:has(.history-tabs) > .pane-title { order: -1; flex: 0 0 auto; }
+}
+@container (max-width: 520px) {
+  .pane-tool:has(.history-tabs) .history-tab-full { display: none; }
+  .pane-tool:has(.history-tabs) .history-tab-compact { display: inline; }
+  .pane-tool:has(.history-tabs) .graph-sync-action,
+  .pane-tool:has(.history-tabs) .graph-toolbar-actions > .btn.primary { padding-inline: 5px; }
+  .pane-tool:has(.history-tabs) .graph-action-icon,
+  .pane-tool:has(.history-tabs) .graph-worktree-icon { display: inline; }
+  .pane-tool:has(.history-tabs) .graph-action-label,
+  .pane-tool:has(.history-tabs) .graph-worktree-label,
+  .pane-tool:has(.history-tabs) .blame-open-label { display: none; }
+}
+@container (max-width: 380px) {
+  .pane-tool:has(.history-tabs) > .history-tabs .history-tab { padding-inline: 3px; font-size: var(--fs-meta); }
+  .pane-tool:has(.history-tabs) > .history-tabs { justify-content: flex-start; }
+  .pane-tool:has(.history-tabs) > .pane-ctl { padding-left: 0; border-left: 0; }
+}
 .stage-tabs { display: flex; flex: 0 0 42px; align-items: stretch; gap: 2px; min-width: 0; margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border); background: var(--surface); }
 .stage-tablist { display: flex; flex: 0 0 auto; align-items: stretch; gap: 2px; min-width: 0; margin: 0; padding: 0; }
 .stage-tab-card { display: flex; flex: 0 0 172px; align-items: center; gap: 0; min-width: 0; height: 100%; margin: 0; padding: 0 10px; border: 1px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0; color: var(--fg2); }

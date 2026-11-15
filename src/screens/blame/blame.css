@@ -29,3 +29,10 @@
 .blame-history-message { font-weight: 550; font-size: 12.5px; }
 .blame-history-meta { color: var(--fg3); font-size: var(--fs-meta); }
 .blame-no-history, .blame-state { padding: 10px 14px; color: var(--fg3); font-size: 12.5px; }
+
+@container (max-width: 640px) {
+  .blame-screen { grid-template-columns: minmax(0, 32%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(140px, 34%); }
+  .blame-detail { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid var(--line); }
+  .blame-tree { border-right: 1px solid var(--line); }
+  .blame-subtitle { display: none; }
+}

@@ -35,3 +35,12 @@
 
 .files-editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .files-diff-empty { display: grid; height: 100%; place-items: center; color: var(--fg3); }
+
+@container (max-width: 560px) {
+  .files-screen { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(150px, 34%) minmax(0, 1fr); }
+  .files-side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .files-top { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px; }
+  .files-worktree-select, .files-search { flex: 1 1 140px; min-width: 0; }
+  .files-toolbar-actions { flex-wrap: wrap; gap: 4px; }
+  .files-subtitle { display: none; }
+}

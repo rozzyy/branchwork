@@ -52,3 +52,10 @@
 
 .changes-diff-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .changes-empty { display: grid; height: 100%; place-items: center; color: var(--fg3); }
+
+@container (max-width: 560px) {
+  .changes-screen { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 42%) minmax(0, 1fr); }
+  .changes-list-panel { border-right: 0; border-bottom: 1px solid var(--line); }
+  .changes-toolbar-actions { flex-wrap: wrap; gap: 4px; }
+  .changes-subtitle { display: none; }
+}

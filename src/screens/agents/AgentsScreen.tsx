@@ -57,26 +57,30 @@ export function AgentsToolbar() {
   const setNewAgentOpen = useSessions((s) => s.setNewAgentOpen);
   const setRaceOpen = useSessions((s) => s.setRaceOpen);
   return (
-    <>
+    <div className="agent-toolbar">
       <h1 className="pane-title">{t("agents.title")}</h1>
-      <div className="pane-actions">
+      <div className="agent-toolbar-actions">
         <span className="faint">{t("agents.sessionSummary", { count, waiting })}</span>
         <div className="seg" title={t("agents.layoutAll")}>
           <button
             type="button"
             className={layoutMode === "grid" ? "on" : ""}
+            aria-label={t("agents.layoutGrid")}
             aria-pressed={layoutMode === "grid" ? "true" : "false"}
+            title={t("agents.layoutGrid")}
             onClick={() => setLayoutMode("grid")}
           >
-            ▦ {t("agents.layoutGrid")}
+            <span aria-hidden="true">▦</span><span className="agent-action-label">{t("agents.layoutGrid")}</span>
           </button>
           <button
             type="button"
             className={layoutMode === "full" ? "on" : ""}
+            aria-label={t("agents.layoutFull")}
             aria-pressed={layoutMode === "full" ? "true" : "false"}
+            title={t("agents.layoutFull")}
             onClick={() => setLayoutMode("full")}
           >
-            ▭ {t("agents.layoutFull")}
+            <span aria-hidden="true">▭</span><span className="agent-action-label">{t("agents.layoutFull")}</span>
           </button>
         </div>
         <button type="button" className="btn sm" onClick={() => setRaceOpen(true)}>
@@ -86,7 +90,7 @@ export function AgentsToolbar() {
           ＋ {t("agents.newAgent")}
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -488,73 +492,76 @@ function AgentPane({ session, off, place }: { session: AgentSession; off?: boole
       aria-label={t("agents.paneLabel", { cli: def.name, name: tail(session.worktreePath) })}
     >
       <div className="agent-phd">
-        <StatusDot status={status} />
-        {session.cliId === "custom" ? (
-          <span className="agent-cli" title={def.name}>
-            <CliIcon id={session.cliId} /> {def.name}
-          </span>
-        ) : (
-          <select
-            className="agent-cli-switch"
-            aria-label={t("agents.switchAgent")}
-            title={t("agents.switchAgent")}
-            value={session.cliId}
-            disabled={handoverFor === session.id}
-            onChange={(e) => switchAgent(e.target.value)}
-          >
-            {RACEABLE_IDS.map((id) => (
-              <option key={id} value={id}>
-                {CLI_REGISTRY[id].name}
-              </option>
-            ))}
-          </select>
-        )}
-        <span className="faint agent-wt" title={session.worktreePath}>· {tail(session.worktreePath)}</span>
-        <StatusChip status={status} />
-        <span className="sp" />
-        <ProfileChip session={session} />
-        <span className="agent-lay">
-          {(["left", "right", "full"] as const).map((side) => (
-            <button
-              key={side}
-              type="button"
-              className={session.slot === side ? "on" : ""}
-              aria-label={t(side === "left" ? "agents.slotLeft" : side === "right" ? "agents.slotRight" : "agents.slotFull")}
-              aria-pressed={session.slot === side ? "true" : "false"}
-              title={t(side === "left" ? "agents.slotLeft" : side === "right" ? "agents.slotRight" : "agents.slotFull")}
-              onClick={() => store.toggleSlot(session.id, side)}
+        <div className="agent-phd-id">
+          <StatusDot status={status} />
+          {session.cliId === "custom" ? (
+            <span className="agent-cli" title={def.name}>
+              <CliIcon id={session.cliId} /> {def.name}
+            </span>
+          ) : (
+            <select
+              className="agent-cli-switch"
+              aria-label={t("agents.switchAgent")}
+              title={t("agents.switchAgent")}
+              value={session.cliId}
+              disabled={handoverFor === session.id}
+              onChange={(e) => switchAgent(e.target.value)}
             >
-              {side === "left" ? "◧" : side === "right" ? "◨" : "▭"}
-            </button>
-          ))}
-        </span>
-        <button
-          type="button"
-          className="agent-phb"
-          title={t("agents.moveToDock")}
-          aria-label={t("agents.moveToDock")}
-          onClick={() => store.moveToDock(session.id)}
-        >
-          ⤴
-        </button>
-        <button
-          type="button"
-          className="agent-phb"
-          title={t("agents.handover")}
-          aria-label={t("agents.handover")}
-          onClick={() => store.setHandoverFor(session.id)}
-        >
-          ↗
-        </button>
-        <button
-          type="button"
-          className="agent-phb x"
-          title={t("agents.closeSession")}
-          aria-label={t("agents.closeSession")}
-          onClick={() => void store.closeSession(session.id)}
-        >
-          ✕
-        </button>
+              {RACEABLE_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {CLI_REGISTRY[id].name}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="faint agent-wt" title={session.worktreePath}>· {tail(session.worktreePath)}</span>
+          <StatusChip status={status} />
+        </div>
+        <div className="agent-phd-actions">
+          <ProfileChip session={session} />
+          <span className="agent-lay">
+            {(["left", "right", "full"] as const).map((side) => (
+              <button
+                key={side}
+                type="button"
+                className={session.slot === side ? "on" : ""}
+                aria-label={t(side === "left" ? "agents.slotLeft" : side === "right" ? "agents.slotRight" : "agents.slotFull")}
+                aria-pressed={session.slot === side ? "true" : "false"}
+                title={t(side === "left" ? "agents.slotLeft" : side === "right" ? "agents.slotRight" : "agents.slotFull")}
+                onClick={() => store.toggleSlot(session.id, side)}
+              >
+                {side === "left" ? "◧" : side === "right" ? "◨" : "▭"}
+              </button>
+            ))}
+          </span>
+          <button
+            type="button"
+            className="agent-phb"
+            title={t("agents.moveToDock")}
+            aria-label={t("agents.moveToDock")}
+            onClick={() => store.moveToDock(session.id)}
+          >
+            ⤴
+          </button>
+          <button
+            type="button"
+            className="agent-phb"
+            title={t("agents.handover")}
+            aria-label={t("agents.handover")}
+            onClick={() => store.setHandoverFor(session.id)}
+          >
+            ↗
+          </button>
+          <button
+            type="button"
+            className="agent-phb x"
+            title={t("agents.closeSession")}
+            aria-label={t("agents.closeSession")}
+            onClick={() => void store.closeSession(session.id)}
+          >
+            ✕
+          </button>
+        </div>
       </div>
       {/* Meters sit in their own strip: the header holds only identity and
        * actions, so a narrow split pane can never push the buttons out of view. */}

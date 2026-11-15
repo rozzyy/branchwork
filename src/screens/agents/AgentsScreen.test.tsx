@@ -266,7 +266,7 @@ describe("AgentsView", () => {
     fireEvent.click(rightButtons[0]);
     expect(useSessions.getState().sessions.find((s) => s.id === "a1")?.slot).toBe("right");
 
-    fireEvent.click(screen.getByRole("button", { name: "▭ Full width layout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full width layout" }));
     expect(useSessions.getState().layoutMode).toBe("full");
     expect(document.querySelector(".agent-screen")).toHaveClass("agent-full");
   });

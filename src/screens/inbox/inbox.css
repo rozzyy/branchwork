@@ -19,3 +19,13 @@
 .inbox-error, .inbox-status { margin: 8px 16px 0; padding: 8px 10px; border-radius: var(--r-control); background: var(--raised); color: var(--text-2); font-size: var(--fs-meta); }
 .inbox-error { background: var(--danger-bg); color: var(--danger); }
 .inbox-screen .empty b { color: var(--text); }
+
+@container (max-width: 560px) {
+  .inbox-screen .section-h { flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
+  .inbox-screen .section-h h3 { flex: 1 1 120px; min-width: 0; }
+  .inbox-screen .section-h .grow { display: none; }
+  .inbox-screen .section-h > .btn { margin-left: auto; }
+  .inbox-screen .section-h .tabs { flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  .att-item { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; padding: 10px 12px; }
+  .att-actions { grid-column: 2; flex-wrap: wrap; }
+}

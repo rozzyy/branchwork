@@ -34,3 +34,11 @@
   .opt { align-items: flex-start; flex-wrap: wrap; }
   .opt-ctl { flex-wrap: wrap; justify-content: flex-start; width: 100%; }
 }
+
+@container (max-width: 560px) {
+  .settings { padding: 12px; }
+  .opt { align-items: flex-start; flex-wrap: wrap; gap: 8px; padding-inline: 10px; }
+  .opt-ctl { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; width: 100%; min-width: 0; }
+  .opt-ctl > * { min-width: 0; max-width: 100%; }
+  .opt-ctl input[type="range"] { width: min(180px, 44cqi); }
+}

@@ -214,8 +214,9 @@
 .shortcut-sheet dl > div { display:flex; justify-content:space-between; padding:7px 4px; border-bottom:1px solid var(--border); }
 .shortcut-sheet dd { margin:0; color:var(--text-2); }
 .shortcut-sheet kbd { color:var(--text); }
-.history-tabs { display:flex; align-items:center; gap:2px; }
-.history-tab { min-height:28px; padding:0 9px; border:0; border-radius:var(--r-control); background:transparent; color:var(--text-2); cursor:pointer; }
+.history-tabs { display:flex; flex-wrap:nowrap; align-items:center; gap:2px; min-width:0; overflow-x:auto; scrollbar-width:thin; }
+.history-tab { flex:0 0 auto; min-height:28px; padding:0 9px; border:0; border-radius:var(--r-control); background:transparent; color:var(--text-2); cursor:pointer; white-space:nowrap; }
+.history-tab-compact { display:none; }
 .history-tab[aria-selected="true"] { background:var(--selected); color:var(--text); }
 .home-screen { display:flex; flex-direction:column; gap:18px; min-height:100%; padding:12px; overflow:auto; }
 .main-dock-right { flex-direction: row; }

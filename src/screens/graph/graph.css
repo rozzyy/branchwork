@@ -31,6 +31,7 @@
 .graph-filter-hint { margin-left: auto; overflow: hidden; color: var(--fg3); font-size: var(--fs-meta); text-overflow: ellipsis; white-space: nowrap; }
 .graph-toolbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .graph-toolbar-actions .btn { padding-inline: 8px; font-size: var(--fs-meta); }
+.graph-action-icon, .graph-worktree-icon { display: none; }
 .graph-scroll { flex: 1; min-height: 0; width: 100%; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .graph-row {
   display: flex;

@@ -5,9 +5,9 @@ import { BlameToolbar, BlameView } from "../blame/BlameScreen";
 import { RebaseToolbar, RebaseView } from "../rebase/RebaseScreen";
 
 const modes = [
-  ["graph", "history.mode.graph"],
-  ["file", "history.mode.file"],
-  ["rewrite", "history.mode.rewrite"],
+  ["graph", "history.mode.graph", "history.mode.graphCompact"],
+  ["file", "history.mode.file", "history.mode.fileCompact"],
+  ["rewrite", "history.mode.rewrite", "history.mode.rewriteCompact"],
 ] as const;
 
 export function HistoryToolbar() {
@@ -15,7 +15,7 @@ export function HistoryToolbar() {
   const setMode = useHistory((s) => s.setMode);
   const Toolbar = mode === "graph" ? GraphToolbar : mode === "file" ? BlameToolbar : RebaseToolbar;
   return <><div className="history-tabs" role="tablist" aria-label={t("nav.history")}>
-    {modes.map(([value, label]) => <button key={value} role="tab" aria-selected={mode === value} className="history-tab" onClick={() => setMode(value)}>{t(label)}</button>)}
+    {modes.map(([value, label, compactLabel]) => <button key={value} role="tab" aria-label={t(label)} aria-selected={mode === value} className="history-tab" onClick={() => setMode(value)}><span className="history-tab-full">{t(label)}</span><span className="history-tab-compact">{t(compactLabel)}</span></button>)}
   </div><Toolbar /></>;
 }
 

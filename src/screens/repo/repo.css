@@ -132,6 +132,11 @@
   }
 }
 
+@container (max-width: 760px) {
+  .repo-body { grid-template-columns: minmax(0, 1fr); }
+  .repo { padding: 10px; }
+}
+
 .repo-code {
   display: flex;
   flex-direction: column;

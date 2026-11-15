@@ -2,6 +2,14 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-15: Make split-view headers responsive
+
+- Fixed the Agents toolbar so segmented layout labels do not wrap in split view; audited Home, Changes, Files, History (Graph/Blame/Rebase), Terminal, GitHub, Browser, and Settings headers. Added responsive wrapping/stacking to shared pane toolbars and narrow content layouts for Files, Changes, Blame, Rebase, Repo, Settings, and Inbox. Conflicts already uses the shared wrapping behavior; it could not be mounted without an active conflict context.
+- History layout: title and pane controls (including close) stay on the first row; mode tabs and active-mode actions share the second row. The tabs sit left, actions right, with flexible space between; the wide layout puts the active title (e.g. “Graph main”) at the left edge. Compact panes shorten mode labels and use icon actions while retaining accessible names/tooltips.
+- Visual checks at 280px, 384px, 664px, and 704px confirmed headers fit within panes. Repository-dependent Files/Changes content was unavailable in the empty-worktree preview.
+- Verification: `pnpm typecheck`; focused Vitest 11 files/164 tests, Agents 30/30, then Graph/Blame/History 5 files/33 tests; `git diff --check` passed. Baseline `./init.sh` before edits had 10 Rust tests fail because macOS FSEvent streams could not start (327 passed / 10 failed / 3 ignored); TypeScript, Vitest, and Clippy passed. UI-only changes add no data traversal, IPC, or new trust boundary.
+- Next: implement the user-requested “Open in browser” context-menu action for HTML files. Existing M8–M11 manual-spec edits and reference images are preserved outside the responsive-header commit.
+
 ## 2026-11-15: Align stage tabs with the selected reference
 
 - Returned stage tabs to their original position above the stage. Applied the selected reference style: a shared bottom rule with the active tab raised and visually joined to the stage surface. Cards are fixed at 172px wide with 10px of internal horizontal padding and no outer margin/padding.
