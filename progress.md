@@ -1558,3 +1558,9 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Removed 1 GitHub token from Branchwork's dedicated Keychain service and cleared its account index; signed out 2 isolated Claude profiles; removed 6 declared Codex `auth.json` files. Agent profile metadata and session data remain.
 - Muse's one profile uses device-wide vendor credentials. Left it connected because `muse logout` signs the user out of Muse outside Branchwork; ask before that broader action.
 - Post-cleanup checks: database counts for groups/projects/pins/oplog are all zero; repo-selection/GitHub-account settings are absent; 7 Codex profile records remain but zero `auth.json` files exist.
+
+## 2026-11-15: Commit and push first-launch onboarding
+
+- Committed all 17 then-present changed/new files as `ffedb2f` (`feat: add first-launch onboarding`) and pushed `main` to `origin`.
+- `./init.sh`: TypeScript passed; Vitest 86 files / 742 tests passed; Clippy passed; Rust tests had 328 passed, 11 failed, and 3 ignored. Ten worktree failures reported inability to start macOS FSEvent streams; one PTY replay test failed (`completed output was not replayed after reattach`).
+- `git diff --cached --check` passed before commit. Release tag/version is pending user choice because repository policy bumps semver only when a milestone is done; M13 is not marked complete.
