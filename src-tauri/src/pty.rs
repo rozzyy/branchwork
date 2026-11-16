@@ -7,7 +7,7 @@ use std::{
     path::Path,
     sync::{
         Arc, Mutex, Weak,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
     },
     thread,
 };
@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter};
 const MAX_COLUMNS: u16 = 500;
 const MAX_ROWS: u16 = 500;
 const MAX_INPUT_BYTES: usize = 64 * 1024;
-const MAX_SESSIONS: usize = 8;
+const MAX_LOGIN_SESSIONS: usize = 2;
 const OUTPUT_BUFFER_BYTES: usize = 8 * 1024;
 const MAX_PENDING_OUTPUT_BYTES: usize = 256 * 1024;
 
@@ -63,6 +63,7 @@ struct PtySessionState {
     writer: Mutex<Box<dyn Write + Send>>,
     terminator: SessionTerminator,
     closing: std::sync::atomic::AtomicBool,
+    login_slot: bool,
     event_sink: EventSink,
     events: Mutex<BufferedEvents>,
 }
@@ -305,6 +306,7 @@ impl SessionTerminator {
 struct PtyManagerInner {
     sessions: Mutex<HashMap<String, Arc<PtySessionState>>>,
     next_id: AtomicU64,
+    active_login_sessions: AtomicUsize,
 }
 
 impl Drop for PtyManagerInner {
@@ -334,12 +336,50 @@ impl Default for PtyManager {
             inner: Arc::new(PtyManagerInner {
                 sessions: Mutex::new(HashMap::new()),
                 next_id: AtomicU64::new(1),
+                active_login_sessions: AtomicUsize::new(0),
             }),
         }
     }
 }
 
 impl PtyManager {
+    pub fn spawn_login(
+        &self,
+        launch: &crate::cli::LoginLaunch,
+        columns: u16,
+        rows: u16,
+        app: AppHandle,
+    ) -> Result<PtySession, AppError> {
+        validate_dimensions(columns, rows)?;
+        let mut command = CommandBuilder::new(std::ffi::OsStr::new(&launch.binary));
+        command.args(&launch.args);
+        command.cwd(&launch.profile_dir);
+        apply_terminal_defaults(&mut command);
+        for name in [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "OPENAI_API_KEY",
+            "CODEX_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "COPILOT_GITHUB_TOKEN",
+        ] {
+            command.env_remove(name);
+        }
+        apply_spawn_env(&mut command, &launch.env)?;
+        let sink = Arc::new(move |event| emit_event(&app, event));
+        reserve_login_slot(&self.inner.active_login_sessions)?;
+        match self.spawn_command_inner(command, columns, rows, sink, true) {
+            Ok(session) => Ok(session),
+            Err(error) => {
+                release_login_slot(&self.inner.active_login_sessions);
+                Err(error)
+            }
+        }
+    }
+
     pub fn spawn(
         &self,
         worktree_path: &Path,
@@ -363,6 +403,17 @@ impl PtyManager {
         columns: u16,
         rows: u16,
         sink: EventSink,
+    ) -> Result<PtySession, AppError> {
+        self.spawn_command_inner(command, columns, rows, sink, false)
+    }
+
+    fn spawn_command_inner(
+        &self,
+        command: CommandBuilder,
+        columns: u16,
+        rows: u16,
+        sink: EventSink,
+        login_slot: bool,
     ) -> Result<PtySession, AppError> {
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -411,6 +462,7 @@ impl PtyManager {
             writer: Mutex::new(writer),
             terminator,
             closing: std::sync::atomic::AtomicBool::new(false),
+            login_slot,
             event_sink: sink,
             events: Mutex::new(BufferedEvents {
                 attachment_id: None,
@@ -424,19 +476,6 @@ impl PtyManager {
         });
         match self.inner.sessions.lock() {
             Ok(mut sessions) => {
-                let active_sessions = sessions
-                    .values()
-                    .filter(|session| !session.is_completed())
-                    .count();
-                if active_sessions >= MAX_SESSIONS {
-                    drop(sessions);
-                    return match terminate_and_reap(&mut child, &session_state.terminator) {
-                        Ok(()) => Err(AppError::validation(format!(
-                            "No more than {MAX_SESSIONS} terminal sessions can be active"
-                        ))),
-                        Err(error) => Err(error),
-                    };
-                }
                 sessions.insert(session_id.clone(), Arc::clone(&session_state));
             }
             Err(_) => {
@@ -709,6 +748,11 @@ fn read_session_output(
             message: format!("Could not wait for terminal to exit: {error}"),
         })),
     }
+    if session.login_slot
+        && let Some(manager) = inner.upgrade()
+    {
+        release_login_slot(&manager.active_login_sessions);
+    }
 }
 
 fn session_is_active(inner: &Weak<PtyManagerInner>, session_id: &str) -> bool {
@@ -771,6 +815,31 @@ fn validate_dimensions(columns: u16, rows: u16) -> Result<(), AppError> {
         )));
     }
     Ok(())
+}
+
+fn reserve_login_slot(active: &AtomicUsize) -> Result<(), AppError> {
+    let mut current = active.load(Ordering::Acquire);
+    loop {
+        if current >= MAX_LOGIN_SESSIONS {
+            return Err(AppError::validation(
+                "No more than two provider sign-ins can run at once",
+            ));
+        }
+        match active.compare_exchange_weak(
+            current,
+            current + 1,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return Ok(()),
+            Err(observed) => current = observed,
+        }
+    }
+}
+
+fn release_login_slot(active: &AtomicUsize) {
+    let previous = active.fetch_sub(1, Ordering::AcqRel);
+    debug_assert!(previous > 0, "login session slot released more than once");
 }
 
 fn validate_session_id(session_id: &str) -> Result<(), AppError> {
@@ -880,6 +949,17 @@ mod tests {
         assert!(validate_session_id("../pty-1").is_err());
         assert!(validate_attachment_id(1).is_ok());
         assert!(validate_attachment_id(0).is_err());
+    }
+
+    #[test]
+    fn auth_login_slots_are_capped_at_two_and_released() {
+        let active = std::sync::atomic::AtomicUsize::new(0);
+        reserve_login_slot(&active).unwrap();
+        reserve_login_slot(&active).unwrap();
+        assert!(reserve_login_slot(&active).is_err());
+        release_login_slot(&active);
+        reserve_login_slot(&active).unwrap();
+        assert_eq!(active.load(Ordering::Acquire), 2);
     }
 
     #[cfg(unix)]
@@ -1296,13 +1376,13 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn manager_caps_concurrent_sessions_and_releases_closed_slots() {
+    fn manager_allows_more_than_eight_concurrent_sessions() {
         use std::ffi::OsStr;
 
         let manager = PtyManager::default();
         let sink = Arc::new(|_| {});
         let mut sessions = Vec::new();
-        for _ in 0..MAX_SESSIONS {
+        for _ in 0..9 {
             let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));
             command.args(["-c", "read value"]);
             sessions.push(
@@ -1311,16 +1391,6 @@ mod tests {
                     .unwrap(),
             );
         }
-
-        let mut excess_command = CommandBuilder::new(OsStr::new("/bin/sh"));
-        excess_command.args(["-c", "read value"]);
-        assert_eq!(
-            manager
-                .spawn_command(excess_command, 80, 24, sink)
-                .unwrap_err()
-                .kind,
-            ErrorKind::Validation
-        );
         manager.close(&sessions[0].session_id).unwrap();
 
         let mut command = CommandBuilder::new(OsStr::new("/bin/sh"));

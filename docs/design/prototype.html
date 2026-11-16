@@ -450,6 +450,9 @@ body.tb-bottom .shell{padding-bottom:306px}body.tb-right .shell{padding-right:49
 .pg-r i{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-style:normal;font-size:9px;font-weight:700;color:#fff;flex:none}
 .pg-r .mono{margin-left:auto;font-size:10.5px}
 .ppop .pf{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--line2)}
+.pg-sec-h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);padding:8px 10px 2px}
+.pg-gtag{font-size:10.5px;color:var(--fg3);border:1px solid var(--line2);border-radius:99px;padding:0 7px;margin-left:auto;white-space:nowrap}
+.pg-r.sel{background:var(--s3);box-shadow:inset 2px 0 0 var(--acc)}
 .gsw{display:flex;gap:8px}.gsw input{display:none}.gsw i{display:block;width:24px;height:24px;border-radius:50%;cursor:pointer;box-shadow:inset 0 0 0 2px oklch(1 0 0 / .25)}
 .gsw label:has(input:checked) i{box-shadow:0 0 0 2px var(--surf),0 0 0 4px var(--fg)}
 /* ===== changes / source control ===== */
@@ -697,10 +700,11 @@ const PROJ=[
   {n:'pos-app',o:'nusantara',g:'client',c:'var(--org)',pr:3},{n:'landing',o:'nusantara',g:'client',c:'var(--pur)'},
   {n:'scratch',o:'local',g:null,c:'var(--fg3)'}];
 S.group='acme';S.repo='web-app';
+S.popManage=false;S.popIndex=-1;S.popItems=[];S.recent=['blog','web-app','api'];
 const curG=()=>GROUPS.find(g=>g.id===S.group)||GROUPS[0];
 const curP=()=>PROJ.find(p=>p.n===S.repo)||PROJ[0];
 const GSW=['oklch(.66 .19 250)','oklch(.72 .16 155)','oklch(.72 .16 55)','oklch(.68 .2 350)','oklch(.66 .18 300)','oklch(.7 .13 200)','oklch(.6 .02 260)'];
-function openProj(n){const p=PROJ.find(x=>x.n===n);if(!p)return;S.group=p.g;S.repo=n;closePop();renderStage();toast(`Opened ${p.o}/${n}`,p.g?'Grup '+curG().n:'Tanpa grup','◫')}
+function openProj(n){const p=PROJ.find(x=>x.n===n);if(!p)return;S.recent=[n,...S.recent.filter(x=>x!==n)].slice(0,5);S.group=p.g;S.repo=n;closePop();renderStage();toast(`Opened ${p.o}/${n}`,p.g?'Grup '+curG().n:'Tanpa grup','◫')}
 function switchGroup(id){const groupId=id||null;S.group=groupId;S.repo=(PROJ.find(p=>p.g===groupId)||curP()).n;renderStage();toast('Grup: '+(GROUPS.find(g=>g.id===groupId)?.n||'Tanpa grup'),PROJ.filter(p=>p.g===groupId).length+' project · akun default grup aktif','▣')}
 function toggleProjectRail(){S.projectRailOpen=!S.projectRailOpen;renderProjectRail()}
 function toggleProjectGroup(id){S.collapsedGroups.has(id)?S.collapsedGroups.delete(id):S.collapsedGroups.add(id);renderProjectRail()}
@@ -723,16 +727,37 @@ function renderProjectRail(){
 function closePop(){$('#ppop')?.remove()}
 addEventListener('mousedown',e=>{if($('#ppop')&&!e.target.closest('#ppop,.gchip,#modal'))closePop()});
 function projPop(){if($('#ppop'))return closePop();const d=document.createElement('div');d.className='ppop';d.id='ppop';
-  d.innerHTML=`<div class="phd2"><input class="in" id="pq" placeholder="⌕ Cari project di semua grup…" oninput="renderPop()"></div><div class="pl" id="plist2"></div>
-  <div class="pf"><button class="btn sm" onclick="groupModal()">＋ Grup baru</button><button class="btn sm" onclick="addProj()">＋ Tambah project</button><span class="m" style="margin-left:auto;font-size:11.5px;align-self:center">drag project ke grup lain</span></div>`;
+  d.innerHTML=`<div class="phd2"><input class="in" id="pq" placeholder="⌕ Cari project di semua grup…" oninput="renderPop()" onkeydown="popKeys(event)"></div><div class="pl" id="plist2"></div><div class="pf" id="ppopFoot"></div>`;
   document.body.append(d);renderPop();setTimeout(()=>$('#pq').focus(),30)}
-function renderPop(){const q=($('#pq')?.value||'').toLowerCase(),l=$('#plist2');if(!l)return;
+function popRow(p){const g=GROUPS.find(x=>x.id===p.g);return `<div class="pg-r ${p.n===S.repo?'on':''}" data-p="${p.n}" onclick="openProj('${p.n}')" onmouseenter="popHover('${p.n}')"><i style="background:${p.c}">${p.n[0].toUpperCase()}</i><span><span class="m">${p.o}/</span><b>${p.n}</b></span>${p.pr?`<span class="chip">${p.pr} PR</span>`:''}<span class="pg-gtag">${g?g.n:'Tanpa grup'}</span></div>`}
+function paintPopSel(){$$('#plist2 .pg-r').forEach(r=>{const on=r.dataset.p===(S.popItems||[])[S.popIndex];r.classList.toggle('sel',!!on);if(on&&r.scrollIntoView)r.scrollIntoView({block:'nearest'})})}
+function popHover(n){const i=(S.popItems||[]).indexOf(n);if(i>=0&&i!==S.popIndex){S.popIndex=i;paintPopSel()}}
+function popKeys(e){const items=S.popItems||[];
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!items.length)return;S.popIndex=((S.popIndex??-1)+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;paintPopSel()}
+  else if(e.key==='Enter'){const n=items[S.popIndex??-1];if(n)openProj(n)}
+  else if(e.key==='Escape'){closePop()}}
+function togglePopManage(){S.popManage=!S.popManage;S.popIndex=-1;renderPop();setTimeout(()=>{const i=$('#pq');if(i)i.focus()},0)}
+function renderPop(){const q=($('#pq')?.value||'').toLowerCase(),l=$('#plist2'),f=$('#ppopFoot');if(!l||!f)return;
+  S.popIndex=-1;
+  if(!S.popManage){
+    const all=PROJ.filter(p=>(p.o+'/'+p.n).toLowerCase().includes(q));
+    const recents=q?[]:S.recent.map(n=>PROJ.find(p=>p.n===n)).filter(p=>p&&(p.o+'/'+p.n).toLowerCase().includes(q));
+    const rest=all.filter(p=>!recents.includes(p));
+    let h='';
+    if(recents.length)h+=`<div class="pg-sec-h">Terakhir dibuka</div>`+recents.map(popRow).join('');
+    h+=rest.map(popRow).join('');
+    if(!h)h='<div class="m" style="padding:6px 14px;font-size:12px">Tidak ada project yang cocok</div>';
+    l.innerHTML=h;S.popItems=[...recents,...rest].map(p=>p.n);
+    f.innerHTML=`<span class="m" style="font-size:11.5px;align-self:center">↑↓ pilih · Enter buka · Esc tutup</span><span style="flex:1"></span><button class="btn sm ghost" onclick="togglePopManage()">Kelola grup & repo…</button>`;
+    return;
+  }
   l.innerHTML=[...GROUPS,{id:null,n:'Tanpa grup',c:'var(--fg3)'}].map(g=>{const ps=PROJ.filter(p=>p.g===g.id&&(p.o+'/'+p.n).includes(q));if(q&&!ps.length)return'';const ac=g.acct&&g.acct.claude&&ACCTS.claude.find(a=>a.id===g.acct.claude);
    return `<div class="pg-sec ${g.id===S.group?'cur':''}" data-g="${g.id}"><div class="pg-h"><span class="sq" style="background:${g.c}"></span><b>${g.n}</b><span class="m">${ps.length}</span>${ac?`<span class="chip" title="Akun default Claude Code di grup ini">◔ ${ac.n}</span>`:''}<span style="flex:1"></span>${g.id&&g.id!==S.group?`<button onclick="switchGroup('${g.id}');renderPop()">Buka grup</button>`:''}${g.id?`<button title="Pengaturan grup" onclick="groupModal('${g.id}')">⋯</button>`:''}</div>
    ${ps.map(p=>`<div class="pg-r ${p.n===S.repo?'on':''}" draggable="true" data-p="${p.n}" onclick="openProj('${p.n}')"><i style="background:${p.c}">${p.n[0].toUpperCase()}</i><span><span class="m">${p.o}/</span><b>${p.n}</b></span>${p.pr?`<span class="chip">${p.pr} PR</span>`:''}<span class="m mono">${(g.path||'~/{repo}').replace('{repo}',p.n)}</span></div>`).join('')||'<div class="m" style="padding:6px 14px;font-size:12px">Drop project di sini</div>'}</div>`}).join('');
   let dr;$$('.pg-r').forEach(r=>{r.ondragstart=e=>{dr=r.dataset.p;r.classList.add('drag')};r.ondragend=()=>r.classList.remove('drag')});
   $$('.pg-sec').forEach(sec=>{sec.ondragover=e=>{e.preventDefault();sec.classList.add('over')};sec.ondragleave=()=>sec.classList.remove('over');
-   sec.ondrop=e=>{e.preventDefault();sec.classList.remove('over');const p=PROJ.find(x=>x.n===dr),g=sec.dataset.g==='null'?null:sec.dataset.g;if(!p||p.g===g)return;p.g=g;if(p.n===S.repo&&g)S.group=g;renderPop();renderChrome();toast(`${p.n} dipindah`,'ke '+(g?GROUPS.find(x=>x.id===g).n:'Tanpa grup'),'▣')}})}
+   sec.ondrop=e=>{e.preventDefault();sec.classList.remove('over');const p=PROJ.find(x=>x.n===dr),g=sec.dataset.g==='null'?null:sec.dataset.g;if(!p||p.g===g)return;p.g=g;if(p.n===S.repo&&g)S.group=g;renderPop();renderChrome();toast(`${p.n} dipindah`,'ke '+(g?GROUPS.find(x=>x.id===g).n:'Tanpa grup'),'▣')}});
+  f.innerHTML=`<button class="btn sm" onclick="togglePopManage()">← Kembali</button><button class="btn sm" onclick="groupModal()">＋ Grup baru</button><button class="btn sm" onclick="addProj()">＋ Tambah project</button><span class="m" style="margin-left:auto;font-size:11.5px;align-self:center">drag project ke grup lain</span>`;}
 async function addProj(){closePop();const v=await ask({title:'Tambah project ke '+curG().n,body:'Clone dari GitHub (owner/repo) atau buka folder lokal.',icon:'⇣',ok:'Tambah',input:'acme/mobile-app',placeholder:'owner/repo atau ~/path'});if(!v)return;const [o,n]=v.includes('/')&&!v.startsWith('~')?v.split('/'):['local',v.split('/').pop()];
   PROJ.push({n,o,g:S.group,c:GSW[PROJ.length%GSW.length]});openProj(n);toast(`Cloning ${o}/${n}…`,'ke '+curG().path.replace('{repo}',n),'⇣')}
 function groupModal(id){closePop();const g=GROUPS.find(x=>x.id===id)||{n:'',c:GSW[GROUPS.length%GSW.length],acct:{},path:'~/{repo}'};

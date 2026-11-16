@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branchwork — Arah desain shell (mockup)</title>
+<style>
+:root{
+  --ah:215; --bh:265;
+  --bg:oklch(.18 .006 var(--bh)); --surface:oklch(.205 .011 var(--bh)); --raised:oklch(.245 .012 var(--bh)); --overlay:oklch(.27 .013 var(--bh));
+  --border:oklch(1 0 0 / .11); --border-strong:oklch(1 0 0 / .2); --hover:oklch(1 0 0 / .06);
+  --text:oklch(.92 .004 var(--bh)); --text-2:oklch(.80 .010 var(--bh)); --text-3:oklch(.70 .012 var(--bh));
+  --accent:oklch(.70 .14 var(--ah)); --accent-strong:oklch(.62 .18 var(--ah)); --on-accent:oklch(.16 .02 var(--ah)); --selected:oklch(.68 .17 var(--ah) / .18);
+  --success:oklch(.76 .15 155); --warning:oklch(.82 .14 80); --danger:oklch(.72 .17 25); --info:oklch(.76 .12 230); --agent:oklch(.76 .14 300);
+  --shadow:0 24px 60px -16px oklch(0 0 0 / .5); --r:10px; --rc:6px;
+  --fs:13px; --fsm:12px; --fst:15px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:var(--fs)/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;color:var(--text);background:var(--bg);overflow:hidden;user-select:none}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.app{height:100dvh;display:grid;grid-template-rows:44px minmax(0,1fr) 26px}
+.titlebar{display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--surface)}
+.traffic{width:70px;height:100%;flex:none}
+.context{display:flex;align-items:center;gap:7px;min-width:0;border:0;background:transparent;padding:5px 8px;border-radius:var(--rc);font-weight:550}
+.context:hover{background:var(--hover)}
+.context .dot{width:9px;height:9px;border-radius:3px;background:var(--accent)}
+.context .sep{color:var(--text-3)}
+.context .branch{color:var(--text-2);font-family:ui-monospace,Menlo,monospace;font-size:var(--fsm)}
+.command{flex:0 1 420px;margin:0 auto;height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--rc);background:var(--bg);color:var(--text-3)}
+.command:hover{color:var(--text);border-color:var(--text-3)}
+.command .grow{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.icon-btn{width:28px;height:28px;display:inline-grid;place-items:center;border:0;border-radius:var(--rc);background:transparent;color:var(--text-2)}
+.icon-btn:hover{background:var(--hover);color:var(--text)}
+.body{display:grid;grid-template-columns:72px minmax(0,1fr);min-height:0}
+.rail{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px;border-right:1px solid var(--border);background:var(--surface)}
+.nav{width:56px;min-height:48px;display:grid;justify-items:center;align-content:center;gap:2px;border:0;border-radius:9px;background:transparent;color:var(--text-2);font-size:10px}
+.nav:hover{background:var(--hover);color:var(--text)}
+.nav.on{background:var(--selected);color:var(--text);font-weight:600}
+.nav .ic{font-size:16px;line-height:1}.nav .lbl{max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav .badge{position:absolute}
+.navwrap{position:relative}.badge{position:absolute;right:5px;top:4px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--warning);color:#171006;font-size:10px;font-weight:700;display:grid;place-items:center}
+.rail .sp{flex:1}
+.stage-stack{display:flex;flex-direction:column;min-width:0;min-height:0}
+.tabs{display:flex;align-items:stretch;gap:2px;height:42px;padding:0 10px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto}
+.stage-tab{display:flex;align-items:center;gap:8px;min-width:132px;max-width:190px;padding:0 10px;border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;background:transparent;color:var(--text-2)}
+.stage-tab.active{border-color:var(--border);background:var(--surface);color:var(--text);font-weight:600}
+.stage-tab .x{margin-left:auto;color:var(--text-3)}.stage-tab .x:hover{color:var(--text)}
+.tabs .add{width:34px;display:grid;place-items:center}
+.stage{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);overflow:hidden}
+.stage.split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.pane{display:grid;grid-template-rows:minmax(44px,max-content) minmax(0,1fr);min-width:0;min-height:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin:12px;overflow:hidden}
+.stage.split .pane{border:0;border-radius:0;margin:0}
+.pane-head{display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;border-bottom:1px solid var(--border)}
+.pane-title{font-size:var(--fst);font-weight:650;letter-spacing:-.01em}
+.pane-context{display:flex;align-items:center;gap:6px;min-width:0;padding:4px 8px;border:1px solid var(--border);border-radius:99px;color:var(--text-2);font-size:var(--fsm)}
+.pane-head .buttons{margin-left:auto;display:flex;align-items:center;gap:6px}
+.btn{height:28px;padding:0 11px;border:1px solid var(--border-strong);border-radius:var(--rc);background:var(--raised);font-weight:500}
+.btn:hover{background:var(--overlay)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:650}
+.pane-body{overflow:auto;padding:14px}
+.splitview{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(320px,1.5fr);gap:0;height:100%}
+.list{border-right:1px solid var(--border);padding:8px;overflow:auto}
+.file{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px}.file:hover{background:var(--hover)}
+.file .st{margin-left:auto;color:var(--text-3);font-size:var(--fsm)}
+.diff{padding:10px 0;overflow:auto;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}
+.diff div{padding:1px 14px;white-space:pre-wrap}.diff .add{background:color-mix(in oklch,var(--success) 12%,transparent)}.diff .del{background:color-mix(in oklch,var(--danger) 12%,transparent)}
+.term{font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
+.term .ok{color:var(--success)}.term .dim{color:var(--text-3)}
+.grid{display:grid;gap:12px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--raised)}
+.card h3{margin:0 0 8px;font-size:var(--fst)}
+.rowline{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.rowline:last-child{border-bottom:0}.muted{color:var(--text-2)}.faint{color:var(--text-3)}
+.status-bar{display:flex;align-items:center;gap:12px;padding:0 12px;border-top:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:var(--fsm)}
+.status-bar .grow{flex:1}.num{font-variant-numeric:tabular-nums}
+.backdrop{position:fixed;inset:0;z-index:20;background:oklch(0 0 0 / .36);animation:fade .15s}
+dialog{border:1px solid var(--border-strong);border-radius:14px;background:var(--overlay);box-shadow:var(--shadow);padding:0;width:min(480px,92vw)}
+dialog::backdrop{background:oklch(0 0 0 / .36)}
+.switch-head{padding:10px 10px 6px}.input{width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--rc);background:var(--bg);outline:none}
+.input:focus{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.switch-list{max-height:min(52vh,420px);overflow:auto;padding:4px 8px 8px}
+.sec{padding:8px 8px 2px;color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.prow{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:0;border-radius:9px;background:transparent;text-align:left}
+.prow:hover,.prow.sel{background:var(--raised)}
+.prow.sel{box-shadow:inset 2px 0 0 var(--accent)}
+.prow .mark{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;flex:none}
+.prow .tag{margin-left:auto;color:var(--text-3);font-size:10.5px;border:1px solid var(--border-strong);border-radius:99px;padding:0 7px}
+.switch-foot{display:flex;gap:6px;align-items:center;padding:8px 10px;border-top:1px solid var(--border);color:var(--text-3);font-size:11.5px}
+.palette input{font-size:16px;padding:14px 16px;border-bottom:1px solid var(--border);background:transparent;border-top:0;border-left:0;border-right:0;border-radius:0}
+.command-list{max-height:min(55vh,460px);overflow:auto;padding:6px}
+.command-row{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:9px;background:transparent;text-align:left}
+.command-row:hover,.command-row.sel{background:var(--accent);color:var(--on-accent)}
+.command-row .grp{margin-left:auto;color:var(--text-3);font-size:var(--fsm)}
+.command-row.sel .grp{color:inherit;opacity:.75}
+.menu{position:fixed;z-index:30;min-width:220px;padding:6px;border:1px solid var(--border-strong);border-radius:10px;background:var(--overlay);box-shadow:var(--shadow)}
+.menu button{display:flex;width:100%;align-items:center;gap:9px;padding:7px 8px;border:0;border-radius:var(--rc);background:transparent;text-align:left}
+.menu button:hover{background:var(--hover)}
+.palette{width:min(640px,92vw)}
+@media (max-width:1000px){.body{grid-template-columns:56px minmax(0,1fr)}.nav{width:44px}.nav .lbl{display:none}.command{flex-basis:280px}}
+@media (max-width:760px){.traffic{display:none}.context .branch{display:none}.stage.split{grid-template-columns:minmax(0,1fr)}.splitview{grid-template-columns:1fr}.list{border-right:0;border-bottom:1px solid var(--border)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="titlebar">
+    <div class="traffic" aria-hidden="true"></div>
+    <button class="context" id="contextBtn" aria-haspopup="dialog" title="Pilih project dan worktree">
+      <span class="dot" style="background:oklch(.66 .13 250)"></span><span id="ctxProject">web-app</span><span class="sep">/</span><span class="branch">main</span><span aria-hidden="true">▾</span>
+    </button>
+    <button class="command" id="commandBtn"><span aria-hidden="true">⌕</span><span class="grow">Search, jump, or ask…</span><span>⌘K</span></button>
+    <button class="icon-btn" id="helpBtn" aria-label="Shortcut sheet" title="Shortcut sheet">?</button>
+  </header>
+
+  <div class="body">
+    <nav class="rail" aria-label="Navigasi utama"></nav>
+    <main class="stage-stack">
+      <div class="tabs" id="stageTabs"></div>
+      <section class="stage" id="stage"></section>
+    </main>
+  </div>
+  <footer class="status-bar"><span>⎇ main</span><span class="num">● 3 changed</span><span class="num">↑2 ↓1</span><span class="grow"></span><span>✦ 2 agents · 1 waiting</span><button class="icon-btn" id="dockBtn" aria-label="Terminal dock" title="Terminal dock">❯</button></footer>
+</div>
+
+<dialog class="palette" id="palette" aria-label="Command palette">
+  <input class="input" id="paletteInput" placeholder="Ketikan perintah, layar, atau project…" autocomplete="off">
+  <div class="command-list" id="paletteList"></div>
+</dialog>
+
+<dialog id="switcher" aria-label="Pilih project">
+  <div class="switch-head"><input class="input" id="switchInput" placeholder="⌕ Cari project…" autocomplete="off"></div>
+  <div class="switch-list" id="switchList"></div>
+  <div class="switch-foot" id="switchFoot"></div>
+</dialog>
+
+<div id="menuRoot"></div>
+<div id="toasts" style="position:fixed;right:20px;bottom:40px;z-index:40"></div>
+<script>
+"use strict";
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const GROUPS=[{id:"acme",n:"Acme · Work",c:"oklch(.66 .13 250)"},{id:"personal",n:"Personal",c:"oklch(.72 .13 155)"},{id:"client",n:"Client · Nusantara",c:"oklch(.72 .13 55)"}];
+const PROJECTS=[{n:"web-app",o:"acme",g:"acme",c:"var(--accent)",pr:4},{n:"api",o:"acme",g:"acme",c:"var(--success)",pr:2},{n:"design-system",o:"acme",g:"acme",c:"oklch(.72 .13 350)"},{n:"dotfiles",o:"rozzy",g:"personal",c:"oklch(.75 .13 60)"},{n:"blog",o:"rozzy",g:"personal",c:"var(--accent)"},{n:"pos-app",o:"nusantara",g:"client",c:"oklch(.75 .13 45)",pr:3},{n:"landing",o:"nusantara",g:"client",c:"oklch(.70 .13 200)"},{n:"scratch",o:"local",g:null,c:"var(--text-3)"}];
+const NAV=[["home","⌂","Home","⌘1"],["changes","±","Changes","⌘2"],["history","⎇","History","⌘3"],["files","▤","Files","⌘4"],["agents","✦","Agents","⌘5"],["terminal","❯_","Terminal","⌘6"],["github","◫","GitHub","⌘7"],["browser","◎","Browser",""],["conflicts","⚠","Conflicts",""],["settings","⚙","Settings",""]];
+const S={screen:"changes",tab:"main",split:false,project:"web-app",branch:"main",manage:false,recent:["blog","web-app","api"],index:-1,items:[]};
+const stageTabs={main:{name:"Main",screen:"changes"},auth:{name:"Auth",screen:"agents"}};
+function toast(msg){const t=document.createElement("div");t.className="card";t.style.cssText="position:fixed;right:20px;bottom:40px;z-index:40;padding:10px 14px";t.textContent=msg;$("#toasts").append(t);setTimeout(()=>t.remove(),2400)}
+function renderRail(){
+  $(".rail").innerHTML=NAV.map(([id,icon,label,k])=>`<div class="navwrap"><button class="nav ${S.screen===id?"on":""}" data-screen="${id}" title="${label}${k?" · "+k:""}" aria-label="${label}"><span class="ic" aria-hidden="true">${icon}</span><span class="lbl">${label}</span></button>${id==="changes"?'<span class="badge">3</span>':id==="agents"?'<span class="badge">1</span>':""}</div>`).join("");
+  $$(".nav").forEach(b=>b.onclick=()=>goScreen(b.dataset.screen));
+}
+function paneHtml(title,body){return `<section class="pane" aria-label="${title}"><div class="pane-head"><span class="pane-title">${title}</span><button class="pane-context" id="paneContext" title="Kontek pane"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></span><span id="paneProject">${S.project}</span><span class="faint">/</span><span id="paneBranch">${S.branch}</span></button><span class="buttons"><button class="btn" id="splitBtn" title="Split pane">◨ Split</button><button class="icon-btn" id="overflowBtn" aria-label="More actions" aria-haspopup="menu">⋯</button></span></div><div class="pane-body">${body}</div></section>`}
+function contentHtml(id){
+  if(id==="changes")return `<div class="splitview"><div class="list"><div class="sec">Unstaged</div>${["src/auth/callback.ts","src/auth/old.ts"].map(f=>`<div class="file"><span class="mono">${f}</span><span class="st">M</span></div>`).join("")}<div class="sec">Staged</div><div class="file"><span class="mono">src/auth/session.ts</span><span class="st">A</span></div></div><div class="diff" aria-label="Diff sample"><div>-const session = loadSession()</div><div class="add">+const session = await loadSession()</div><div class="add">+if (!session) return redirect('/login')</div></div></div>`;
+  if(id==="agents")return `<div class="grid two"><div class="card"><h3>Claude · web-app</h3><div class="term">Waiting for input…<br><span class="dim">auth is waiting for your reply</span></div></div><div class="card"><h3>Codex · pos-app</h3><div class="term"><span class="ok">running</span> · compare files and summarize risk</div></div></div>`;
+  if(id==="files")return `<div class="card"><h3>Files</h3><div class="rowline"><span>src</span><span class="faint">folder</span></div><div class="rowline"><span>package.json</span><span class="faint">4 KB</span></div><div class="rowline"><span>README.md</span><span class="faint">8 KB</span></div></div>`;
+  if(id==="history")return `<div class="card"><h3>History</h3><div class="rowline"><span class="mono">3c4d8e1</span><span>feat: add GitHub OAuth provider</span><span class="faint" style="margin-left:auto">5m</span></div><div class="rowline"><span class="mono">a91f3c2</span><span>Merge pull request #477</span><span class="faint" style="margin-left:auto">2h</span></div></div>`;
+  if(id==="terminal")return `<div class="card term">❯ pnpm test --changed<br><span class="ok">✓</span> 42 passed  <span class="dim">2.4s</span><br>❯ <span class="dim">Type a command…</span></div>`;
+  if(id==="github")return `<div class="grid two"><div class="card"><h3>Pull requests</h3><div class="rowline"><span>#482 Add GitHub OAuth login</span><span class="chip" style="margin-left:auto">review</span></div><div class="rowline"><span>#479 Fix cart rounding</span><span class="chip" style="margin-left:auto">failing</span></div></div><div class="card"><h3>Repository</h3><p class="muted">acme/web-app · main</p><p class="faint">Default branch, issues, actions.</p></div></div>`;
+  if(id==="browser")return `<div class="card"><div class="rowline"><span class="mono">⌕</span><span class="muted">https://developer.mozilla.org</span><button class="btn" style="margin-left:auto">Open</button></div><p class="muted">Web content stays separate from worktree actions and has no filesystem access.</p></div>`;
+  if(id==="conflicts")return `<div class="card" style="border-color:color-mix(in oklch,var(--danger) 45%,transparent)"><h3>Resolve conflicts</h3><p class="muted">2 files conflict on feat/auth-oauth.</p><button class="btn primary">Resolve</button></div>`;
+  if(id==="settings")return `<div class="card"><h3>Theme</h3><div class="rowline"><span>Mode</span><span style="margin-left:auto">Dark</span></div><div class="rowline"><span>Accent hue</span><span style="margin-left:auto">215</span></div><div class="rowline"><span>Density</span><span style="margin-left:auto">Comfort</span></div></div>`;
+  return `<div class="grid two"><div class="card"><h3>Focus today</h3><div class="rowline"><span>3 changes in web-app</span><span class="chip" style="margin-left:auto">Changes</span></div><div class="rowline"><span>1 agent waiting</span><span class="chip" style="margin-left:auto">Agents</span></div><div class="rowline"><span>Recent project: blog</span><span class="chip" style="margin-left:auto">⌘⇧P</span></div></div><div class="card"><h3>Actions</h3><button class="btn primary">Open changes</button> <button class="btn">Start agent</button></div></div>`;
+}
+function renderStageTabs(){
+  $("#stageTabs").innerHTML=Object.entries(stageTabs).map(([id,t])=>`<button class="stage-tab ${S.tab===id?"active":""}" data-tab="${id}">${t.name}<span class="x" aria-hidden="true">×</span></button>`).join("")+`<button class="icon-btn add" aria-label="New stage tab" title="New stage tab">+</button>`;
+  $$(".stage-tab").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.screen=stageTabs[S.tab].screen;renderStage()});
+}
+function renderStage(){
+  const primary=paneHtml(NAV.find(n=>n[0]===S.screen)[2],contentHtml(S.screen));
+  const second=S.split?`<section class="pane" aria-label="Agents secondary"><div class="pane-head"><span class="pane-title">Agents</span><span class="pane-context"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></span><span>pos-app</span><span class="faint">/</span><span>fix/cart</span></span><span class="buttons"><button class="icon-btn" aria-label="Close secondary pane" id="closeSplit">×</button></span></div><div class="pane-body">${contentHtml("agents")}</div></section>`:"";
+  $("#stage").innerHTML=primary+second;
+  $("#stage").classList.toggle("split",S.split);renderStageTabs();
+  $("#splitBtn").onclick=()=>{S.split=!S.split;renderStage();toast(S.split?"Split pane dibuka":"Kembali ke satu pane")};
+  $("#closeSplit")&&($("#closeSplit").onclick=()=>{S.split=false;renderStage()});
+  $("#overflowBtn").onclick=e=>showOverflow(e.currentTarget);
+}
+function goScreen(id){S.screen=id;stageTabs[S.tab].screen=id;renderRail();renderStage()}
+function showOverflow(anchor){
+  closeMenu();const r=anchor.getBoundingClientRect();const m=document.createElement("div");m.className="menu";m.id="overflowMenu";m.style.left=(r.right-220)+"px";m.style.top=(r.bottom+6)+"px";
+  m.innerHTML=[["⇄","Swap with neighbor"],["⬒","Toggle orientation"],["⧉","Move to new window"],["✕","Close pane"]].map(([i,l])=>`<button><span>${i}</span>${l}</button>`).join("");
+  document.body.append(m);$$("button",m).forEach(b=>b.onclick=()=>{closeMenu();toast(b.textContent.trim())});
+  setTimeout(()=>addEventListener("mousedown",closeMenu,{once:true}),0);
+}
+function closeMenu(){$("#overflowMenu")?.remove()}
+function prows(list,manage){return list.map(p=>`<button class="prow ${p.n===S.project?"on":""}" data-p="${p.n}"><i class="mark" style="background:${p.c}">${p.n[0].toUpperCase()}</i><span><span class="faint">${p.o}/</span><b>${p.n}</b></span>${p.pr?`<span class="chip">${p.pr} PR</span>`:""}<span class="tag">${(GROUPS.find(g=>g.id===p.g)||{}).n||"Tanpa grup"}</span></button>`).join("")}
+function renderSwitcher(){
+  const q=$("#switchInput").value.trim().toLowerCase(),list=$("#switchList"),foot=$("#switchFoot");
+  if(!S.manage){
+    const all=PROJECTS.filter(p=>(p.o+"/"+p.n).toLowerCase().includes(q));
+    const recent=q?[]:S.recent.map(n=>PROJECTS.find(p=>p.n===n)).filter(Boolean);
+    const rest=all.filter(p=>!recent.includes(p));
+    list.innerHTML=(recent.length?`<div class="sec">Terakhir dibuka</div>`+prows(recent):"")+prows(rest);
+    S.items=[...recent,...rest].map(p=>p.n);S.index=-1;
+    foot.innerHTML=`<span>↑↓ pilih · Enter buka · Esc tutup</span><span style="flex:1"></span><button class="btn ghost" id="manageBtn2">Kelola grup &amp; repo…</button>`;
+    $("#manageBtn2").onclick=()=>{S.manage=true;renderSwitcher()};
+    return;
+  }
+  list.innerHTML=[...GROUPS,{id:null,n:"Tanpa grup",c:"var(--text-3)"}].map(g=>{
+    const ps=PROJECTS.filter(p=>p.g===g.id&&(p.o+"/"+p.n).toLowerCase().includes(q));if(q&&!ps.length)return"";
+    return `<div class="grp"><div class="grp-head"><span class="sq" style="background:${g.c}"></span><b>${g.n}</b><span class="faint">${ps.length}</span>${g.id?`<button class="tog" onclick="event.stopPropagation();toast('Pengaturan grup: ${g.n}')">⋯</button>`:""}</div>${prows(ps,true)||""}</div>`;
+  }).join("");
+  S.items=[...list.querySelectorAll(".prow")].map(r=>r.dataset.p);
+  foot.innerHTML=`<button class="btn" id="backBtn">← Kembali</button><button class="btn" id="addGroupBtn">＋ Grup</button><button class="btn" id="addProjectBtn">＋ Project</button><button class="btn" id="openRepoBtn">Open repo…</button><button class="btn" id="cloneBtn">Clone…</button>`;
+  $("#backBtn").onclick=()=>{S.manage=false;renderSwitcher()};
+  $("#addGroupBtn").onclick=()=>{const n=prompt("Nama grup baru:","Contoh · Grup");if(!n||!n.trim())return;GROUPS.push({id:"g"+Date.now(),n:n.trim(),c:"oklch(.7 .13 200)"});renderSwitcher()};
+  $("#addProjectBtn").onclick=()=>{const n=prompt("Nama project baru (owner/nama):","acme/proyek-baru");if(!n||!n.includes("/"))return;const[o,nm]=n.split("/");PROJECTS.push({n:nm.trim(),o:o.trim(),g:null,c:"var(--text-3)"});S.recent=[nm.trim(),...S.recent.filter(x=>x!==nm.trim())].slice(0,5);renderSwitcher()};
+  $("#openRepoBtn").onclick=()=>toast("Open repository");
+  $("#cloneBtn").onclick=()=>toast("Clone repository");
+}
+function paintSwitcherSel(){$$("#switchList .prow").forEach(r=>{const on=r.dataset.p===(S.items[S.index]||null);r.classList.toggle("sel",on);if(on&&r.scrollIntoView)r.scrollIntoView({block:"nearest"})})}
+function openSwitcher(){S.manage=false;S.index=-1;$("#switchInput").value="";renderSwitcher();$("#switcher").showModal();setTimeout(()=>$("#switchInput").focus(),0)}
+function switcherKey(e){const items=S.items||[];if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();if(items.length){S.index=((S.index??-1)+(e.key==="ArrowDown"?1:-1)+items.length)%items.length;paintSwitcherSel()}}else if(e.key==="Enter"){const n=items[S.index??-1];if(n)openProject(n)}else if(e.key==="Escape"){$("#switcher").close()}}
+function openProject(n){const p=PROJECTS.find(x=>x.n===n);if(!p)return;S.project=n;S.branch=p.g==="client"?"fix/cart":"main";S.recent=[n,...S.recent.filter(x=>x!==n)].slice(0,5);$("#ctxProject").textContent=n;const b=$(".context .branch");if(b)b.textContent=S.branch;$("#switcher").close();renderStage();toast(`Pindah ke ${p.o}/${n}`)}
+const COMMANDS=[...NAV.map(([id,icon,label])=>({id,label:"Go to "+label,icon,group:"Navigate",run:()=>goScreen(id)})),{id:"togglePrev",label:"Toggle previous project",icon:"⇄",group:"Project",kbd:"⌘⇧P",run:()=>openProject(S.recent[1]||S.recent[0])},{id:"newAgent",label:"New agent…",icon:"✦",group:"Agents",run:()=>goScreen("agents")},{id:"split",label:"Split view",icon:"◨",group:"Stage",run:()=>{S.split=true;renderStage()}},{id:"closeSplit",label:"Close split",icon:"✕",group:"Stage",run:()=>{S.split=false;renderStage()}}];
+let paletteItems=[];
+function renderPalette(){
+  const q=$("#paletteInput").value.trim().toLowerCase();paletteItems=COMMANDS.filter(c=>c.label.toLowerCase().includes(q));const l=$("#paletteList");
+  l.innerHTML=paletteItems.map((c,i)=>`<button class="command-row ${i===0?"sel":""}" data-i="${i}"><span>${c.icon}</span>${c.label}<span class="grp">${c.kbd||c.group}</span></button>`).join("")||`<div class="empty">Tidak ada perintah yang cocok</div>`;
+  $$(".command-row",l).forEach(r=>r.onclick=()=>{const c=paletteItems[+r.dataset.i];$("#palette").close();c&&c.run()});
+}
+function openPalette(){$("#paletteInput").value="";renderPalette();$("#palette").showModal();setTimeout(()=>$("#paletteInput").focus(),0)}
+$("#contextBtn").onclick=openSwitcher;
+$("#commandBtn").onclick=openPalette;
+$("#helpBtn").onclick=()=>toast("Shortcut sheet");
+$("#dockBtn").onclick=()=>toast("Terminal dock");
+$("#switchInput").addEventListener("input",renderSwitcher);
+$("#switchInput").addEventListener("keydown",switcherKey);
+$("#switchList").addEventListener("mouseover",e=>{const r=e.target.closest(".prow");if(r){const i=S.items.indexOf(r.dataset.p);if(i>=0&&i!==S.index){S.index=i;paintSwitcherSel()}}});
+$("#switchList").addEventListener("click",e=>{const r=e.target.closest(".prow");if(r)openProject(r.dataset.p)});
+$("#paletteInput").addEventListener("input",renderPalette);
+$("#paletteInput").addEventListener("keydown",e=>{if(e.key==="Enter"){const b=$(".command-row.sel",$("#paletteList"));if(b)b.click()}});
+renderRail();renderStage();
+</script>
+</body>
+</html>

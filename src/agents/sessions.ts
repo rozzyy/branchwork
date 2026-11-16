@@ -30,6 +30,7 @@ import { toast } from "../ui/toast";
 import { ask } from "../ui/dialog";
 import { useDock } from "../terminal/dock";
 import { waitForTerminalAttach } from "../terminal/attachReady";
+import { disposeTerminalView } from "../terminal/viewCache";
 import { useProfiles, type ProfileRef } from "./profiles";
 import { useSettings } from "../state/settings";
 import { useStage } from "../state/stage";
@@ -616,6 +617,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
       if (failedPty) {
         exitedSessions.add(failedPty);
         await closeTerminal(failedPty).catch(() => undefined);
+        disposeTerminalView(failedPty);
       }
       toast({ title: t("agents.switchRolledBack", { from: fromName, to: toName, message }), icon: "⚠" });
       // The user may have closed the pane meanwhile: nothing to restore.
@@ -790,6 +792,8 @@ export const useSessions = create<SessionsStore>((set, get) => {
       } catch {
         // Already gone; the new shell replaces it below.
       }
+      // The old shell is replaced: drop its cached xterm view as well.
+      disposeTerminalView(session.sessionId);
     }
     clearSessionWatch(id);
     // Switching replaces the mounted PTY just like an initial launch.
@@ -1013,6 +1017,7 @@ export const useSessions = create<SessionsStore>((set, get) => {
           } catch {
             // The backend session is already gone; nothing left to clean up.
           }
+          disposeTerminalView(result.sessionId);
         }
         return null;
       }
@@ -1074,6 +1079,9 @@ export const useSessions = create<SessionsStore>((set, get) => {
       clearSessionWatch(id);
       set({ sessions: get().sessions.filter((item) => item.id !== id) });
       save();
+      // The grid pane is gone; unless the dock still shows this session, drop
+      // its cached xterm view as well (the dock path disposes on its own close).
+      if (removed.sessionId && !removed.sharedWithDock) disposeTerminalView(removed.sessionId);
       const def = CLI_REGISTRY[removed.cliId];
       toast({
         title: t("agents.closed", { name: def.name }),

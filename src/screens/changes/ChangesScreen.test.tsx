@@ -391,3 +391,50 @@ it("stages all unstaged files from Changes section header action", async () => {
   );
   expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Stage complete" }));
 });
+
+it("ignores a pane pin and refreshes the global project's worktree", async () => {
+  const { PaneProjectProvider } = await import("../../stage/paneProject");
+  const { useRepos } = await import("../../state/repos");
+  vi.mocked(readStatus).mockResolvedValue({ staged: [], unstaged: [] });
+  act(() => {
+    useRepos.setState({
+      groups: [],
+      projects: [
+        { id: "p1", owner: null, name: "A", localPath: "/wt/a", groupId: null },
+        { id: "p2", owner: null, name: "B", localPath: "/wt/b", groupId: null },
+      ],
+      activeGroupId: null,
+      activeProjectId: "p1",
+      openProjectIds: ["p1", "p2"],
+      collapsedGroupIds: [],
+      recentProjectIds: ["p1"],
+      status: "ready",
+      error: null,
+    });
+    useWorktrees.setState({
+      projectId: "p1",
+      worktrees: [{ path: "/wt/a" } as never],
+      pinnedPaths: [],
+      activePath: "/wt/a",
+      loading: false,
+      error: null,
+    });
+    useChanges.setState({
+      worktree: null,
+      entries: { staged: [], unstaged: [] },
+      stashes: [],
+      loading: false,
+      error: null,
+      selection: null,
+      diff: null,
+      selectedLineIds: [],
+      dmode: "split",
+    });
+  });
+  render(
+    <PaneProjectProvider projectId="p2">
+      <ChangesView />
+    </PaneProjectProvider>,
+  );
+  await waitFor(() => expect(readStatus).toHaveBeenCalledWith("/wt/a"));
+});

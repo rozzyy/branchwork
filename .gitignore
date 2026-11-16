@@ -32,3 +32,6 @@ playwright-report/
 # Agent/tool caches
 .claude/
 node-compile-cache/
+
+# Local pnpm store (sandbox workaround, never commit)
+.pnpm-store/

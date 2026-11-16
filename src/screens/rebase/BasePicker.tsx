@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { readGraphPage, type GraphCommit } from "../../ipc/graph";
 import { t } from "../../i18n/t";
-import { useRepos } from "../../state/repos";
 import { useRebaseUi } from "./rebaseState";
-import { useWorktrees } from "../../state/worktrees";
+import { usePaneWorktrees } from "../../stage/paneProject";
 import { graphAncestry } from "../graph/graphUtils";
 
 export function BasePicker({ worktree }: { worktree: string }) {
-  const projectId = useRepos((s) => s.activeProjectId);
-  const headSha = useWorktrees((s) => s.worktrees.find((w) => w.path === worktree)?.head);
+  const { project, worktrees } = usePaneWorktrees();
+  const projectId = project?.id ?? null;
+  const headSha = worktrees.find((w) => w.path === worktree)?.head;
   const [commits, setCommits] = useState<GraphCommit[]>([]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {

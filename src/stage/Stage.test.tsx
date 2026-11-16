@@ -57,6 +57,12 @@ it("keeps the existing pane mounted when splitting and closing", async () => {
   expect(container.querySelector(`[data-stage-pane="${homePane?.getAttribute("data-stage-pane")}"]`)).toBe(homePane);
 });
 
+it("does not offer a pane project pin", () => {
+  const { container } = render(<Stage />);
+  expect(container.querySelector(".pane-pin")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Pin pane/ })).not.toBeInTheDocument();
+});
+
 it("adds, renames, cancels and closes stage tabs accessibly", async () => {
   render(<StageTabs />);
   await userEvent.click(screen.getByRole("button", { name: "New tab" }));

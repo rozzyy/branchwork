@@ -21,6 +21,7 @@ import {
 import { errorMessage } from "../ipc/errors";
 import { markTerminalAttached } from "./attachReady";
 import { dropPositionIsInside, formatDroppedPaths } from "./fileDrop";
+import { registerTerminalDisposer } from "./viewCache";
 import "./terminal.css";
 import "@xterm/xterm/css/xterm.css";
 
@@ -84,6 +85,31 @@ function openTerminalLink(event: MouseEvent, value: string): void {
   });
 }
 
+interface CachedView {
+  terminal: Terminal;
+  fitAddon: FitAddon;
+  webglAddon: WebglAddon;
+  webLinksAddon: WebLinksAddon;
+}
+
+// Rendered xterm views by PTY session id. A view survives unmounts (tab and
+// page switches) so a remount re-adopts the rendered buffer instead of
+// starting blank; the backend replays only output produced while detached, so
+// nothing is duplicated. Entries are dropped only on explicit session close
+// via disposeTerminalView(), which the session-owner stores call.
+const views = new Map<string, CachedView>();
+
+/** Test-only reset for the module-level view cache. */
+export function resetTerminalViewsForTests(): void {
+  for (const [sessionId, view] of views) {
+    views.delete(sessionId);
+    view.webglAddon.dispose();
+    view.webLinksAddon.dispose();
+    view.fitAddon.dispose();
+    view.terminal.dispose();
+  }
+}
+
 export function CliPane({ sessionId, interceptInput, onResize, agentInput = false }: { sessionId: string } & CliPaneHooks) {
   const containerRef = useRef<HTMLDivElement>(null);
   const exitedRef = useRef(false);
@@ -111,20 +137,32 @@ export function CliPane({ sessionId, interceptInput, onResize, agentInput = fals
     let resizeTimer = 0;
     const unlisteners: Array<() => void> = [];
     const style = getComputedStyle(container);
-    const terminal = new Terminal({
-      cursorBlink: true,
-      fontFamily: monoFontFamily(container),
-      fontSize: 12,
-      theme: {
-        background: resolveThemeColor(style.getPropertyValue("--surf").trim()),
-        foreground: resolveThemeColor(style.getPropertyValue("--fg").trim()),
-        cursor: resolveThemeColor(style.getPropertyValue("--acc").trim()),
-        selectionBackground: resolveThemeColor(style.getPropertyValue("--accs").trim()),
-      },
-    });
-    const fitAddon = new FitAddon();
-    const webglAddon = new WebglAddon();
-    const webLinksAddon = new WebLinksAddon(openTerminalLink);
+    let terminal: Terminal;
+    let fitAddon: FitAddon;
+    let webglAddon: WebglAddon;
+    let webLinksAddon: WebLinksAddon;
+    const cached = views.get(sessionId);
+    if (cached) {
+      // Re-adopt the rendered buffer after a tab or page switch; React gave us
+      // a fresh container for the surviving xterm element.
+      ({ terminal, fitAddon, webglAddon, webLinksAddon } = cached);
+      if (terminal.element) container.appendChild(terminal.element);
+    } else {
+      terminal = new Terminal({
+        cursorBlink: true,
+        fontFamily: monoFontFamily(container),
+        fontSize: 12,
+        theme: {
+          background: resolveThemeColor(style.getPropertyValue("--surf").trim()),
+          foreground: resolveThemeColor(style.getPropertyValue("--fg").trim()),
+          cursor: resolveThemeColor(style.getPropertyValue("--acc").trim()),
+          selectionBackground: resolveThemeColor(style.getPropertyValue("--accs").trim()),
+        },
+      });
+      fitAddon = new FitAddon();
+      webglAddon = new WebglAddon();
+      webLinksAddon = new WebLinksAddon(openTerminalLink);
+    }
     let resizeObserver: ResizeObserver | null = null;
     let inputSubscription: { dispose: () => void } | null = null;
     let dragDropUnlisten: (() => void) | null = null;
@@ -236,11 +274,27 @@ export function CliPane({ sessionId, interceptInput, onResize, agentInput = fals
         if (disposed) unlisten();
         else dragDropUnlisten = unlisten;
       }).catch(showError);
-      terminal.loadAddon(fitAddon);
-      terminal.open(container);
-      fitAddon.fit();
-      terminal.loadAddon(webglAddon);
-      terminal.loadAddon(webLinksAddon);
+      if (!cached) {
+        terminal.loadAddon(fitAddon);
+        terminal.open(container);
+        terminal.loadAddon(webglAddon);
+        terminal.loadAddon(webLinksAddon);
+        views.set(sessionId, { terminal, fitAddon, webglAddon, webLinksAddon });
+        registerTerminalDisposer(sessionId, () => {
+          const view = views.get(sessionId);
+          if (!view) return;
+          views.delete(sessionId);
+          view.webglAddon.dispose();
+          view.webLinksAddon.dispose();
+          view.fitAddon.dispose();
+          view.terminal.dispose();
+        });
+      }
+      try {
+        fitAddon.fit();
+      } catch {
+        // Hidden tab/dock panes have no layout yet; the ResizeObserver refits on show.
+      }
       terminal.options.linkHandler = { activate: openTerminalLink };
       terminal.attachCustomKeyEventHandler((event) => {
         if (hooksRef.current.agentInput && event.type === "keydown" && event.code === "Enter" && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
@@ -273,10 +327,9 @@ export function CliPane({ sessionId, interceptInput, onResize, agentInput = fals
       inputSubscription?.dispose();
       dragDropUnlisten?.();
       unsubscribe();
-      webglAddon.dispose();
-      webLinksAddon.dispose();
-      fitAddon.dispose();
-      terminal.dispose();
+      // The rendered view stays cached so a tab or page switch re-adopts it
+      // instead of starting blank. Addons and the terminal are disposed only
+      // on explicit session close (see the registered disposer above).
       if (attached) {
         void detachTerminal(sessionId, attachmentId).catch((reason) => {
           console.error("Could not detach terminal after pane unmount", reason);

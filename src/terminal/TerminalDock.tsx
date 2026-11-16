@@ -257,13 +257,16 @@ export function TerminalDock() {
         </div>
       </div>
       <div className={"term-dock-body" + (split.length > 1 ? " term-dock-split" : "")}>
-        {split.length === 0 ? (
+        {tabs.length === 0 ? (
           <div className="term-dock-empty" role="status">
             {t("dock.empty")}
           </div>
         ) : (
-          split.map((tab) => (
-            <div key={tab.id} className="term-dock-pane">
+          // Visible tabs first in split order (so swap reorders them), then
+          // the hidden rest: every tab stays mounted so switching or
+          // splitting never detaches the PTY or discards the rendered buffer.
+          [...split, ...tabs.filter((tab) => !split.some((item) => item.id === tab.id))].map((tab, index) => (
+            <div key={tab.id} className="term-dock-pane" hidden={index >= split.length}>
               <TabPane tab={tab} />
             </div>
           ))

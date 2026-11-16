@@ -3,7 +3,7 @@ import { t } from "../i18n/t";
 import { useSettings } from "../state/settings";
 import { useSidebar } from "../state/sidebar";
 import { useWorktrees } from "../state/worktrees";
-import { GroupSwitcherPopover, projectLabel, useSwitcher } from "./GroupSwitcher";
+import { projectLabel, useSwitcher } from "./GroupSwitcher";
 import { useRepos } from "../state/repos";
 import { Menu } from "../ui/Menu";
 import { useShortcutSheet } from "./ShortcutSheet";
@@ -15,9 +15,7 @@ export function TitleBar() {
   const activePath = useWorktrees((s) => s.activePath);
   const worktrees = useWorktrees((s) => s.worktrees);
   const pinnedPaths = useWorktrees((s) => s.pinnedPaths);
-  const [projectAnchor, setProjectAnchor] = useState<HTMLElement | null>(null);
   const [worktreeMenu, setWorktreeMenu] = useState<{x:number;y:number} | null>(null);
-  const projectOpen = useSwitcher((s) => s.open);
   const activeProjectId = useRepos((s) => s.activeProjectId);
   const activeGroupId = useRepos((s) => s.activeGroupId);
   const project = useRepos((s) => s.projects.find((p) => p.id === activeProjectId) ?? null);
@@ -29,13 +27,12 @@ export function TitleBar() {
       <button className="icon-btn side-toggle" aria-label={t("sidebar.toggle")} title={t("sidebar.toggle")} onClick={() => useSidebar.getState().toggle()}>◧</button>
       {/* Prototype title bar: location crumb (group › project › worktree ▾), no brand text. */}
       <nav className="crumb" aria-label={t("shell.location")}>
-        <button className="breadcrumb-segment" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().show(); }}>{group?.name ?? t("groups.ungrouped")}</button>
+        <button className="breadcrumb-segment" onClick={(e) => useSwitcher.getState().show(e.currentTarget)}>{group?.name ?? t("groups.ungrouped")}</button>
         <span className="sep" aria-hidden>›</span>
-        <button className="breadcrumb-segment" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().show(); }}>{project ? projectLabel(project) : t("groups.noProjectSelected")}</button>
+        <button className="breadcrumb-segment" onClick={(e) => useSwitcher.getState().show(e.currentTarget)}>{project ? projectLabel(project) : t("groups.noProjectSelected")}</button>
         <span className="sep" aria-hidden>›</span>
         <button className="breadcrumb-segment worktree-crumb cur" onClick={(e) => { const r=e.currentTarget.getBoundingClientRect(); setWorktreeMenu({x:r.left,y:r.bottom+5}); }}>{activeWorktree?.branch ?? t("sidebar.noWorktree") } ▾</button>
       </nav>
-      {projectOpen && projectAnchor && <GroupSwitcherPopover anchorEl={projectAnchor} />}
       {worktreeMenu && <Menu x={worktreeMenu.x} y={worktreeMenu.y} onClose={() => setWorktreeMenu(null)} items={worktrees.filter((w) => pinnedPaths.includes(w.path) || w.path === activePath).map((w) => ({ kind:"item" as const, label:w.branch ?? w.path, onSelect:() => useWorktrees.getState().select(w.path) }))} />}
       <button className="search" onClick={() => window.dispatchEvent(new CustomEvent("bw:palette"))}>
         <span aria-hidden>⌕</span>

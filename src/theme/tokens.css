@@ -4,12 +4,12 @@
  * 2026-11-14-ui-redesign-design-system-design.md, "Design system".
  * ============================================================ */
 :root {
-  --ah: 250; /* accent hue (user setting, "accent hue") */
+  --ah: 215; /* accent hue (user setting, "accent hue") */
   --bh: 265; /* neutral tint (user setting, "base tint") */
   color-scheme: dark;
 
   /* Neutrals */
-  --bg: oklch(.17 .010 var(--bh));
+  --bg: oklch(.18 .006 var(--bh));
   --surface: oklch(.205 .011 var(--bh));
   --raised: oklch(.245 .012 var(--bh));
   --overlay: oklch(.27 .013 var(--bh));
@@ -17,12 +17,12 @@
   --selected: oklch(.68 .17 var(--ah) / .18);
   --border: oklch(1 0 0 / .11);
   --border-strong: oklch(1 0 0 / .2);
-  --text: oklch(.96 .004 var(--bh));
+  --text: oklch(.92 .004 var(--bh));
   --text-2: oklch(.80 .010 var(--bh));
   --text-3: oklch(.70 .012 var(--bh));
 
   /* Accent + semantic */
-  --accent: oklch(.70 .16 var(--ah));
+  --accent: oklch(.70 .14 var(--ah));
   --accent-strong: oklch(.62 .18 var(--ah));
   --on-accent: oklch(.16 .02 var(--ah));
   --success: oklch(.76 .15 155);
@@ -117,8 +117,8 @@
   --text-2: oklch(.40 .014 var(--bh));
   --text-3: oklch(.49 .014 var(--bh));
 
-  --accent: oklch(.53 .19 var(--ah));
-  --accent-strong: oklch(.47 .19 var(--ah));
+  --accent: oklch(.50 .17 var(--ah));
+  --accent-strong: oklch(.45 .17 var(--ah));
   --on-accent: #fff;
   --success: oklch(.50 .14 155);
   --warning: oklch(.55 .13 70);

@@ -80,7 +80,7 @@ button.chip:hover { background: var(--hover); color: var(--text); }
 .banner.info { background: var(--info-bg); border-color: color-mix(in oklch, var(--info) 45%, transparent); }
 
 /* Menu / popover: solid --overlay surface, 10px radius, token shadow (no glass). */
-.menu { position: fixed; z-index: 100; padding: 6px; border-radius: var(--r-panel); background: var(--overlay); border: 1px solid var(--border-strong); box-shadow: var(--shadow); animation: pop var(--dur) var(--spring); transform-origin: top left; }
+.menu { position: fixed; z-index: 100; padding: 12px 6px; border-radius: var(--r-panel); background: var(--overlay); border: 1px solid var(--border-strong); box-shadow: var(--shadow); animation: pop var(--dur) var(--spring); transform-origin: top left; }
 @keyframes pop { from { opacity: 0; transform: scale(.96); } }
 .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: var(--r-control); background: none; color: var(--text); text-align: left; cursor: pointer; }
 .menu-item:hover, .menu-item:focus-visible { background: var(--hover); }

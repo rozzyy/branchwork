@@ -185,3 +185,13 @@ describe("nearestSide", () => {
     expect(nearestSide(0.5, 0.95)).toBe("bottom");
   });
 });
+
+describe("pane project pins removed", () => {
+  it("carries no pane project pins on initial or derived stages", () => {
+    expect("paneProjects" in initialStage).toBe(false);
+  });
+  it("still accepts saved stages that carry legacy pane project pins", () => {
+    const legacy = { ...initialStage, paneProjects: { [initialStage.focusId]: "p1" } };
+    expect(isValidStage(legacy)).toBe(true);
+  });
+});

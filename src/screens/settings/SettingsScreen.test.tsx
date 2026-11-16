@@ -276,6 +276,19 @@ it("shows a waiting-for-login loader while login is pending", async () => {
   expect(document.querySelector(".spin")).not.toBeNull();
 });
 
+it("explains that Copilot sign-in uses the device keychain rather than an isolated profile credential", async () => {
+  useProfiles.setState({
+    profiles: [{ cliId: "copilot", slug: "work", name: "Work", createdAt: 1 }],
+    globalDefault: null,
+    cliDefaults: {},
+    loaded: true,
+    usage: {},
+    cliProbes: {},
+  });
+  render(<SettingsView />);
+  expect(await screen.findByText(/Copilot sign-in is stored in the system keychain/i)).toBeInTheDocument();
+});
+
 it("shows a loader while the credential check is pending", async () => {
   useProfiles.setState({
     profiles: [{ cliId: "codex", slug: "work", name: "Work", createdAt: 1 }],

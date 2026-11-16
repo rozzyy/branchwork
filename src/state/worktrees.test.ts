@@ -57,3 +57,76 @@ it("refuses to load a different project while an editor buffer is dirty (R5b)", 
   await useWorktrees.getState().load(other);
   expect(useWorktrees.getState().projectId).toBe("p2");
 });
+
+it("loads and caches a second project's worktrees without disturbing the active one", async () => {
+  const projectA = { id: "pa", localPath: "/a" } as Project;
+  const projectB = { id: "pb", localPath: "/b" } as Project;
+  vi.mocked(listWorktrees).mockImplementation(async (id: string) =>
+    id === "pa" ? [{ path: "/a" } as Worktree] : ([{ path: "/b" }, { path: "/b/wt-1" }] as Worktree[]),
+  );
+  vi.mocked(listPins).mockResolvedValue([]);
+  vi.mocked(loadSetting).mockResolvedValue(null);
+  await useWorktrees.getState().load(projectA);
+
+  const cached = await useWorktrees.getState().ensureProjectWorktrees(projectB);
+  expect(cached).toEqual({ worktrees: [{ path: "/b" }, { path: "/b/wt-1" }], activePath: "/b" });
+  expect(useWorktrees.getState().projectId).toBe("pa");
+  expect(useWorktrees.getState().worktrees).toEqual([{ path: "/a" }]);
+  expect(useWorktrees.getState().activePath).toBe("/a");
+
+  vi.mocked(listWorktrees).mockClear();
+  await useWorktrees.getState().ensureProjectWorktrees(projectB);
+  expect(listWorktrees).not.toHaveBeenCalled();
+});
+
+it("worktreePathsFor resolves the pinned project's paths without touching global state", async () => {
+  const projectA = { id: "pa", localPath: "/a" } as Project;
+  const projectB = { id: "pb", localPath: "/b" } as Project;
+  vi.mocked(listWorktrees).mockImplementation(async (id: string) =>
+    id === "pa" ? [{ path: "/a" } as Worktree] : ([{ path: "/b" }, { path: "/b/wt-1" }] as Worktree[]),
+  );
+  vi.mocked(listPins).mockResolvedValue([]);
+  vi.mocked(loadSetting).mockResolvedValue(null);
+  await useWorktrees.getState().load(projectA);
+  await useWorktrees.getState().ensureProjectWorktrees(projectB);
+
+  expect(useWorktrees.getState().worktreePathsFor(projectA)).toEqual(["/a"]);
+  expect(useWorktrees.getState().worktreePathsFor(projectB)).toEqual(["/b", "/b/wt-1"]);
+  expect(useWorktrees.getState().worktreePathsFor({ id: "px", localPath: "/x" } as Project)).toEqual(["/x"]);
+  expect(useWorktrees.getState().projectId).toBe("pa");
+});
+
+it("selectCachedWorktree switches only the cached project", async () => {
+  const projectA = { id: "pa", localPath: "/a" } as Project;
+  const projectB = { id: "pb", localPath: "/b" } as Project;
+  vi.mocked(listWorktrees).mockImplementation(async (id: string) =>
+    id === "pa" ? [{ path: "/a" } as Worktree] : ([{ path: "/b" }, { path: "/b/wt-1" }] as Worktree[]),
+  );
+  vi.mocked(listPins).mockResolvedValue([]);
+  vi.mocked(loadSetting).mockResolvedValue(null);
+  await useWorktrees.getState().load(projectA);
+  await useWorktrees.getState().ensureProjectWorktrees(projectB);
+
+  useWorktrees.getState().selectCachedWorktree("pb", "/b/wt-1");
+  expect(useWorktrees.getState().byProject["pb"]?.activePath).toBe("/b/wt-1");
+  expect(useWorktrees.getState().activePath).toBe("/a");
+
+  useWorktrees.getState().selectCachedWorktree("pb", "/nope");
+  expect(useWorktrees.getState().byProject["pb"]?.activePath).toBe("/b/wt-1");
+});
+
+it("selectCachedWorktree refuses while an editor buffer is dirty", async () => {
+  const projectB = { id: "pc", localPath: "/c" } as Project;
+  vi.mocked(listWorktrees).mockResolvedValue([{ path: "/c" }, { path: "/c/wt-1" }] as Worktree[]);
+  vi.mocked(listPins).mockResolvedValue([]);
+  vi.mocked(loadSetting).mockResolvedValue(null);
+  await useWorktrees.getState().ensureProjectWorktrees(projectB);
+  expect(useWorktrees.getState().byProject["pc"]?.activePath).toBe("/c");
+
+  useFiles.setState({ dirty: { "x.ts": true } });
+  useWorktrees.getState().selectCachedWorktree("pc", "/c/wt-1");
+  expect(useWorktrees.getState().byProject["pc"]?.activePath).toBe("/c");
+  useFiles.setState({ dirty: {} });
+  useWorktrees.getState().selectCachedWorktree("pc", "/c/wt-1");
+  expect(useWorktrees.getState().byProject["pc"]?.activePath).toBe("/c/wt-1");
+});

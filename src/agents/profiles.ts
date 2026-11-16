@@ -5,7 +5,7 @@
 // the isolated profile directory and any provider-owned shared credential.
 import { createElement } from "react";
 import { create } from "zustand";
-import { CLI_REGISTRY, resolveCli, slugify, type CliDef, type CliId } from "./registry";
+import { CLI_REGISTRY, resolveCli, slugify, type CliId } from "./registry";
 import { CliIcon } from "./cliIcons";
 import {
   ensureProfileDir,
@@ -16,15 +16,13 @@ import {
   seedClaudeOnboarding,
 } from "../ipc/cli";
 import { parseClaudeAuth, parseMuseLoginStatus, parseMuseUsage } from "./probe";
-import { waitTerminalReady, writeTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { errorMessage } from "../ipc/errors";
 import { t } from "../i18n/t";
 import { toast } from "../ui/toast";
 import { ask } from "../ui/dialog";
-import { useTerminalScreen } from "../terminal/screen";
-import { useStage } from "../state/stage";
-import { useWorktrees } from "../state/worktrees";
+import { agentLoginManager } from "./AgentLoginManager";
+import { OPENCODE_LOGIN_CHOICES, type OpenCodeLoginOptions } from "./login";
 
 export interface AgentProfile {
   cliId: CliId;
@@ -104,57 +102,6 @@ export interface CliProbeState {
   identity: string | null;
 }
 
-/**
- * Open the isolated login PTY for a profile dir and land it in the
- * vendor's real login command (Orca's method: the user completes the vendor
- * login inside it; Branchwork never sees the secret). True when the login
- * step started.
- */
-async function openLoginTab(def: CliDef, profileDir: string): Promise<boolean> {
-  let env: Record<string, string>;
-  try {
-    env = resolveCli(def).envFor(profileDir);
-  } catch (error) {
-    // Custom CLI with no launch override yet: explain instead of
-    // rejecting unhandled (callers fire-and-forget these flows).
-    toast({ title: errorMessage(error), icon: "⚠" });
-    return false;
-  }
-  const target = useWorktrees.getState().activePath;
-  const screen = useTerminalScreen.getState();
-  let tabId: string | null;
-  try {
-    await screen.load();
-    tabId = await screen.newTab(target ?? undefined, env);
-  } catch (error) {
-    toast({ title: errorMessage(error), icon: "⚠" });
-    return false;
-  }
-  if (!tabId) return false; // newTab already explained why (no worktree).
-  useStage.getState().go("terminal");
-  // Land the pane inside the vendor CLI when it exposes no dedicated
-  // shell login command (gemini: auth completes inside its TUI).
-  const startCmd = def.loginCmd ?? def.launch[0] ?? null;
-  if (!startCmd) {
-    toast({ title: t("agents.loginReady", { name: def.name }), icon: createElement(CliIcon, { id: def.id }) });
-    return true;
-  }
-  // Re-read the store: newTab settled new state after `screen` was taken.
-  const tab = useTerminalScreen.getState().tabs.find((item) => item.id === tabId);
-  const paneId = tab?.focusedPaneId;
-  const sessionId = paneId ? tab?.panes[paneId]?.sessionId : null;
-  if (!sessionId) return false;
-  try {
-    // Issue #3: don't type into a shell whose startup may still discard typeahead.
-    await waitTerminalReady(sessionId).catch(() => false);
-    await writeTerminal(sessionId, new TextEncoder().encode(`${startCmd}\n`));
-  } catch (error) {
-    toast({ title: errorMessage(error), icon: "⚠" });
-    return false;
-  }
-  return true;
-}
-
 const activeLoginMonitors = new Set<string>();
 const LOGIN_MONITOR_TIMEOUT_MS = 10 * 60_000;
 const LOGIN_MONITOR_INTERVAL_MS = 1_000;
@@ -184,17 +131,18 @@ function monitorLogin(ref: ProfileRef): void {
             .profiles.find((item) => item.cliId === ref.cliId && item.slug === ref.slug);
           toast({
             title: t("agents.loginDetected", { name: def.name, profile: profile?.name ?? ref.slug }),
-            // The probe turns true the moment the browser step completes,
-            // while the login terminal may still sit on the vendor's
-            // one-time setup wizard — say so, or it reads as another login.
-            detail: ref.cliId === "claude" ? t("agents.loginFinishSetup") : undefined,
             icon: createElement(CliIcon, { id: def.id }),
           });
+          await agentLoginManager.cancel(ref);
           return;
         }
-        if (linked === null) return; // unverifiable: stop, never fabricate
+        if (!agentLoginManager.isActive(ref)) {
+          if (linked !== null) toast({ title: t("agents.loginNotDetected"), icon: "⚠" });
+          return;
+        }
         if (Date.now() - started > LOGIN_MONITOR_TIMEOUT_MS) {
           toast({ title: t("agents.loginNotDetected"), icon: "⚠" });
+          await agentLoginManager.cancel(ref);
           return;
         }
         await delay(LOGIN_MONITOR_INTERVAL_MS);
@@ -237,14 +185,13 @@ interface ProfilesStore {
   checkProfileLogin(ref: ProfileRef): Promise<boolean | null>;
   /** Create a profile record + dir without opening anything. Null when invalid. */
   createProfile(cliId: CliId, name: string): Promise<AgentProfile | null>;
-  /** Create a profile, then open its login terminal. Null when cancelled/invalid. */
+  /** Create a profile and start background browser login. Null when canceled/invalid. */
   addProfile(cliId: CliId, name?: string): Promise<AgentProfile | null>;
   /**
-   * Re-open the login terminal for an existing profile (e.g. a row whose
-   * credentials were never completed). False when the login step failed
-   * to start; the profile record is kept in both cases.
+   * Start background browser login for an existing profile. False when the
+   * login could not start or the OpenCode choice was canceled.
    */
-  loginProfile(ref: ProfileRef): Promise<boolean>;
+  loginProfile(ref: ProfileRef, options?: OpenCodeLoginOptions): Promise<boolean>;
   /** Confirmed logout: delete the profile's credentials, keep the profile. */
   logoutProfile(ref: ProfileRef): Promise<string[] | null>;
   /** Confirmed account removal: delete profile data before dropping its record. */
@@ -387,6 +334,10 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
     },
 
     async addProfile(cliId, name) {
+      if (cliId === "custom") {
+        toast({ title: t("agents.loginUnsupported"), icon: "⚠" });
+        return null;
+      }
       const def = CLI_REGISTRY[cliId];
       const label =
         name ??
@@ -401,35 +352,32 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
       const profile = await get().createProfile(cliId, label);
       if (!profile) return null;
       const ref = { cliId, slug: profile.slug };
-      const rollback = () => get().removeProfile(ref);
-      let profileDir: string;
-      try {
-        profileDir = await ensureProfileDir(cliId, profile.slug);
-      } catch (error) {
-        rollback();
-        toast({ title: t("agents.dirError", { message: errorMessage(error) }), icon: "⚠" });
-        return null;
-      }
-      // A login that never starts must not leave a dead account behind.
-      const started = await openLoginTab(def, profileDir);
-      if (!started) {
-        rollback();
-        return null;
-      }
-      monitorLogin(ref);
+      await get().loginProfile(ref);
       return profile;
     },
 
-    async loginProfile(ref) {
+    async loginProfile(ref, suppliedOptions) {
       const profile = findProfile(ref);
       if (!profile) {
         toast({ title: t("agents.profileRequired", { name: ref.cliId }), icon: "⚠" });
         return false;
       }
-      const def = CLI_REGISTRY[ref.cliId];
-      let profileDir: string;
+      if (agentLoginManager.isActive(ref)) return false;
+      let options = suppliedOptions;
+      if (ref.cliId === "opencode" && !options) {
+        const choice = await ask({
+          title: t("settings.opencodeLoginTitle"),
+          body: t("settings.opencodeLoginBody"),
+          choices: OPENCODE_LOGIN_CHOICES.map((entry) => ({ value: entry.value, label: t(entry.labelKey) })),
+          ok: t("agents.loginNow"),
+          icon: createElement(CliIcon, { id: "opencode" }),
+        });
+        if (typeof choice !== "string") return false;
+        const [providerId, methodId] = choice.split(":");
+        options = { providerId, methodId };
+      }
       try {
-        profileDir = await ensureProfileDir(ref.cliId, profile.slug);
+        await ensureProfileDir(ref.cliId, profile.slug);
       } catch (error) {
         toast({ title: t("agents.dirError", { message: errorMessage(error) }), icon: "⚠" });
         return false;
@@ -439,12 +387,20 @@ export const useProfiles = create<ProfilesStore>((set, get) => {
         // already exists, so existing credentials are never touched.
         await seedClaudeOnboarding(ref.cliId, profile.slug).catch(() => false);
       }
-      const started = await openLoginTab(def, profileDir);
-      if (started) monitorLogin(ref);
-      return started;
+      get().setLoginPending(ref, Date.now());
+      try {
+        await agentLoginManager.start(ref, options);
+        monitorLogin(ref);
+        return true;
+      } catch {
+        get().setLoginPending(ref, null);
+        toast({ title: t("agents.loginStartFailed"), icon: "⚠" });
+        return false;
+      }
     },
 
     removeProfile(ref) {
+      void agentLoginManager.cancel(ref);
       const profiles = get().profiles.filter(
         (profile) => !(profile.cliId === ref.cliId && profile.slug === ref.slug),
       );

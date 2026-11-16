@@ -1,6 +1,6 @@
 {
-  "milestone": "M12 — Stage tabs",
-  "plan": "docs/superpowers/plans/2026-11-15-m12-stage-tabs.md",
+  "milestone": "M13 \u2014 Agent provider browser login",
+  "plan": "docs/superpowers/plans/2026-11-15-agent-provider-browser-login.md",
   "statuses": [
     "not-started",
     "in-progress",
@@ -55,7 +55,7 @@
     {
       "id": "m0-stage-1-review",
       "stage": 1,
-      "name": "Stage 1 batch review (code, security, e2e) + manual E2E spec + 🛑 checkpoint 1",
+      "name": "Stage 1 batch review (code, security, e2e) + manual E2E spec + \ud83d\uded1 checkpoint 1",
       "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
       "dependencies": [
         "m0-task-04"
@@ -111,13 +111,13 @@
     {
       "id": "m0-stage-2-review",
       "stage": 2,
-      "name": "Stage 2 batch review + manual E2E spec + 🛑 checkpoint 2",
+      "name": "Stage 2 batch review + manual E2E spec + \ud83d\uded1 checkpoint 2",
       "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
       "dependencies": [
         "m0-task-08"
       ],
       "status": "done",
-      "evidence": "code-reviewer CHANGES REQUESTED → fixed in task 08b (IPC mockIPC integration test, i18n accentHue, light reduce-transparency, stage1 e2e update); security PASS (3 minor deferred: Rust-side settings key allowlist before executable settings, shape-check loaded theme, size cap); e2e 14/14; vitest 20/20; init.sh green; bundle 74.9KB gzip (+3.1KB). Manual spec Stage 2 written. Awaiting user. | User go-ahead given after manual test."
+      "evidence": "code-reviewer CHANGES REQUESTED \u2192 fixed in task 08b (IPC mockIPC integration test, i18n accentHue, light reduce-transparency, stage1 e2e update); security PASS (3 minor deferred: Rust-side settings key allowlist before executable settings, shape-check loaded theme, size cap); e2e 14/14; vitest 20/20; init.sh green; bundle 74.9KB gzip (+3.1KB). Manual spec Stage 2 written. Awaiting user. | User go-ahead given after manual test."
     },
     {
       "id": "m0-task-09",
@@ -166,18 +166,18 @@
     {
       "id": "m0-stage-3-review",
       "stage": 3,
-      "name": "Stage 3 batch review + manual E2E spec + 🛑 checkpoint 3",
+      "name": "Stage 3 batch review + manual E2E spec + \ud83d\uded1 checkpoint 3",
       "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
       "dependencies": [
         "m0-task-12"
       ],
       "status": "done",
-      "evidence": "code-reviewer APPROVE (1 Important = plan conflict in Task 14 split:close → fixed in plan + task file; 10 minor incl. unclamped saved ratio, Pane memo later); e2e PASS 11/11 new, 25/25 full suite; vitest 41/41; init.sh green; bundle 245.7KB/77.1KB gz (+2.2KB). Manual spec Stage 3 (S3-01..08). Awaiting user. | Manual test: S3-01 drag bug in native window fixed (task 12b dragDropEnabled:false), re-verified by user; go-ahead given."
+      "evidence": "code-reviewer APPROVE (1 Important = plan conflict in Task 14 split:close \u2192 fixed in plan + task file; 10 minor incl. unclamped saved ratio, Pane memo later); e2e PASS 11/11 new, 25/25 full suite; vitest 41/41; init.sh green; bundle 245.7KB/77.1KB gz (+2.2KB). Manual spec Stage 3 (S3-01..08). Awaiting user. | Manual test: S3-01 drag bug in native window fixed (task 12b dragDropEnabled:false), re-verified by user; go-ahead given."
     },
     {
       "id": "m0-task-12c",
       "stage": 4,
-      "name": "Terminal screen placeholder (spec §6.5a)",
+      "name": "Terminal screen placeholder (spec \u00a76.5a)",
       "description": ".agent/tasks/m0-task-12c-terminal-placeholder.md",
       "dependencies": [
         "m0-stage-3-review"
@@ -221,18 +221,18 @@
     {
       "id": "m0-task-15b",
       "stage": 4,
-      "name": "Collapse / show sidebar (⌘B)",
+      "name": "Collapse / show sidebar (\u2318B)",
       "description": ".agent/tasks/m0-task-15b-sidebar-collapse.md",
       "dependencies": [
         "m0-task-15"
       ],
       "status": "done",
-      "evidence": "Spec review PASS; sidebar persistence and ⌘B tests pass; ./init.sh green: typecheck clean, 16 Vitest files/56 tests passed, Clippy clean, Rust tests 2/2 passed; pnpm test:e2e: 25 passed. Stage 4 code review APPROVE after fixing sidebar-load race and palette focus containment."
+      "evidence": "Spec review PASS; sidebar persistence and \u2318B tests pass; ./init.sh green: typecheck clean, 16 Vitest files/56 tests passed, Clippy clean, Rust tests 2/2 passed; pnpm test:e2e: 25 passed. Stage 4 code review APPROVE after fixing sidebar-load race and palette focus containment."
     },
     {
       "id": "m0-stage-4-review",
       "stage": 4,
-      "name": "Stage 4 batch review + final manual E2E spec + 🛑 checkpoint 4 (M0 done)",
+      "name": "Stage 4 batch review + final manual E2E spec + \ud83d\uded1 checkpoint 4 (M0 done)",
       "description": "Batch review (code-reviewer, security-reviewer, e2e-testing), manual E2E spec in docs/testing/m0-manual-e2e.md, then stop for user checkpoint",
       "dependencies": [
         "m0-task-15b"
@@ -304,7 +304,7 @@
         "m1-task-05"
       ],
       "status": "done",
-      "evidence": "spec-reviewer PASS; security re-review Clear (Medium fixed; minor: command(async) uses tokio worker not blocking pool — comment corrected in 05c, spawn_blocking deferred to §7 cancellable clone); init.sh green: vitest 20 files/80 tests, cargo test 17/17, fmt clean; e2e 35/35"
+      "evidence": "spec-reviewer PASS; security re-review Clear (Medium fixed; minor: command(async) uses tokio worker not blocking pool \u2014 comment corrected in 05c, spawn_blocking deferred to \u00a77 cancellable clone); init.sh green: vitest 20 files/80 tests, cargo test 17/17, fmt clean; e2e 35/35"
     },
     {
       "id": "m1-task-05c",
@@ -315,7 +315,7 @@
         "m1-task-05b"
       ],
       "status": "done",
-      "evidence": "spec-reviewer PASS; security Clear (only dialog:allow-open; tripwire: plugin widens asset scope on pick — re-review if protocol-asset or fs plugin enabled); tauri-plugin-dialog 2.8.4 Rust+npm; init.sh green: vitest 81, cargo 17/17, fmt clean; e2e 35/35"
+      "evidence": "spec-reviewer PASS; security Clear (only dialog:allow-open; tripwire: plugin widens asset scope on pick \u2014 re-review if protocol-asset or fs plugin enabled); tauri-plugin-dialog 2.8.4 Rust+npm; init.sh green: vitest 81, cargo 17/17, fmt clean; e2e 35/35"
     },
     {
       "id": "m1-task-05d",
@@ -381,7 +381,7 @@
         "m1-task-05h"
       ],
       "status": "done",
-      "evidence": "spec FAIL on AC4 (role=presentation still exposes close buttons in tablist) → AC4 amended (labelled ul/li list + aria-current; amends Task 04 tablist AC) → re-review PASS; regression tests failed pre-fix; vitest 111/111, cargo 17/17, e2e 47/47"
+      "evidence": "spec FAIL on AC4 (role=presentation still exposes close buttons in tablist) \u2192 AC4 amended (labelled ul/li list + aria-current; amends Task 04 tablist AC) \u2192 re-review PASS; regression tests failed pre-fix; vitest 111/111, cargo 17/17, e2e 47/47"
     },
     {
       "id": "m1-task-05j",
@@ -568,7 +568,7 @@
         "m2-task-04"
       ],
       "status": "done",
-      "evidence": "Changes stub renders real status+diff via DiffRenderer. Security review PASS (4 Minor; #1 NUL path, #2 working-file read, #3 async commands fixed; #4 line cap mitigated by windowing). Code review REQUEST CHANGES x2 -> fixed (staged large-file truncation, staged binary misdetection, select/refresh race, stale timer after worktree switch, dmode restore, split pairing, ruler, perf fixture) -> APPROVE WITH NITS. Perf §9 (prod, i5-1038NG7, realistic 5000-line diff): median 52 ms (was 140). ./init.sh: 27 Vitest files/166 tests; Clippy clean; Rust 60 passed/2 ignored; Playwright 53/53. OQ1=oplog blob, OQ3=reuse git:changed (user). Manual spec docs/testing/m2-manual-e2e.md written, not run. Awaiting Checkpoint M2.1."
+      "evidence": "Changes stub renders real status+diff via DiffRenderer. Security review PASS (4 Minor; #1 NUL path, #2 working-file read, #3 async commands fixed; #4 line cap mitigated by windowing). Code review REQUEST CHANGES x2 -> fixed (staged large-file truncation, staged binary misdetection, select/refresh race, stale timer after worktree switch, dmode restore, split pairing, ruler, perf fixture) -> APPROVE WITH NITS. Perf \u00a79 (prod, i5-1038NG7, realistic 5000-line diff): median 52 ms (was 140). ./init.sh: 27 Vitest files/166 tests; Clippy clean; Rust 60 passed/2 ignored; Playwright 53/53. OQ1=oplog blob, OQ3=reuse git:changed (user). Manual spec docs/testing/m2-manual-e2e.md written, not run. Awaiting Checkpoint M2.1."
     },
     {
       "id": "m2-task-05",
@@ -590,7 +590,7 @@
         "m2-task-05"
       ],
       "status": "done",
-      "evidence": "Rust IPC for stage/unstage/discard/hunk/line + oplog bridge + filter-sentinel; Changes dispatch wired to file-row/section/diff actions with toasts. Acceptance self-check vs .agent/tasks/m2-task-06.md AC 1–8. ./init.sh: Test Files 28 passed (28); Tests 177 passed (177); Rust 71 passed, 0 failed, 2 ignored; Clippy clean; cargo fmt --check clean. Untracked discard-to-Trash deferred to Task 09 as specified."
+      "evidence": "Rust IPC for stage/unstage/discard/hunk/line + oplog bridge + filter-sentinel; Changes dispatch wired to file-row/section/diff actions with toasts. Acceptance self-check vs .agent/tasks/m2-task-06.md AC 1\u20138. ./init.sh: Test Files 28 passed (28); Tests 177 passed (177); Rust 71 passed, 0 failed, 2 ignored; Clippy clean; cargo fmt --check clean. Untracked discard-to-Trash deferred to Task 09 as specified."
     },
     {
       "id": "m2-task-07",
@@ -601,7 +601,7 @@
         "m2-task-06"
       ],
       "status": "done",
-      "evidence": "Commit / commit-and-push / commit-and-sync IPC with pre-write HEAD oplog rows, GitHook/GitAuth/GitConflict classification, and the full Changes commit UI (split-button menu, ⌘↵, Sync, disabled Generate). Acceptance self-check vs .agent/tasks/m2-task-07.md AC 1-8. ./init.sh: Test Files 28 passed (28); Tests 186 passed (186); Rust 78 passed, 0 failed, 2 ignored; Clippy clean; cargo fmt --check clean. Undo Last Commit remains a deferred toast; undo_last wiring is Task 14 per the task's out-of-scope note."
+      "evidence": "Commit / commit-and-push / commit-and-sync IPC with pre-write HEAD oplog rows, GitHook/GitAuth/GitConflict classification, and the full Changes commit UI (split-button menu, \u2318\u21b5, Sync, disabled Generate). Acceptance self-check vs .agent/tasks/m2-task-07.md AC 1-8. ./init.sh: Test Files 28 passed (28); Tests 186 passed (186); Rust 78 passed, 0 failed, 2 ignored; Clippy clean; cargo fmt --check clean. Undo Last Commit remains a deferred toast; undo_last wiring is Task 14 per the task's out-of-scope note."
     },
     {
       "id": "m2-task-08",
@@ -645,7 +645,7 @@
         "m2-task-09"
       ],
       "status": "done",
-      "evidence": "Files screen (src/screens/files/FilesScreen.tsx, files.css), src/state/files.ts, EditorHost placeholder, views.tsx wired; ⌘P via palette fuzzy rank; context menu with deferred items disabled (ui.deferred_m3/m4). Prototype parity fixes: disabled Terminal button, folder change dots, shared toolbar alignment fix (.pane-actions ~ .pane-ctl, also fixes Changes). Spec review FAIL (title, folder rename) -> PASS (.agent/reviews/m2-task-10-spec.md). Deviation: Rename shown for folders (prototype hides it) per AC-3. Screenshots .agent/reviews/m2-task-10-ui*.png. ./init.sh: Test Files 31 passed (31); Tests 202 passed (202); Rust 95 passed, 0 failed, 3 ignored."
+      "evidence": "Files screen (src/screens/files/FilesScreen.tsx, files.css), src/state/files.ts, EditorHost placeholder, views.tsx wired; \u2318P via palette fuzzy rank; context menu with deferred items disabled (ui.deferred_m3/m4). Prototype parity fixes: disabled Terminal button, folder change dots, shared toolbar alignment fix (.pane-actions ~ .pane-ctl, also fixes Changes). Spec review FAIL (title, folder rename) -> PASS (.agent/reviews/m2-task-10-spec.md). Deviation: Rename shown for folders (prototype hides it) per AC-3. Screenshots .agent/reviews/m2-task-10-ui*.png. ./init.sh: Test Files 31 passed (31); Tests 202 passed (202); Rust 95 passed, 0 failed, 3 ignored."
     },
     {
       "id": "m2-task-11",
@@ -678,7 +678,7 @@
         "m2-stage-3-review"
       ],
       "status": "done",
-      "evidence": "spec-reviewer PASS (.agent/reviews/m2-task-12-spec.md, all 8 ACs). Implemented on m2-stage-4 (partial from prior session rate-limited executor, completed this session): src-tauri/src/blame.rs blame (git2::Blame, groups collapse, age_bucket hours/days/weeks/months/older) + file_history (Revwalk TOPOLOGICAL|TIME, limit, path-scoped via tree diff), NotFound on untracked, validate_catalog_worktree in lib.rs, regenerated bindings; src/ipc/blame.ts + blame.test.ts (3 tests). Rust blame tests 4/4. ./init.sh green: Test Files 33 passed (33), Tests 274 passed (274), Rust 104 passed/0 failed/3 ignored, Clippy clean; cargo fmt --check clean. Also: e2e/m2-stage2-changes.spec.ts rewritten from vacuous __bwTest stubs to __TAURI_INTERNALS__ mock — 16/16 passed, no early-return guards."
+      "evidence": "spec-reviewer PASS (.agent/reviews/m2-task-12-spec.md, all 8 ACs). Implemented on m2-stage-4 (partial from prior session rate-limited executor, completed this session): src-tauri/src/blame.rs blame (git2::Blame, groups collapse, age_bucket hours/days/weeks/months/older) + file_history (Revwalk TOPOLOGICAL|TIME, limit, path-scoped via tree diff), NotFound on untracked, validate_catalog_worktree in lib.rs, regenerated bindings; src/ipc/blame.ts + blame.test.ts (3 tests). Rust blame tests 4/4. ./init.sh green: Test Files 33 passed (33), Tests 274 passed (274), Rust 104 passed/0 failed/3 ignored, Clippy clean; cargo fmt --check clean. Also: e2e/m2-stage2-changes.spec.ts rewritten from vacuous __bwTest stubs to __TAURI_INTERNALS__ mock \u2014 16/16 passed, no early-return guards."
     },
     {
       "id": "m2-task-13",
@@ -722,7 +722,7 @@
         "m2-task-15"
       ],
       "status": "done",
-      "evidence": "Coordinator acceptance review PASS (.agent/reviews/m2-task-16-spec.md, all 6 ACs). Updated spec §6.2: Graph WIP inspector has staged/unstaged/untracked/conflicted groups, separate diff tabs retaining path/area, quick stage/unstage and shared hunk/line actions; full commit/stash/discard workflows remain in Changes. Uses existing IPC only. Stage 4 manual E2E M2-S4-04 added. Focused Vitest: 3 files/18 tests passed. ./init.sh: typecheck clean; Test Files 36 passed (36), Tests 292 passed (292), Rust 116 passed/0 failed/3 ignored, Clippy clean."
+      "evidence": "Coordinator acceptance review PASS (.agent/reviews/m2-task-16-spec.md, all 6 ACs). Updated spec \u00a76.2: Graph WIP inspector has staged/unstaged/untracked/conflicted groups, separate diff tabs retaining path/area, quick stage/unstage and shared hunk/line actions; full commit/stash/discard workflows remain in Changes. Uses existing IPC only. Stage 4 manual E2E M2-S4-04 added. Focused Vitest: 3 files/18 tests passed. ./init.sh: typecheck clean; Test Files 36 passed (36), Tests 292 passed (292), Rust 116 passed/0 failed/3 ignored, Clippy clean."
     },
     {
       "id": "m2-stage-4-review",
@@ -1145,7 +1145,7 @@
         "m4-task-10"
       ],
       "status": "done",
-      "evidence": "Implemented Inbox and spec-review PASS (.agent/reviews/m4-task-11-spec.md). Bounds: 8 accounts × 50 notifications, 2 MiB response, 30s/request; latest 500 agent events and 500 persisted state entries. Focused Vitest 3 files / 6 tests, pnpm typecheck, Rust notification tests 36/36, Clippy -D warnings, and rustfmt passed. Final Stage 4 verification: Vitest 68 files / 593 tests passed; full Rust serial suite 216 passed / 3 ignored. ./init.sh parallel Rust phase hit macOS FSEvent startup failures (10 watcher tests). No commit/push."
+      "evidence": "Implemented Inbox and spec-review PASS (.agent/reviews/m4-task-11-spec.md). Bounds: 8 accounts \u00d7 50 notifications, 2 MiB response, 30s/request; latest 500 agent events and 500 persisted state entries. Focused Vitest 3 files / 6 tests, pnpm typecheck, Rust notification tests 36/36, Clippy -D warnings, and rustfmt passed. Final Stage 4 verification: Vitest 68 files / 593 tests passed; full Rust serial suite 216 passed / 3 ignored. ./init.sh parallel Rust phase hit macOS FSEvent startup failures (10 watcher tests). No commit/push."
     },
     {
       "id": "m4-task-12",
@@ -1176,7 +1176,7 @@
       "description": "Ad-hoc user follow-up: enable native Tauri file drops and insert safe quoted paths into the targeted PTY pane.",
       "dependencies": [],
       "status": "done",
-      "evidence": "Implementation reviewed: native drop listener targets the PTY pane under the drop point; paths are capped at 8 × 2048 characters, control characters are rejected, shell metacharacters are single-quoted, and no newline is sent to submit the command. Focused tests previously passed 15/15. Current ./init.sh passed: Vitest 80 files / 687 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean. Native Finder drop remains visually unverified because Cua Driver did not answer; deferred under the user instruction to continue past manual checkpoints."
+      "evidence": "Implementation reviewed: native drop listener targets the PTY pane under the drop point; paths are capped at 8 \u00d7 2048 characters, control characters are rejected, shell metacharacters are single-quoted, and no newline is sent to submit the command. Focused tests previously passed 15/15. Current ./init.sh passed: Vitest 80 files / 687 tests; Rust 308 passed / 3 ignored; TypeScript and Clippy clean. Native Finder drop remains visually unverified because Cua Driver did not answer; deferred under the user instruction to continue past manual checkpoints."
     },
     {
       "id": "followup-issue-2-term-env",
@@ -1315,7 +1315,7 @@
         "m6-task-02-checkout-branch-picks"
       ],
       "status": "done",
-      "evidence": "Done 2026-11-13. Spec review PASS (.agent/reviews/m6-task-10-spec.md); nits fixed (unknown SHA → Validation; lossy UTF-8 for subject/author). Findings 1–2 (refuse truncated/merge plans, rebuild plan server-side) carried into M6-11. Cap test builds commits in-process (26 s → 2 s). ./init.sh green before the nits (Vitest 71 files / 635 tests; Rust 282 passed / 3 ignored); rebase:: 4/4 and clippy after."
+      "evidence": "Done 2026-11-13. Spec review PASS (.agent/reviews/m6-task-10-spec.md); nits fixed (unknown SHA \u2192 Validation; lossy UTF-8 for subject/author). Findings 1\u20132 (refuse truncated/merge plans, rebuild plan server-side) carried into M6-11. Cap test builds commits in-process (26 s \u2192 2 s). ./init.sh green before the nits (Vitest 71 files / 635 tests; Rust 282 passed / 3 ignored); rebase:: 4/4 and clippy after."
     },
     {
       "id": "m6-task-11-rebase-execute",
@@ -1338,7 +1338,7 @@
         "m6-task-11-rebase-execute"
       ],
       "status": "done",
-      "evidence": "Done 2026-11-13. Spec review FAIL (Continue → done skipped the lease offer and left the stale plan; missing truncated and Start → conflict → Continue tests) then PASS (.agent/reviews/m6-task-12-spec.md); fixed with done handling shared by Start and Continue via useRebaseUi (per-worktree base and pushed flag, needsLeasePush), autosquash edge cases (no target, nested prefixes, dropped rows), custom drag type. ./init.sh: === Verification Complete === (Vitest 72 files / 645 tests; Rust 289 passed / 3 ignored)."
+      "evidence": "Done 2026-11-13. Spec review FAIL (Continue \u2192 done skipped the lease offer and left the stale plan; missing truncated and Start \u2192 conflict \u2192 Continue tests) then PASS (.agent/reviews/m6-task-12-spec.md); fixed with done handling shared by Start and Continue via useRebaseUi (per-worktree base and pushed flag, needsLeasePush), autosquash edge cases (no target, nested prefixes, dropped rows), custom drag type. ./init.sh: === Verification Complete === (Vitest 72 files / 645 tests; Rust 289 passed / 3 ignored)."
     },
     {
       "id": "m7-task-01-tokens-global-rules",
@@ -1354,7 +1354,7 @@
     {
       "id": "m7-task-02-theme-settings",
       "stage": 30,
-      "name": "Theme settings — Text size replaces contrast and transparency",
+      "name": "Theme settings \u2014 Text size replaces contrast and transparency",
       "description": "docs/superpowers/plans/2026-11-14-m7-ui-redesign.md#task-02-theme-settings--text-size-replaces-contrast-and-transparency",
       "dependencies": [
         "m7-task-01-tokens-global-rules"
@@ -1371,7 +1371,7 @@
         "m7-task-02-theme-settings"
       ],
       "status": "done",
-      "evidence": "Implemented StatusLabel, CountBadge, Banner, and base UI restyle. Reviewer re-review PASS (.agent/reviews/m7-stage-1-code-review.md) after fixing 12px text floor, 24px targets, clipped/global focus rings, fixed-size text in Stage 1 surfaces, and CountBadge accessible role/name. pnpm vitest run src/ui: 7 files / 15 tests passed; pnpm typecheck and git diff --check passed. RUST_TEST_THREADS=1 ./init.sh: Vitest 78 files / 679 tests and Clippy passed; Rust 298 passed / 10 failed / 3 ignored, all failures unable to start macOS FSEvent streams. Full gate is not green; native pnpm tauri dev visual verification is unrun. Stage 1 remains in progress; no commit/push. Follow-up: TMPDIR=/private/tmp did not fix one FSEvent test (same failure). pnpm tauri dev compiled and launched, but Cua Driver permissions status returned \"the app didn't answer\", so native window inspection could not be completed. Spec recheck: approved design spec is normative; corrected .input from 10px/raised to 6px control radius, --bg fill, and strong border, with regression assertions. Final focused UI run: 7 files / 15 tests passed; git diff --check passed. Baseline retry outside the sandbox passed: ./init.sh → === Verification Complete ===; Vitest 78 files/679 tests; Rust 308 passed/3 ignored; TypeScript and Clippy clean. User authorized continuing across manual stage checkpoints; no commit/push."
+      "evidence": "Implemented StatusLabel, CountBadge, Banner, and base UI restyle. Reviewer re-review PASS (.agent/reviews/m7-stage-1-code-review.md) after fixing 12px text floor, 24px targets, clipped/global focus rings, fixed-size text in Stage 1 surfaces, and CountBadge accessible role/name. pnpm vitest run src/ui: 7 files / 15 tests passed; pnpm typecheck and git diff --check passed. RUST_TEST_THREADS=1 ./init.sh: Vitest 78 files / 679 tests and Clippy passed; Rust 298 passed / 10 failed / 3 ignored, all failures unable to start macOS FSEvent streams. Full gate is not green; native pnpm tauri dev visual verification is unrun. Stage 1 remains in progress; no commit/push. Follow-up: TMPDIR=/private/tmp did not fix one FSEvent test (same failure). pnpm tauri dev compiled and launched, but Cua Driver permissions status returned \"the app didn't answer\", so native window inspection could not be completed. Spec recheck: approved design spec is normative; corrected .input from 10px/raised to 6px control radius, --bg fill, and strong border, with regression assertions. Final focused UI run: 7 files / 15 tests passed; git diff --check passed. Baseline retry outside the sandbox passed: ./init.sh \u2192 === Verification Complete ===; Vitest 78 files/679 tests; Rust 308 passed/3 ignored; TypeScript and Clippy clean. User authorized continuing across manual stage checkpoints; no commit/push."
     },
     {
       "id": "m7-task-04-screen-registry-history-container",
@@ -1415,7 +1415,7 @@
         "m7-task-06-breadcrumb-status-bar"
       ],
       "status": "done",
-      "evidence": "Implemented Cmd/Ctrl+1–7 navigation, opt-in bare digits, shortcut sheet, and preserved Ctrl+` behavior. Covered in full Vitest suite; final ./init.sh passed."
+      "evidence": "Implemented Cmd/Ctrl+1\u20137 navigation, opt-in bare digits, shortcut sheet, and preserved Ctrl+` behavior. Covered in full Vitest suite; final ./init.sh passed."
     },
     {
       "id": "m7-task-08-home-launchpad-inbox",
@@ -1437,7 +1437,7 @@
         "m7-task-08-home-launchpad-inbox"
       ],
       "status": "done",
-      "evidence": "Implemented ancestor BasePicker (max 50), Commit… beside, and line-specific blame navigation. Covered in full Vitest suite; final ./init.sh passed."
+      "evidence": "Implemented ancestor BasePicker (max 50), Commit\u2026 beside, and line-specific blame navigation. Covered in full Vitest suite; final ./init.sh passed."
     },
     {
       "id": "m7-task-10-operation-banner",
@@ -1558,7 +1558,7 @@
         "m8-task-04-switch-carry"
       ],
       "status": "done",
-      "evidence": "stageModel on terminal/layout tree (max 4, 20% min share, ≤3 depth validation), store keeps derived panes/focus/dir, v1 migration. 14 model tests + store tests. ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
+      "evidence": "stageModel on terminal/layout tree (max 4, 20% min share, \u22643 depth validation), store keeps derived panes/focus/dir, v1 migration. 14 model tests + store tests. ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
     },
     {
       "id": "m9-task-02-split-tree-ui",
@@ -1569,7 +1569,7 @@
         "m9-task-01-split-tree-model"
       ],
       "status": "done",
-      "evidence": "Stage renders split tree with per-gutter dividers (200 px min, double-click equalize), drop target = pane under cursor, per-pane Open beside/swap/orientation/close, sidebar numbers for >2 panes, palette equalize. Screenshot of a 2×2 layout checked. ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
+      "evidence": "Stage renders split tree with per-gutter dividers (200 px min, double-click equalize), drop target = pane under cursor, per-pane Open beside/swap/orientation/close, sidebar numbers for >2 panes, palette equalize. Screenshot of a 2\u00d72 layout checked. ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
     },
     {
       "id": "m9-task-03-split-keys",
@@ -1580,7 +1580,7 @@
         "m9-task-02-split-tree-ui"
       ],
       "status": "done",
-      "evidence": "⌘\\\\ right, ⌘⇧\\\\ below, ⌘⌥\\\\ close, ⌘⌥ arrows move focus (Terminal keeps the chord when focused); shortcut sheet + e2e updated (4-pane + fifth refusal). ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
+      "evidence": "\u2318\\\\ right, \u2318\u21e7\\\\ below, \u2318\u2325\\\\ close, \u2318\u2325 arrows move focus (Terminal keeps the chord when focused); shortcut sheet + e2e updated (4-pane + fifth refusal). ./init.sh exit 0: Vitest 82 files / 707 tests; Rust 330 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
     },
     {
       "id": "m10-task-01-window-commands",
@@ -1613,7 +1613,7 @@
         "m10-task-02-scoped-settings"
       ],
       "status": "done",
-      "evidence": "⌘⇧N, palette New window / Move to new window, pane ⧉ control. ./init.sh exit 0: Vitest 83 files / 716 tests; Rust 333 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
+      "evidence": "\u2318\u21e7N, palette New window / Move to new window, pane \u29c9 control. ./init.sh exit 0: Vitest 83 files / 716 tests; Rust 333 passed / 3 ignored; TypeScript and Clippy clean. Playwright 59/59. User reported manual desktop checks done (2026-11-14); released in v0.11.0."
     },
     {
       "id": "m11-task-01-browser-webviews",
@@ -1740,12 +1740,23 @@
       "id": "post-release-first-launch-onboarding",
       "stage": 49,
       "name": "First-launch onboarding",
-      "description": "docs/superpowers/specs/2026-11-06-branchwork-design.md §6.1.10; user-requested (2026-11-15)",
+      "description": "docs/superpowers/specs/2026-11-06-branchwork-design.md \u00a76.1.10; user-requested (2026-11-15)",
       "dependencies": [
         "github-issue-4-project-switch-loading-overlay"
       ],
       "status": "done",
       "evidence": "Added a one-time first-launch modal for welcome, optional GitHub device-flow/PAT connection, and opening or cloning repositories into a selected or newly created group. Existing installations with registered projects are marked complete without interruption; completion/skip persists in app-wide settings. Final ./init.sh: TypeScript passed; Vitest 86 files/742 tests passed; Clippy passed; Rust tests 328 passed/11 failed/3 ignored (10 FSEvent stream startup failures and one PTY buffered replay failure). Native manual walkthrough was not run. After user confirmation, cleared 3 project registrations, 2 groups, 4 pins, repo selection settings, and undo history; confirmed all 3 local repo roots remain. Removed 1 Branchwork GitHub Keychain item, signed out 2 isolated Claude profiles, and removed 6 Codex auth files while preserving profile/session data. Muse uses device-wide credentials and remains connected pending separate authorization. Committed as ffedb2f and pushed to origin/main; release tag/version choice pending user input."
+    },
+    {
+      "id": "m13-task-01-agent-provider-browser-login",
+      "stage": 50,
+      "name": "Start agent provider browser login from Settings",
+      "description": "docs/superpowers/specs/2026-11-15-agent-provider-browser-login-design.md",
+      "dependencies": [
+        "post-release-first-launch-onboarding"
+      ],
+      "status": "review",
+      "evidence": "Implemented fixed built-in provider login adapters, Settings-owned OpenCode choices, bounded detached PTY login sessions, profile-scoped isolation where supported, and status integration. Removed the arbitrary cap of 8 terminal sessions while retaining the separate cap of 2 background provider logins. Regression test opens 9 concurrent PTYs and opens a replacement after closing one. ./init.sh before this follow-up: TypeScript passed; Vitest 88 files/753 tests passed; Clippy passed; Rust tests 332 passed/11 failed/3 ignored, with the known 10 macOS FSEvent startup failures and one PTY buffered replay failure. Follow-up CAS compatibility fix, targeted session test, cargo check, Clippy, rustfmt, and diff checks passed. OpenCode current SQLite auth state remains unknown; native provider browser walkthrough is pending."
     }
   ]
 }

@@ -18,6 +18,7 @@ import {
   type SplitDir,
 } from "./layout";
 import { closeTerminal, onTerminalExit, spawnTerminal, waitTerminalReady, writeTerminal } from "../ipc/pty";
+import { disposeTerminalView } from "./viewCache";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { errorMessage } from "../ipc/errors";
 import { t } from "../i18n/t";
@@ -276,6 +277,8 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
       } catch (error) {
         toast({ title: errorMessage(error), icon: "⚠" });
       }
+      // The pane is gone from the UI; drop its cached xterm view as well.
+      disposeTerminalView(pane.sessionId);
     }
     if (pane.sessionId) exitedSessions.delete(pane.sessionId);
     const next = closePane(tab.layout, paneId);
@@ -383,6 +386,7 @@ export const useTerminalScreen = create<ScreenStore>((set, get) => {
           } catch (error) {
             toast({ title: errorMessage(error), icon: "⚠" });
           }
+          disposeTerminalView(pane.sessionId);
           exitedSessions.delete(pane.sessionId);
         }
       }

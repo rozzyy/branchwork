@@ -51,14 +51,20 @@ beforeEach(() => {
   seed();
 });
 
-it("renders the selected tab and switches panes on tab click", async () => {
+it("keeps inactive tabs mounted and switches panes on tab click", async () => {
   render(<TerminalDock />);
+  // Both tabs stay mounted; the inactive one is hidden so its rendered buffer
+  // survives the switch.
   expect(screen.getByTestId("pane-pty-a")).toBeInTheDocument();
-  expect(screen.queryByTestId("pane-pty-b")).not.toBeInTheDocument();
+  expect(screen.getByTestId("pane-pty-b")).toBeInTheDocument();
+  expect(screen.getByTestId("pane-pty-a").closest(".term-dock-pane")).not.toHaveAttribute("hidden");
+  expect(screen.getByTestId("pane-pty-b").closest(".term-dock-pane")).toHaveAttribute("hidden");
 
   await userEvent.click(screen.getByRole("tab", { name: "Terminal in b" }));
-  expect(screen.queryByTestId("pane-pty-a")).not.toBeInTheDocument();
+  expect(screen.getByTestId("pane-pty-a")).toBeInTheDocument();
   expect(screen.getByTestId("pane-pty-b")).toBeInTheDocument();
+  expect(screen.getByTestId("pane-pty-a").closest(".term-dock-pane")).toHaveAttribute("hidden");
+  expect(screen.getByTestId("pane-pty-b").closest(".term-dock-pane")).not.toHaveAttribute("hidden");
 });
 
 it("splits two sessions and swaps their order", async () => {

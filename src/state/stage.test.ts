@@ -24,7 +24,7 @@ it("opens splits up to four panes and toasts on the fifth", () => {
   expect(useStage.getState().panes).toEqual(["agents", "changes", "history"]);
 });
 
-it("persists a nested layout and tab workspace as version 3", async () => {
+it("persists a nested layout and tab workspace as version 4", async () => {
   vi.useFakeTimers();
   useStage.getState().openSplit("changes", "right");
   useStage.getState().openSplit("history", "bottom");
@@ -37,7 +37,7 @@ it("persists a nested layout and tab workspace as version 3", async () => {
   vi.advanceTimersByTime(400);
   vi.useRealTimers();
   await new Promise((r) => setTimeout(r, 0));
-  expect(JSON.parse(localStorage.getItem("bw:stage")!).version).toBe(3);
+  expect(JSON.parse(localStorage.getItem("bw:stage")!).version).toBe(4);
   useStage.setState(stageSnapshot(initialStage));
   await useStage.getState().load();
   expect(useStage.getState().tabs).toHaveLength(2);
@@ -229,4 +229,14 @@ it("opens Agents + Changes without discarding a split layout", () => {
   useStage.setState(stageSnapshot(layoutOf(["agents", "history"])));
   useStage.getState().openPair("agents", "changes");
   expect(useStage.getState().panes).toEqual(["agents", "history", "changes"]);
+});
+
+it("loads saved state and ignores legacy pane project pins", async () => {
+  const { layoutOf } = await import("../stage/stageModel");
+  const stage = layoutOf(["agents", "history"]);
+  const paneId = Object.keys(stage.screens)[0];
+  localStorage.setItem("bw:stage", JSON.stringify({ version: 3, current: { ...stage, paneProjects: { [paneId]: "p1" } }, layouts: {} }));
+  await useStage.getState().load();
+  expect("paneProjects" in useStage.getState()).toBe(false);
+  expect(useStage.getState().panes).toEqual(["agents", "history"]);
 });

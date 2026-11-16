@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { CliPane } from "./CliPane";
 import { useTerminalScreen, type ScreenPaneState, type ScreenTab } from "./screen";
+import { usePanePin, usePaneProject } from "../stage/paneProject";
 import type { LayoutNode } from "./layout";
 import { useWorktrees } from "../state/worktrees";
 import { useRepos } from "../state/repos";
@@ -14,7 +15,18 @@ function tail(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? path;
 }
 
+/** New-tab worktree for this pane: the pinned project's worktree, or undefined for default behavior. */
+function usePaneNewTabPath(): string | undefined {
+  const paneProject = usePaneProject();
+  const pin = usePanePin();
+  const globalProjectId = useRepos((s) => s.activeProjectId);
+  const cached = useWorktrees((s) => (paneProject ? s.byProject[paneProject.id] : undefined));
+  if (!paneProject || pin === null || pin !== paneProject.id || paneProject.id === globalProjectId) return undefined;
+  return cached?.activePath ?? paneProject.localPath;
+}
+
 export function TerminalToolbar() {
+  const newTabPath = usePaneNewTabPath();
   return (
     <>
       <h1 className="pane-title">{t("screen.title")}</h1>
@@ -24,7 +36,7 @@ export function TerminalToolbar() {
           className="icon-btn"
           aria-label={t("screen.newTab")}
           title={`${t("screen.newTab")} · ⌘T`}
-          onClick={() => void useTerminalScreen.getState().newTab()}
+          onClick={() => void useTerminalScreen.getState().newTab(newTabPath)}
         >
           ＋
         </button>
@@ -336,6 +348,7 @@ function StatusBar({ tab }: { tab: ScreenTab }) {
 
 function TabBar({ tabs, selected }: { tabs: ScreenTab[]; selected: ScreenTab | null }) {
   const store = useTerminalScreen.getState();
+  const newTabPath = usePaneNewTabPath();
   return (
     <div className="term-screen-tabs" role="tablist" aria-label={t("screen.tabs")}>
       {tabs.map((tab) => {
@@ -370,7 +383,7 @@ function TabBar({ tabs, selected }: { tabs: ScreenTab[]; selected: ScreenTab | n
         className="icon-btn"
         aria-label={t("screen.newTab")}
         title={`${t("screen.newTab")} · ⌘T`}
-        onClick={() => void store.newTab()}
+        onClick={() => void store.newTab(newTabPath)}
       >
         ＋
       </button>
@@ -382,15 +395,29 @@ export function TerminalScreen() {
   const tabs = useTerminalScreen((s) => s.tabs);
   const selectedTabId = useTerminalScreen((s) => s.selectedTabId);
   const loaded = useTerminalScreen((s) => s.loaded);
-  const activeProjectId = useRepos((s) => s.activeProjectId);
-  const activeProject = useRepos((s) => s.projects.find((project) => project.id === s.activeProjectId) ?? null);
+  const globalProject = useRepos((s) => s.projects.find((project) => project.id === s.activeProjectId) ?? null);
+  const globalProjectId = useRepos((s) => s.activeProjectId);
+  const rawPin = usePanePin();
+  const paneProject = usePaneProject();
+  // An explicit pin to another project scopes this screen to it; otherwise
+  // the screen follows the global project exactly as before.
+  const pinned = rawPin !== null && paneProject !== null && rawPin === paneProject.id && paneProject.id !== globalProjectId;
+  const project = pinned && paneProject ? paneProject : globalProject;
+  const projectId = project?.id ?? null;
   const worktreesProjectId = useWorktrees((s) => s.projectId);
   const worktrees = useWorktrees((s) => s.worktrees);
+  const cached = useWorktrees((s) => (pinned && paneProject ? s.byProject[paneProject.id] : undefined));
+  useEffect(() => {
+    if (pinned && paneProject && paneProject.id !== worktreesProjectId && !cached) {
+      void useWorktrees.getState().ensureProjectWorktrees(paneProject);
+    }
+  }, [pinned, paneProject, worktreesProjectId, cached]);
+  const newTabPath = usePaneNewTabPath();
   const projectPaths = new Set([
-    ...(activeProject ? [activeProject.localPath] : []),
-    ...(activeProjectId !== null && worktreesProjectId === activeProjectId
+    ...(project ? [project.localPath] : []),
+    ...(projectId !== null && worktreesProjectId === projectId
       ? worktrees.map((worktree) => worktree.path)
-      : []),
+      : (cached?.worktrees.map((worktree) => worktree.path) ?? [])),
   ]);
   // Hide mixed-project tabs as a whole so hidden panes cannot receive broadcast input.
   const visibleTabs = tabs.filter((tab) =>
@@ -427,7 +454,7 @@ export function TerminalScreen() {
         void store.splitFocusedPane(tabId, event.shiftKey ? "v" : "h");
       } else if (event.code === "KeyT" && !event.shiftKey && !event.altKey) {
         event.preventDefault();
-        void store.newTab();
+        void store.newTab(newTabPath);
       } else if (event.code === "KeyW" && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         void store.closeFocusedPane(tabId);
@@ -446,25 +473,35 @@ export function TerminalScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [newTabPath]);
 
   if (!loaded) return <ScreenLoader>{t("screen.loading")}</ScreenLoader>;
   if (!selected) {
     return (
       <div className="term-screen term-screen-empty" role="status">
         <span>{t("screen.empty")}</span>
-        <button type="button" className="btn" onClick={() => void useTerminalScreen.getState().newTab()}>
+        <button type="button" className="btn" onClick={() => void useTerminalScreen.getState().newTab(newTabPath)}>
           ＋ {t("screen.newTab")}
         </button>
       </div>
     );
   }
-  const maximizedPane = selected.maximizedPaneId ? selected.panes[selected.maximizedPaneId] : null;
   return (
     <div className="term-screen">
       <TabBar tabs={visibleTabs} selected={selected} />
       <div className="term-screen-body">
-        {maximizedPane ? <PaneView tab={selected} pane={maximizedPane} /> : <LayoutView tab={selected} node={selected.layout} />}
+        {tabs.map((tab) => {
+          // Every tab stays mounted but hidden (the Agents pattern): switching
+          // tabs never detaches the PTY or discards the rendered buffer, so the
+          // view is intact when the tab is shown again.
+          const hidden = tab.id !== selected?.id;
+          const maximizedPane = tab.maximizedPaneId ? tab.panes[tab.maximizedPaneId] : null;
+          return (
+            <div key={tab.id} className="term-screen-tabpage" hidden={hidden}>
+              {maximizedPane ? <PaneView tab={tab} pane={maximizedPane} /> : <LayoutView tab={tab} node={tab.layout} />}
+            </div>
+          );
+        })}
       </div>
       <StatusBar tab={selected} />
     </div>

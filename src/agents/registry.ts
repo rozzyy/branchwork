@@ -154,15 +154,14 @@ const OPENCODE: CliDef = {
   resumeLine: "opencode --continue || opencode",
   launchWithId: null,
   resumeById: null,
-  // Shell login verified: `opencode auth login` (interactive provider picker
-  // runs in the login PTY; `-p/--provider -m/--method` skip it). No
-  // `--standalone` flag in the installed 1.19.3 (OpenCode 2 only).
+  // OpenCode owns its saved credentials. Current releases store them in a
+  // SQLite database, so do not infer login state from the legacy auth.json.
   loginCmd: "opencode auth login",
   installGuidance: "agents.installOpencode",
   profileEnv: (profileDir) => ({ HOME: `${profileDir}/home` }),
-  // Verified on this host: auth lives at ~/.local/share/opencode/auth.json,
-  // which under the HOME sandbox is this nested path in the profile dir.
-  credentialPaths: ["home/.local/share/opencode/auth.json"],
+  // No file-existence probe: current OpenCode stores auth in SQLite and a DB
+  // may exist without an authenticated provider.
+  credentialPaths: [],
   verifiedAgainst: "opencode 1.19.3",
   waitingPatterns: [...GENERIC_WAITING_PATTERNS],
   limitPatterns: [...GENERIC_LIMIT_PATTERNS],
@@ -177,13 +176,12 @@ const GEMINI: CliDef = {
   resumeLine: null,
   launchWithId: null,
   resumeById: null,
-  // No shell login argv (installed CLI exposes none): auth completes inside
-  // the interactive TUI on first run, so addProfile lands the pane in `gemini`.
+  // Gemini's first-use browser auth starts from its CLI; the profile home and
+  // default auth type keep its OAuth state isolated from the host profile.
   loginCmd: null,
   installGuidance: "agents.installGemini",
-  profileEnv: (profileDir) => ({ HOME: `${profileDir}/home` }),
-  // No verified credential layout; logout stays a no-op until documented.
-  credentialPaths: [],
+  profileEnv: (profileDir) => ({ GEMINI_CLI_HOME: `${profileDir}/home` }),
+  credentialPaths: ["home/.gemini/oauth_creds.json"],
   verifiedAgainst: null, // not installed on this host; flags follow spec §6.6.1
   waitingPatterns: [...GENERIC_WAITING_PATTERNS],
   limitPatterns: [...GENERIC_LIMIT_PATTERNS],

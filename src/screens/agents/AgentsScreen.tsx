@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { gridPlacement, type GridPlace } from "../../agents/gridPlacement";
 import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
+import { usePanePin, usePaneProject } from "../../stage/paneProject";
 import { useProfiles, usageKey } from "../../agents/profiles";
 import { UsageBar } from "../../agents/usage";
 import type { QuotaWindow } from "../../ipc/bindings";
@@ -619,11 +620,31 @@ function NewAgentDialog() {
   const newAgentPrompt = useSessions((s) => s.newAgentPrompt);
   const setNewAgentPrompt = useSessions((s) => s.setNewAgentPrompt);
   const profiles = useProfiles((s) => s.profiles);
-  const worktrees = useWorktrees((s) => s.worktrees);
-  const activePath = useWorktrees((s) => s.activePath);
   const [cliId, setCliId] = useState<CliId>("claude");
   const [profileSlug, setProfileSlug] = useState<string>(NEW_PROFILE);
   const [profileName, setProfileName] = useState("");
+  const paneProjectForDialog = usePaneProject();
+  const panePinForDialog = usePanePin();
+  const dialogPinned =
+    panePinForDialog !== null && paneProjectForDialog !== null && panePinForDialog === paneProjectForDialog.id;
+  const dialogGlobalPid = useWorktrees((s) => s.projectId);
+  const dialogGlobalWorktrees = useWorktrees((s) => s.worktrees);
+  const dialogGlobalActive = useWorktrees((s) => s.activePath);
+  const dialogCached = useWorktrees((s) =>
+    dialogPinned && paneProjectForDialog ? s.byProject[paneProjectForDialog.id] : undefined,
+  );
+  useEffect(() => {
+    if (dialogPinned && paneProjectForDialog && paneProjectForDialog.id !== dialogGlobalPid && !dialogCached) {
+      void useWorktrees.getState().ensureProjectWorktrees(paneProjectForDialog);
+    }
+  }, [dialogPinned, paneProjectForDialog, dialogGlobalPid, dialogCached]);
+  // A pinned pane offers the pinned project's worktrees (empty while they
+  // load); otherwise the dialog keeps today's global worktree list and
+  // default.
+  const dialogScoped =
+    dialogPinned && paneProjectForDialog && paneProjectForDialog.id !== dialogGlobalPid;
+  const worktrees = dialogScoped ? (dialogCached?.worktrees ?? []) : dialogGlobalWorktrees;
+  const activePath = dialogScoped ? (dialogCached?.activePath ?? "") : dialogGlobalActive;
   const [worktreePath, setWorktreePath] = useState<string>("");
   const [prompt, setPrompt] = useState("");
   const [binaries, setBinaries] = useState<Record<CliId, string | null> | null>(null);
@@ -1357,13 +1378,38 @@ export function AgentsView() {
       }
     }
   }, [sessions]);
-  // The Agents page follows the active worktree like Files/Changes/Graph do;
-  // with no project open every session stays visible. Off-worktree panes stay
-  // mounted but hidden, so switching projects never replays terminal output
-  // or storms the PTY with resizes that garble full-screen CLI apps.
-  const activePath = useWorktrees((s) => s.activePath);
+  // The Agents page follows the pane's project like Files/Changes/Graph do
+  // (the active worktree when unpinned); with no project open every session
+  // stays visible. Off-scope panes stay mounted but hidden, so switching
+  // projects never replays terminal output or storms the PTY with resizes
+  // that garble full-screen CLI apps.
+  const rawPin = usePanePin();
+  const paneProject = usePaneProject();
+  const globalProjectId = useWorktrees((s) => s.projectId);
+  const globalWorktrees = useWorktrees((s) => s.worktrees);
+  const globalActivePath = useWorktrees((s) => s.activePath);
+  const pinned = rawPin !== null && paneProject !== null && rawPin === paneProject.id;
+  const cached = useWorktrees((s) => (pinned && paneProject ? s.byProject[paneProject.id] : undefined));
+  useEffect(() => {
+    if (pinned && paneProject && paneProject.id !== globalProjectId && !cached) {
+      void useWorktrees.getState().ensureProjectWorktrees(paneProject);
+    }
+  }, [pinned, paneProject, globalProjectId, cached]);
+  // Unpinned panes keep exactly today's worktree scoping (even with no
+  // project record); a pin widens the scope to the pinned project's
+  // worktrees.
+  const allowedPaths = !pinned
+    ? globalActivePath == null
+      ? null
+      : new Set([globalActivePath])
+    : new Set([
+        ...(paneProject ? [paneProject.localPath] : []),
+        ...(paneProject && paneProject.id === globalProjectId
+          ? globalWorktrees.map((worktree) => worktree.path)
+          : (cached?.worktrees.map((worktree) => worktree.path) ?? [])),
+      ]);
   const ordered = [...sessions].sort((a, b) => slotOrder(a.slot) - slotOrder(b.slot));
-  const visible = ordered.filter((s) => activePath == null || s.worktreePath === activePath);
+  const visible = ordered.filter((s) => allowedPaths === null || allowedPaths.has(s.worktreePath));
   // A lone default session fills the whole view; the grid kicks in on split.
   const solo = visible.length === 1 && visible[0].slot === "auto";
   // Two-column grid: place panes explicitly so a column with fewer panes
@@ -1399,7 +1445,7 @@ export function AgentsView() {
           <AgentPane
             key={session.id}
             session={session}
-            off={activePath != null && session.worktreePath !== activePath}
+            off={allowedPaths !== null && !allowedPaths.has(session.worktreePath)}
             place={placement?.places.get(session.id)}
           />
         ))}

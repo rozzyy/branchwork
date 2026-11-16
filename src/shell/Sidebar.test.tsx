@@ -2,13 +2,15 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./Sidebar";
 import { useStage, stageSnapshot } from "../state/stage";
-import { initialStage, layoutOf } from "../stage/stageModel";
+import { initialStage, layoutOf, leafIds } from "../stage/stageModel";
 import { useRepos } from "../state/repos";
 import { useWorktrees } from "../state/worktrees";
 import { listPins, pinWorktree, unpinWorktree } from "../ipc/catalog";
 import { listWorktrees, onGitChanged, type GitChanged, type Worktree } from "../ipc/worktrees";
+import { createWorktree, removeWorktree } from "../ipc/worktrees";
 import { useToasts } from "../ui/toast";
 import { useSessions } from "../agents/sessions";
+import { DialogHost } from "../ui/dialog";
 
 vi.mock("../ipc/catalog", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ipc/catalog")>();
@@ -17,7 +19,7 @@ vi.mock("../ipc/catalog", async (importOriginal) => {
 
 vi.mock("../ipc/worktrees", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ipc/worktrees")>();
-  return { ...actual, listWorktrees: vi.fn(), onGitChanged: vi.fn() };
+  return { ...actual, listWorktrees: vi.fn(), onGitChanged: vi.fn(), createWorktree: vi.fn(), removeWorktree: vi.fn() };
 });
 
 const project = { id: "p1", owner: null, name: "repo", localPath: "/repos/main", groupId: null };
@@ -83,12 +85,180 @@ it("opens a sidebar screen in a separate stage tab from its context menu", async
   expect(useStage.getState().panes).toEqual(["agents", "changes"]);
 });
 
-it("shows the app logo and name above the project and group picker", () => {
+it("shows the app logo above the worktree navigation and inline groups below For this worktree", () => {
   const { container } = render(<Sidebar />);
   const brand = container.querySelector(".side-brand");
   expect(brand).toHaveTextContent("Branchwork");
   expect(brand?.querySelector(".app-mark")).toBeInTheDocument();
-  expect(brand?.nextElementSibling).toHaveClass("project-picker-trigger");
+  expect(container.querySelector(".project-picker-trigger")).not.toBeInTheDocument();
+  const worktrees = container.querySelector(".worktree-section");
+  const groups = container.querySelector(".group-inline");
+  expect(worktrees).toBeInTheDocument();
+  expect(groups).toBeInTheDocument();
+  // Groups sit below the "For this worktree" navigation (below Browser).
+  const navHeading = [...container.querySelectorAll(".side-h")].find((h) => h.textContent === "For this worktree");
+  expect(navHeading).toBeTruthy();
+  expect(navHeading?.compareDocumentPosition(groups as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  const browser = container.querySelector(".nav[aria-label='Browser']");
+  expect(browser).toBeTruthy();
+  expect(browser?.compareDocumentPosition(groups as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  // Groups heading keeps its icon buttons; group actions sit behind a
+  // hamburger in each group title row (tested below).
+  expect(screen.getByRole("button", { name: "New group" })).toHaveClass("group-inline-action");
+  expect(screen.getByRole("button", { name: "Open project…" })).toHaveClass("group-inline-action");
+  expect(screen.getByRole("button", { name: "Clone repository…" })).toHaveClass("group-inline-action");
+  expect(container.querySelector(".group-inline-foot")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Open repository…" })).not.toBeInTheDocument();
+});
+
+it("shows a hamburger dropdown on each group title with its group actions", async () => {
+  const user = userEvent.setup();
+  useRepos.setState({
+    groups: [{ id: "g1", name: "Personal", color: "oklch(.68 .19 250)", clonePathTemplate: "~/clients/{repo}" }],
+    projects: [{ id: "p1", owner: null, name: "api", localPath: "/repos/api", groupId: "g1" }],
+    activeGroupId: "g1",
+    activeProjectId: "p1",
+    collapsedGroupIds: [],
+    status: "ready",
+    error: null,
+  });
+  render(<Sidebar />);
+
+  const burger = screen.getByRole("button", { name: "Manage Personal" });
+  // No direct Edit/Delete buttons on the row anymore.
+  expect(screen.queryByRole("button", { name: "Add repository to Personal" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Edit group" })).not.toBeInTheDocument();
+
+  await user.click(burger);
+  expect(screen.getByRole("menuitem", { name: "Add repository to Personal" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Edit group" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Delete group" })).toBeInTheDocument();
+
+  // Edit group opens the inline form for that group.
+  await user.click(screen.getByRole("menuitem", { name: "Edit group" }));
+  expect(screen.getByRole("textbox", { name: "Folder for new clones" })).toBeInTheDocument();
+});
+
+it("shows every group and project inline below worktrees without a modal", async () => {
+  const user = userEvent.setup();
+  useRepos.setState({
+    groups: [{ id: "g1", name: "Acme", color: "oklch(.68 .19 250)", clonePathTemplate: "~/clients/{repo}" }],
+    projects: [
+      { id: "p1", owner: "acme", name: "api", localPath: "/repos/api", groupId: "g1" },
+      { id: "p2", owner: null, name: "scratch", localPath: "/repos/scratch", groupId: null },
+    ],
+    activeGroupId: "g1",
+    activeProjectId: "p1",
+    collapsedGroupIds: [],
+    status: "ready",
+    error: null,
+  });
+  render(<Sidebar />);
+
+  // Visible without any click, no dialog/popover involved.
+  expect(screen.getByText("Acme")).toBeInTheDocument();
+  expect(screen.getByText("Ungrouped")).toBeInTheDocument();
+  expect(screen.getByText("acme/api")).toBeInTheDocument();
+  expect(screen.getByText("scratch")).toBeInTheDocument();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+  // Selecting another project switches it directly from the inline list.
+  await user.click(screen.getByText("scratch"));
+  await waitFor(() => expect(useRepos.getState().activeProjectId).toBe("p2"));
+});
+
+it("creates a worktree from the worktree picker and selects it", async () => {
+  const user = userEvent.setup();
+  const all = [...worktrees];
+  vi.mocked(listWorktrees).mockImplementation(async () => all);
+  vi.mocked(createWorktree).mockImplementation(async (_id: string, destination: string, branch: string) => {
+    const created = { path: destination, branch, head: "a5", ahead: 0, behind: 0, dirtyCount: 0, state: "clean" as const };
+    all.push(created);
+    return created;
+  });
+  render(
+    <>
+      <Sidebar />
+      <DialogHost />
+    </>,
+  );
+  await screen.findByRole("button", { name: "main, Clean" });
+  await user.click(screen.getByRole("button", { name: "Browse worktrees" }));
+  await user.click(screen.getByRole("button", { name: /New worktree/ }));
+
+  const prompt = await screen.findByRole("dialog", { name: "Create a worktree" });
+  await user.type(within(prompt).getByRole("textbox"), "feature/new{Enter}");
+
+  await waitFor(() => expect(createWorktree).toHaveBeenCalledWith("p1", "/repos/feature-new", "feature/new"));
+  await waitFor(() =>
+    expect(useWorktrees.getState().activePath).toBe("/repos/feature-new"),
+  );
+  expect(screen.queryByRole("dialog", { name: "Browse worktrees" })).not.toBeInTheDocument();
+});
+
+it("removes a worktree from the picker after confirmation", async () => {
+  const user = userEvent.setup();
+  vi.mocked(removeWorktree).mockResolvedValue(undefined);
+  render(
+    <>
+      <Sidebar />
+      <DialogHost />
+    </>,
+  );
+  await screen.findByRole("button", { name: "main, Clean" });
+  await user.click(screen.getByRole("button", { name: "Browse worktrees" }));
+
+  await user.click(screen.getByRole("button", { name: "Remove feature/beta" }));
+  const confirm = await screen.findByRole("dialog", { name: /Remove/ });
+  await user.click(within(confirm).getByRole("button", { name: "Remove" }));
+
+  await waitFor(() => expect(removeWorktree).toHaveBeenCalledWith("p1", "/repos/beta"));
+});
+
+it("marks the active project with active UI in the inline list", () => {
+  useRepos.setState({
+    groups: [{ id: "g1", name: "Acme", color: "oklch(.68 .19 250)", clonePathTemplate: "~/clients/{repo}" }],
+    projects: [
+      { id: "p1", owner: "acme", name: "api", localPath: "/repos/api", groupId: "g1" },
+      { id: "p2", owner: null, name: "scratch", localPath: "/repos/scratch", groupId: null },
+    ],
+    activeGroupId: "g1",
+    activeProjectId: "p1",
+    collapsedGroupIds: [],
+    status: "ready",
+    error: null,
+  });
+  render(<Sidebar />);
+
+  const activeRow = screen.getByText("acme/api").closest("button");
+  expect(activeRow).toHaveAttribute("aria-current", "true");
+  expect(activeRow).toHaveClass("is-active");
+  const inactiveRow = screen.getByText("scratch").closest("button");
+  expect(inactiveRow).not.toHaveAttribute("aria-current");
+  expect(inactiveRow).not.toHaveClass("is-active");
+});
+
+it("marks only the global project active in split view (pane pin removed)", () => {
+  useRepos.setState({
+    groups: [{ id: "g1", name: "Acme", color: "oklch(.68 .19 250)", clonePathTemplate: "~/clients/{repo}" }],
+    projects: [
+      { id: "p1", owner: "acme", name: "api", localPath: "/repos/api", groupId: "g1" },
+      { id: "p2", owner: null, name: "scratch", localPath: "/repos/scratch", groupId: null },
+    ],
+    activeGroupId: "g1",
+    activeProjectId: "p1",
+    collapsedGroupIds: [],
+    status: "ready",
+    error: null,
+  });
+  useStage.setState(stageSnapshot(layoutOf(["home", "changes"])));
+  expect(leafIds(useStage.getState())).toHaveLength(2);
+  render(<Sidebar />);
+
+  // Pane pins were removed: only the global project shows active UI, even split.
+  expect(screen.getByText("acme/api").closest("button")).toHaveAttribute("aria-current", "true");
+  expect(screen.getByText("scratch").closest("button")).not.toHaveAttribute("aria-current");
+  expect(screen.getByText("scratch").closest("button")).not.toHaveClass("is-active");
 });
 
 it("keeps Conflicts out of the screen navigation", async () => {

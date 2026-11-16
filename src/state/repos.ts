@@ -41,6 +41,7 @@ interface PersistedSelection {
   activeProjectId: string | null;
   openProjectIds?: string[];
   collapsedGroupIds?: string[];
+  recentProjectIds?: string[];
 }
 
 interface ReposStore {
@@ -50,11 +51,13 @@ interface ReposStore {
   activeProjectId: string | null;
   openProjectIds: string[];
   collapsedGroupIds: string[];
+  recentProjectIds: string[];
   status: Status;
   error: string | null;
   load(): Promise<void>;
   selectProject(id: string): void;
   selectGroup(id: string | null): void;
+  togglePreviousProject(): void;
   closeTab(id: string): void;
   removeProject(id: string): Promise<ProjectSnapshot | undefined>;
   restoreProject(snapshot: ProjectSnapshot): Promise<void>;
@@ -148,13 +151,26 @@ function resolveCollapsedGroupIds(groups: Group[], persisted: string[] | undefin
 let revision = 0;
 
 /** All writers share this so `repos` settings always carries every persisted field. */
-function persistRepos(state: Pick<ReposStore, "activeGroupId" | "activeProjectId" | "openProjectIds" | "collapsedGroupIds">) {
+function persistRepos(state: Pick<ReposStore, "activeGroupId" | "activeProjectId" | "openProjectIds" | "collapsedGroupIds" | "recentProjectIds">) {
   void saveSetting("repos", {
     activeGroupId: state.activeGroupId,
     activeProjectId: state.activeProjectId,
     openProjectIds: state.openProjectIds,
     collapsedGroupIds: state.collapsedGroupIds,
+    recentProjectIds: state.recentProjectIds,
   });
+}
+
+/** Most-recent-first project ids, capped; re-selecting moves the id to the front. */
+function touchRecent(recents: string[], id: string): string[] {
+  return [id, ...recents.filter((r) => r !== id)].slice(0, 5);
+}
+
+/** Drop persisted ids of projects that no longer exist; keep the active project first. */
+function resolveRecentProjectIds(projects: Project[], persistedRecents: string[] | undefined, activeProjectId: string | null): string[] {
+  const validIds = new Set(projects.map((p) => p.id));
+  const recents = (persistedRecents ?? []).filter((id) => validIds.has(id));
+  return activeProjectId !== null ? touchRecent(recents, activeProjectId) : recents;
 }
 
 /** R7: editor buffers belong to the active project's worktree. Refuse (with a toast) any change of
@@ -172,6 +188,7 @@ export const useRepos = create<ReposStore>((set, get) => ({
   activeProjectId: null,
   openProjectIds: [],
   collapsedGroupIds: [],
+  recentProjectIds: [],
   status: "idle",
   error: null,
   async load() {
@@ -191,7 +208,8 @@ export const useRepos = create<ReposStore>((set, get) => ({
       const selection = resolveSelection(groups, projects, persisted);
       const openProjectIds = resolveOpenProjectIds(projects, persisted?.openProjectIds, selection.activeProjectId);
       const collapsedGroupIds = resolveCollapsedGroupIds(groups, persisted?.collapsedGroupIds);
-      set({ groups: mergedGroups, projects: mergedProjects, status: "ready", error: null, ...selection, openProjectIds, collapsedGroupIds });
+      const recentProjectIds = resolveRecentProjectIds(projects, persisted?.recentProjectIds, selection.activeProjectId);
+      set({ groups: mergedGroups, projects: mergedProjects, status: "ready", error: null, ...selection, openProjectIds, collapsedGroupIds, recentProjectIds });
     } catch (e) {
       if (revision !== loadedAtRevision) return;
       const message = errorMessage(e);
@@ -204,7 +222,12 @@ export const useRepos = create<ReposStore>((set, get) => ({
     if (!project || dirtySwitchBlocked(get().activeProjectId, project.id)) return;
     revision++;
     const openProjectIds = get().openProjectIds.includes(id) ? get().openProjectIds : [...get().openProjectIds, id];
-    set({ activeGroupId: effectiveGroupId(project, get().groups), activeProjectId: project.id, openProjectIds });
+    set({
+      activeGroupId: effectiveGroupId(project, get().groups),
+      activeProjectId: project.id,
+      openProjectIds,
+      recentProjectIds: touchRecent(get().recentProjectIds, project.id),
+    });
     persistRepos(get());
   },
   selectGroup(id) {
@@ -214,8 +237,18 @@ export const useRepos = create<ReposStore>((set, get) => ({
     const first = inGroup.find((p) => openProjectIds.includes(p.id)) ?? inGroup[0] ?? null;
     if (dirtySwitchBlocked(get().activeProjectId, first?.id ?? null)) return;
     const nextOpenIds = first && !openProjectIds.includes(first.id) ? [...openProjectIds, first.id] : openProjectIds;
-    set({ activeGroupId: id, activeProjectId: first?.id ?? null, openProjectIds: nextOpenIds });
+    set({
+      activeGroupId: id,
+      activeProjectId: first?.id ?? null,
+      openProjectIds: nextOpenIds,
+      recentProjectIds: first ? touchRecent(get().recentProjectIds, first.id) : get().recentProjectIds,
+    });
     persistRepos(get());
+  },
+  togglePreviousProject() {
+    // Reuses selectProject, so the dirty-edit guard and persistence apply unchanged.
+    const second = get().recentProjectIds[1] ?? get().recentProjectIds[0];
+    if (second !== undefined) get().selectProject(second);
   },
   closeTab(id) {
     const project = get().projects.find((p) => p.id === id);
@@ -244,6 +277,7 @@ export const useRepos = create<ReposStore>((set, get) => ({
         projects: projects.filter((p) => p.id !== id),
         openProjectIds: openProjectIds.filter((pid) => pid !== id),
         activeProjectId: nextActiveId,
+        recentProjectIds: get().recentProjectIds.filter((pid) => pid !== id),
       });
       persistRepos(get());
       return { project, wasOpen, wasActive };

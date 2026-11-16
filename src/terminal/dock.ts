@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { closeTerminal, onTerminalExit, spawnTerminal } from "../ipc/pty";
+import { disposeTerminalView } from "./viewCache";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { errorMessage } from "../ipc/errors";
 import { t } from "../i18n/t";
@@ -174,6 +175,7 @@ export const useDock = create<DockStore>((set, get) => {
       } catch {
         // The backend session is already gone; nothing left to clean up.
       }
+      disposeTerminalView(result.sessionId);
     }
     return true;
   };
@@ -327,6 +329,7 @@ export const useDock = create<DockStore>((set, get) => {
         } catch (error) {
           toast({ title: errorMessage(error), icon: "⚠" });
         }
+        disposeTerminalView(tab.sessionId);
       }
       dropTab(get, set, save, id);
     },

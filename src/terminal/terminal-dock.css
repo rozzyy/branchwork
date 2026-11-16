@@ -199,6 +199,10 @@
   background: var(--surf);
 }
 
+.term-dock-pane[hidden] {
+  display: none;
+}
+
 .term-dock-pane .cli-pane {
   border-radius: 0;
   box-shadow: none;

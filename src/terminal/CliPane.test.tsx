@@ -141,7 +141,8 @@ import {
   resizeTerminal,
   writeTerminal,
 } from "../ipc/pty";
-import { CliPane, resolveThemeColor } from "./CliPane";
+import { CliPane, resetTerminalViewsForTests, resolveThemeColor } from "./CliPane";
+import { disposeTerminalView } from "./viewCache";
 
 const resizeCallbacks: ResizeObserverCallback[] = [];
 
@@ -156,6 +157,9 @@ class ResizeObserverStub {
 }
 
 beforeEach(() => {
+  // Drop cached views from the previous test before zeroing the counters,
+  // so disposal side effects never leak into the next test's assertions.
+  resetTerminalViewsForTests();
   Object.assign(mocks, {
     output: null,
     exit: null,
@@ -368,7 +372,7 @@ describe("CliPane", () => {
     expect(writeTerminal).not.toHaveBeenCalled();
   });
 
-  it("disposes UI subscriptions without closing the PTY session", async () => {
+  it("keeps the rendered view across unmounts without closing the PTY session", async () => {
     const view = await renderAttached();
     const lateInput = mocks.input;
     view.unmount();
@@ -378,13 +382,41 @@ describe("CliPane", () => {
 
     expect(mocks.unlisteners).toBe(3);
     expect(mocks.inputDisposals).toBe(1);
-    expect(mocks.terminalDisposals).toBe(1);
-    expect(mocks.fitDisposals).toBe(1);
-    expect(mocks.webglDisposals).toBe(1);
+    // The xterm view survives unmounts (tab/page switches re-adopt it), so
+    // no terminal or addon is disposed here.
+    expect(mocks.terminalDisposals).toBe(0);
+    expect(mocks.fitDisposals).toBe(0);
+    expect(mocks.webglDisposals).toBe(0);
     expect(mocks.observerDisconnections).toBe(1);
     expect(writeTerminal).not.toHaveBeenCalled();
     expect(resizeTerminal).not.toHaveBeenCalled();
     expect(closeTerminal).not.toHaveBeenCalled();
+  });
+
+  it("re-adopts the cached view on remount instead of creating a new terminal", async () => {
+    const view = await renderAttached();
+    expect(mocks.terminals).toHaveLength(1);
+    view.unmount();
+
+    render(<CliPane sessionId="pty-1" />);
+    await waitFor(() => expect(attachTerminal).toHaveBeenCalledTimes(2));
+    expect(mocks.terminals).toHaveLength(1);
+    expect(detachTerminal).toHaveBeenCalledWith("pty-1", expect.any(Number));
+  });
+
+  it("disposes the cached view only on explicit session close", async () => {
+    const view = await renderAttached();
+    view.unmount();
+    expect(mocks.terminalDisposals).toBe(0);
+
+    disposeTerminalView("pty-1");
+    expect(mocks.terminalDisposals).toBe(1);
+    expect(mocks.fitDisposals).toBe(1);
+    expect(mocks.webglDisposals).toBe(1);
+
+    render(<CliPane sessionId="pty-1" />);
+    await waitFor(() => expect(attachTerminal).toHaveBeenCalled());
+    expect(mocks.terminals).toHaveLength(2);
   });
 
   it("uses an attachment token so stale cleanup cannot detach a newer view", async () => {

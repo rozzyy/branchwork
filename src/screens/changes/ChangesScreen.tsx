@@ -3,6 +3,7 @@ import { useOriginMissing, usePublish } from "../repo/PublishDialog";
 import { t } from "../../i18n/t";
 import { screenById } from "../registry";
 import { useWorktrees } from "../../state/worktrees";
+import { usePaneWorktrees } from "../../stage/paneProject";
 import { useChanges, type ChangesSelection } from "../../state/changes";
 import { useFiles } from "../../state/files";
 import { useStage } from "../../state/stage";
@@ -47,8 +48,8 @@ function filesOpen(path: string): void {
 }
 
 export function ChangesToolbar() {
-  const activePath = useWorktrees((s) => s.activePath);
-  const branch = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath)?.branch ?? null);
+  const { worktrees, activePath } = usePaneWorktrees();
+  const branch = worktrees.find((w) => w.path === activePath)?.branch ?? null;
   const dmode = useChanges((s) => s.dmode);
   const setDiffMode = useChanges((s) => s.setDiffMode);
   return (
@@ -320,9 +321,9 @@ async function checkoutBranch(worktreePath: string) {
 }
 
 export function ChangesView() {
-  const activePath = useWorktrees((s) => s.activePath);
+  const { worktrees, activePath } = usePaneWorktrees();
   const worktreesLoading = useWorktrees((s) => s.loading);
-  const activeWorktree = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath) ?? null);
+  const activeWorktree = worktrees.find((w) => w.path === activePath) ?? null;
   const entries = useChanges((s) => s.entries);
   const stashes = useChanges((s) => s.stashes);
   const loading = useChanges((s) => s.loading);

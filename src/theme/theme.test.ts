@@ -45,3 +45,7 @@ describe("applyTheme", () => {
     expect(document.documentElement.hasAttribute("data-solid")).toBe(false);
   });
 });
+
+it("defaults to the calm-blue accent hue", () => {
+  expect(DEFAULT_THEME.accentHue).toBe(215);
+});

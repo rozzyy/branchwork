@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { GroupSwitcher, GroupSwitcherAddButton, useSwitcher } from "./GroupSwitcher";
+import { GroupSwitcher, GroupSwitcherAddButton, GroupSwitcherHost, useSwitcher } from "./GroupSwitcher";
 import { DialogHost } from "../ui/dialog";
 import { useRepos } from "../state/repos";
 import { useToasts } from "../ui/toast";
@@ -43,6 +43,7 @@ function setup() {
       <GroupSwitcher />
       <GroupSwitcherAddButton />
       <DialogHost />
+      <GroupSwitcherHost />
     </>,
   );
 }
@@ -50,7 +51,7 @@ function setup() {
 beforeEach(() => {
   useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, collapsedGroupIds: [], status: "idle", error: null });
   useToasts.setState({ toasts: [] });
-  useSwitcher.setState({ open: false });
+  useSwitcher.setState({ open: false, anchorEl: null, onSelectProject: null });
   vi.mocked(saveGroupIpc).mockResolvedValue(undefined);
   vi.mocked(deleteGroupIpc).mockResolvedValue(true);
   vi.mocked(saveProjectIpc).mockResolvedValue(undefined);
@@ -82,6 +83,7 @@ it("a project with an unknown groupId appears under Ungrouped", async () => {
       <GroupSwitcher />
       <GroupSwitcherAddButton />
       <DialogHost />
+      <GroupSwitcherHost />
     </>,
   );
   await userEvent.click(screen.getByRole("button", { name: /Acme/ }));
@@ -374,4 +376,41 @@ it("Escape closes the popover and refocuses the chip", async () => {
   await userEvent.keyboard("{Escape}");
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(chip).toHaveFocus();
+});
+
+it("lists recently used projects above the grouped list", async () => {
+  useRepos.setState({
+    groups,
+    projects,
+    activeGroupId: "g1",
+    activeProjectId: "p1",
+    openProjectIds: ["p1", "p2"],
+    collapsedGroupIds: [],
+    recentProjectIds: ["p1", "p2"],
+    status: "ready",
+    error: null,
+  });
+  render(
+    <>
+      <GroupSwitcher />
+      <GroupSwitcherAddButton />
+      <DialogHost />
+      <GroupSwitcherHost />
+    </>,
+  );
+  await userEvent.click(screen.getByRole("button", { name: /Acme/ }));
+  const dialog = await screen.findByRole("dialog");
+  const recentSection = within(dialog).getByText("Recent").closest(".group-sec") as HTMLElement;
+  expect(recentSection).toBeInTheDocument();
+  const rows = within(recentSection).getAllByRole("button", { name: /api|scratch/ });
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toHaveTextContent("api");
+  expect(rows[1]).toHaveTextContent("scratch");
+  await userEvent.click(within(recentSection).getByRole("button", { name: /scratch/ }));
+  expect(useRepos.getState().activeProjectId).toBe("p2");
+});
+
+it("uses muted group swatches that stay easy on the eyes", async () => {
+  const { swatchColor } = await import("./GroupSwitcher");
+  expect(swatchColor(250)).toBe("oklch(.68 .13 250)");
 });

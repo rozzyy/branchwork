@@ -12,7 +12,7 @@ export interface ThemeSettings {
 
 export const DEFAULT_THEME: ThemeSettings = {
   mode: "dark",
-  accentHue: 250,
+  accentHue: 215,
   baseHue: 265,
   textSize: "default",
   density: "default",

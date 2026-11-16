@@ -317,3 +317,45 @@ it("⌘P keeps its results across a git:changed reload while searching (R9)", as
   expect(screen.queryByText("No matching files")).not.toBeInTheDocument();
   expect(screen.getByText("utils.ts")).toBeInTheDocument();
 });
+
+it("ignores a pane pin and lists the global project's tree", async () => {
+  const { PaneProjectProvider } = await import("../../stage/paneProject");
+  const { useRepos } = await import("../../state/repos");
+  useRepos.setState({
+    groups: [],
+    projects: [
+      { id: "p1", owner: null, name: "A", localPath: "/wt/a", groupId: null },
+      { id: "p2", owner: null, name: "B", localPath: "/wt/b", groupId: null },
+    ],
+    activeGroupId: null,
+    activeProjectId: "p1",
+    openProjectIds: ["p1", "p2"],
+    collapsedGroupIds: [],
+    recentProjectIds: ["p1"],
+    status: "ready",
+    error: null,
+  });
+  useWorktrees.setState({
+    projectId: "p1",
+    worktrees: [{ path: "/wt/a", branch: "main" } as never],
+    pinnedPaths: [],
+    activePath: "/wt/a",
+    loading: false,
+    error: null,
+  } as never);
+  useFiles.setState({
+    open: [],
+    current: null,
+    dirty: {},
+    expanded: {},
+    fuzzyQuery: "",
+    showIgnored: false,
+    mode: "editor",
+  });
+  render(
+    <PaneProjectProvider projectId="p2">
+      <FilesView />
+    </PaneProjectProvider>,
+  );
+  await waitFor(() => expect(fsTree).toHaveBeenCalledWith("/wt/a", expect.anything()));
+});

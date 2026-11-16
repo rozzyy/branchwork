@@ -782,3 +782,47 @@ describe("AgentsView", () => {
     expect(useSessions.getState().raceEntries).toHaveLength(1);
   });
 });
+
+it("ignores a pane pin and shows the global project's sessions", async () => {
+  const { PaneProjectProvider } = await import("../../stage/paneProject");
+  const projectA = { id: "p1", localPath: "/wt/a" } as Project;
+  const projectB = { id: "p2", localPath: "/wt/b" } as Project;
+  useRepos.setState({ projects: [projectA, projectB], activeProjectId: "p1" });
+  useWorktrees.setState({
+    projectId: "p1",
+    worktrees: [{ path: "/wt/a" } as Worktree],
+    pinnedPaths: [],
+    activePath: "/wt/a",
+    loading: false,
+    error: null,
+  });
+  vi.mocked(listWorktrees).mockImplementation(async (id: string) =>
+    id === "p2" ? [{ path: "/wt/b" } as Worktree] : [],
+  );
+  const base = useSessions.getState().sessions;
+  useSessions.setState({
+    sessions: base.map((session, index) => ({
+      ...session,
+      id: `s${index}`,
+      sessionId: `pty-${index}`,
+      worktreePath: index === 0 ? "/wt/a" : "/wt/b",
+      error: null,
+      status: "running" as const,
+    })),
+  });
+  render(
+    <PaneProjectProvider projectId="p2">
+      <AgentsView />
+    </PaneProjectProvider>,
+  );
+  // Both terminals stay mounted; only the global project's session is visible
+  // (pane pins were removed).
+  expect(screen.getByTestId("agent-pty-0")).toBeInTheDocument();
+  expect(screen.getByTestId("agent-pty-1")).toBeInTheDocument();
+  expect(
+    screen.getByTestId("agent-pty-0").closest(".agent-pane"),
+  ).not.toHaveClass("agent-off");
+  expect(
+    screen.getByTestId("agent-pty-1").closest(".agent-pane"),
+  ).toHaveClass("agent-off");
+});

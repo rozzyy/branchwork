@@ -289,8 +289,12 @@ function AgentAccounts() {
                 <b>
                   <CliIcon id={cliId} /> {def.name}
                 </b>
-                <small className="mono agent-acct-path">
-                  ~/.branchwork/profiles/{cliId}-&lt;account&gt;
+                <small className={cliId === "copilot" || cliId === "muse" ? undefined : "mono agent-acct-path"}>
+                  {cliId === "copilot"
+                    ? t("settings.copilotSharedCredentials")
+                    : cliId === "muse"
+                      ? t("settings.museSharedCredentials")
+                      : `~/.branchwork/profiles/${cliId}-<account>`}
                 </small>
               </div>
               <div className="opt-ctl">

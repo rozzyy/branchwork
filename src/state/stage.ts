@@ -102,7 +102,7 @@ const saveLayout = (path: string, workspace: StageWorkspace) => {
 const persist = (workspace: StageWorkspace) => {
   if (activeLayoutPath) saveLayout(activeLayoutPath, workspace);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => void saveSetting("stage", { version: 3, current: workspace, layouts }), 300);
+  saveTimer = setTimeout(() => void saveSetting("stage", { version: 4, current: workspace, layouts }), 300);
 };
 
 /** Pre-M9 saved shape `{ panes, focus, dir, ratio }` (legacy ids included). */

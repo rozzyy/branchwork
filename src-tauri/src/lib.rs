@@ -1075,6 +1075,29 @@ fn pty_spawn(
     manager.spawn(&path, columns, rows, app, &env.unwrap_or_default())
 }
 
+// Tauri exposes each fixed IPC field as a separate command argument.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command(async)]
+#[specta::specta]
+fn pty_auth_spawn(
+    manager: State<'_, PtyManager>,
+    app: AppHandle,
+    cli_id: String,
+    profile_slug: String,
+    columns: u16,
+    rows: u16,
+    provider_id: Option<String>,
+    method_id: Option<String>,
+) -> Result<PtySession, AppError> {
+    let launch = cli::prepare_login(
+        &cli_id,
+        &profile_slug,
+        provider_id.as_deref(),
+        method_id.as_deref(),
+    )?;
+    manager.spawn_login(&launch, columns, rows, app)
+}
+
 #[tauri::command]
 #[specta::specta]
 fn pty_write(
@@ -1829,6 +1852,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             blame,
             file_history,
             pty_spawn,
+            pty_auth_spawn,
             pty_write,
             pty_resize,
             pty_attach,

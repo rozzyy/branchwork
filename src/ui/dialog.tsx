@@ -10,6 +10,8 @@ export interface AskOptions {
   icon?: ReactNode;
   input?: string; // when set, the dialog shows a text field prefilled with this value
   placeholder?: string;
+  choices?: Array<{ value: string; label: string }>;
+  selectedChoice?: string;
   meta?: string; // monospace detail block, e.g. list of files
 }
 
@@ -37,11 +39,13 @@ function finish(v: AskResult) {
 export function DialogHost() {
   const c = useDialog((s) => s.current);
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
   const okRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!c) return;
     if (c.input !== undefined) { inputRef.current?.focus(); inputRef.current?.select(); }
+    else if (c.choices) selectRef.current?.focus();
     else okRef.current?.focus();
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); finish(null); } };
     window.addEventListener("keydown", onKey);
@@ -49,7 +53,13 @@ export function DialogHost() {
   }, [c]);
 
   if (!c) return null;
-  const confirm = () => finish(c.input !== undefined ? inputRef.current?.value.trim() || null : true);
+  const confirm = () => finish(
+    c.input !== undefined
+      ? inputRef.current?.value.trim() || null
+      : c.choices
+        ? selectRef.current?.value ?? null
+        : true,
+  );
 
   return (
     <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) finish(null); }}>
@@ -66,6 +76,11 @@ export function DialogHost() {
             placeholder={c.placeholder}
             onKeyDown={(e) => { if (e.key === "Enter") confirm(); }}
           />
+        )}
+        {c.choices && (
+          <select ref={selectRef} className="input" defaultValue={c.selectedChoice ?? c.choices[0]?.value}>
+            {c.choices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+          </select>
         )}
         <div className="dlg-actions">
           <button className="btn" onClick={() => finish(null)}>{t("dialog.cancel")}</button>

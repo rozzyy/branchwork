@@ -23,6 +23,21 @@ export function spawnTerminal(
   return commands.ptySpawn(worktreePath, columns, rows, env ?? null);
 }
 
+/** Start a fixed provider login process in a detached PTY, without a worktree. */
+export function spawnAgentLogin(
+  cliId: string,
+  profileSlug: string,
+  columns: number,
+  rows: number,
+  providerId?: string,
+  methodId?: string,
+): Promise<PtySession> {
+  if (!inTauri()) {
+    return Promise.reject(new Error("Starting provider login requires the desktop app"));
+  }
+  return commands.ptyAuthSpawn(cliId, profileSlug, columns, rows, providerId ?? null, methodId ?? null);
+}
+
 export function writeTerminal(sessionId: string, data: Uint8Array): Promise<void> {
   if (!inTauri()) {
     return Promise.reject(new Error("Writing to a terminal requires the desktop app"));

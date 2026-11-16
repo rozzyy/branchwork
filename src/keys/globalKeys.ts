@@ -4,6 +4,7 @@ import { usePalette } from "../palette/store";
 import { useDialog } from "../ui/dialog";
 import { useSidebar } from "../state/sidebar";
 import { useDock } from "../terminal/dock";
+import { useRepos } from "../state/repos";
 import { useSettings } from "../state/settings";
 import { useShortcutSheet } from "../shell/ShortcutSheet";
 import { NAV_SCREENS } from "../screens/registry";
@@ -41,6 +42,14 @@ export function handleGlobalKey(e: KeyboardEvent): boolean {
   }
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "g") { useStage.getState().go("changes"); return true; }
   if (e.ctrlKey && !e.metaKey && e.code === "Backquote") { useDock.getState().toggle(); return true; }
+  // ⌘⇧P toggles between the two most recent projects. Like the other mod
+  // combos it works from anywhere (including the terminal), but never while
+  // repeating, and never under an open palette or dialog.
+  if (mod && e.shiftKey && !e.altKey && e.code === "KeyP") {
+    if (e.repeat || usePalette.getState().open || useDialog.getState().current) return false;
+    useRepos.getState().togglePreviousProject();
+    return true;
+  }
   if (mod || e.altKey || isTyping(document.activeElement)) return false;
   if (usePalette.getState().open || useDialog.getState().current) return false;
   if (e.key === "?" ) { useShortcutSheet.getState().show(); return true; }

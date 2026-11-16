@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as R
 import { t } from "../../i18n/t";
 import { screenById } from "../registry";
 import { useWorktrees } from "../../state/worktrees";
-import { useRepos } from "../../state/repos";
+import { usePaneWorktrees } from "../../stage/paneProject";
 import { useFiles } from "../../state/files";
 import type { FilesIntent } from "../../state/filesIntents";
 import { openHistory } from "../../state/history";
@@ -126,8 +126,8 @@ function flattenFiles(map: TreeMap): { path: string; entry: FsEntry }[] {
 }
 
 export function FilesToolbar() {
-  const activePath = useWorktrees((s) => s.activePath);
-  const branch = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath)?.branch ?? null);
+  const { worktrees, activePath } = usePaneWorktrees();
+  const branch = worktrees.find((w) => w.path === activePath)?.branch ?? null;
   const mode = useFiles((s) => s.mode);
   const setMode = useFiles((s) => s.setMode);
   const current = useFiles((s) => s.current);
@@ -286,11 +286,10 @@ function TreeNode({
 }
 
 export function FilesView() {
-  const activePath = useWorktrees((s) => s.activePath);
+  const { project, worktrees, activePath, select } = usePaneWorktrees();
   const worktreesLoading = useWorktrees((s) => s.loading);
-  const activeWorktree = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath) ?? null);
-  const worktrees = useWorktrees((s) => s.worktrees);
-  const projectName = useRepos((s) => s.projects.find((p) => p.id === s.activeProjectId)?.name);
+  const activeWorktree = worktrees.find((w) => w.path === activePath) ?? null;
+  const projectName = project?.name;
   const open = useFiles((s) => s.open);
   const current = useFiles((s) => s.current);
   const dirty = useFiles((s) => s.dirty);
@@ -628,7 +627,7 @@ export function FilesView() {
       body: t(isDir ? "files.deleteFolderBody" : "files.deleteFileBody", { path }),
       ok: t("files.deleteOk"),
       danger: true,
-      icon: "🗑",
+      icon: "✕",
     });
     if (confirmed !== true) return;
     try {
@@ -640,7 +639,7 @@ export function FilesView() {
       await reloadTree();
       toast({
         title: t("files.deleted", { path }),
-        icon: "🗑",
+        icon: "✕",
         action: {
           label: t("toast.undo"),
           undo: true,
@@ -701,7 +700,7 @@ export function FilesView() {
   };
 
   const openInBrowser = async (path: string) => {
-    const root = useWorktrees.getState().activePath;
+    const root = activePath;
     if (!root) return;
     try {
       await useBrowser.getState().load();
@@ -723,15 +722,14 @@ export function FilesView() {
     if (!isDir) {
       items.push({ kind: "item", label: t("files.duplicate"), icon: "⧉", onSelect: () => void handleDuplicate(path) });
     }
-    items.push({ kind: "item", label: t("files.delete"), icon: "🗑", danger: true, onSelect: () => void handleDelete(path, isDir) });
+    items.push({ kind: "item", label: t("files.delete"), icon: "✕", danger: true, onSelect: () => void handleDelete(path, isDir) });
     items.push({ kind: "separator" });
     items.push({
       kind: "item",
       label: t("files.openTerminalHere"),
       icon: "❯_",
       onSelect: () => {
-        const target = useWorktrees.getState().activePath;
-        if (target) void useDock.getState().openHere(target);
+        if (activePath) void useDock.getState().openHere(activePath);
       },
     });
     items.push({
@@ -739,8 +737,7 @@ export function FilesView() {
       label: t("files.openTerminalScreen"),
       icon: "❯_",
       onSelect: () => {
-        const target = useWorktrees.getState().activePath;
-        if (target) void useTerminalScreen.getState().openHere(target);
+        if (activePath) void useTerminalScreen.getState().openHere(activePath);
       },
     });
     items.push({ kind: "item", label: t("files.revealInFinder"), icon: "⌘", onSelect: () => void handleReveal(path) });
@@ -791,7 +788,7 @@ export function FilesView() {
           <select
             aria-label={t("sidebar.selectWorktree", { branch: activeWorktree?.branch ?? activePath })}
             className="input files-worktree-select"
-            onChange={(event) => useWorktrees.getState().select(event.target.value)}
+            onChange={(event) => select(event.target.value)}
             value={activePath}
           >
             {worktrees.map((worktree) => (

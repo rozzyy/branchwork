@@ -105,3 +105,50 @@ it("opens the shortcut sheet with ?", () => {
   expect(handleGlobalKey(key({ key: "?" }))).toBe(true);
   expect(useShortcutSheet.getState().open).toBe(true);
 });
+
+it("⌘⇧P toggles to the previous project, ignoring repeats", async () => {
+  const { useRepos } = await import("../state/repos");
+  useRepos.setState({
+    groups: [],
+    projects: [
+      { id: "p1", owner: null, name: "A", localPath: "/a", groupId: null },
+      { id: "p2", owner: null, name: "B", localPath: "/b", groupId: null },
+    ],
+    activeGroupId: null,
+    activeProjectId: "p1",
+    openProjectIds: ["p1", "p2"],
+    collapsedGroupIds: [],
+    recentProjectIds: ["p1", "p2"],
+    status: "ready",
+    error: null,
+  });
+  expect(handleGlobalKey(key({ code: "KeyP", metaKey: true, shiftKey: true, repeat: true }))).toBe(false);
+  expect(useRepos.getState().activeProjectId).toBe("p1");
+  expect(handleGlobalKey(key({ code: "KeyP", metaKey: true, shiftKey: true }))).toBe(true);
+  expect(useRepos.getState().activeProjectId).toBe("p2");
+});
+
+it("toggle hotkey is inert while the palette or a dialog is open", async () => {
+  const { useRepos } = await import("../state/repos");
+  useRepos.setState({
+    groups: [],
+    projects: [
+      { id: "p1", owner: null, name: "A", localPath: "/a", groupId: null },
+      { id: "p2", owner: null, name: "B", localPath: "/b", groupId: null },
+    ],
+    activeGroupId: null,
+    activeProjectId: "p1",
+    openProjectIds: ["p1", "p2"],
+    collapsedGroupIds: [],
+    recentProjectIds: ["p1", "p2"],
+    status: "ready",
+    error: null,
+  });
+  usePalette.setState({ open: true, query: "" });
+  expect(handleGlobalKey(key({ code: "KeyP", metaKey: true, shiftKey: true }))).toBe(false);
+  usePalette.setState({ open: false, query: "" });
+  useDialog.setState({ current: {} as never });
+  expect(handleGlobalKey(key({ code: "KeyP", metaKey: true, shiftKey: true }))).toBe(false);
+  useDialog.setState({ current: null });
+  expect(useRepos.getState().activeProjectId).toBe("p1");
+});

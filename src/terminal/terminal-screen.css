@@ -81,6 +81,17 @@
   padding: 0;
 }
 
+.term-screen-tabpage {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
+.term-screen-tabpage[hidden] {
+  display: none;
+}
+
 .term-screen-split {
   flex: 1;
   min-height: 0;

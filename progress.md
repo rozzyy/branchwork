@@ -1564,3 +1564,56 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Committed all 17 then-present changed/new files as `ffedb2f` (`feat: add first-launch onboarding`) and pushed `main` to `origin`.
 - `./init.sh`: TypeScript passed; Vitest 86 files / 742 tests passed; Clippy passed; Rust tests had 328 passed, 11 failed, and 3 ignored. Ten worktree failures reported inability to start macOS FSEvent streams; one PTY replay test failed (`completed output was not replayed after reattach`).
 - `git diff --cached --check` passed before commit. Release tag/version is pending user choice because repository policy bumps semver only when a milestone is done; M13 is not marked complete.
+
+## 2026-11-16: M13 Agent provider browser login — stage 1 checkpoint
+
+- Implemented provider-owned browser authentication from Settings using a detached, bounded PTY process. Settings remains selected; login no longer creates or switches to a Terminal tab. OpenCode provider/method selection is collected in Settings. Shared Muse and Copilot credential scope is disclosed.
+- Backend login launch uses fixed binaries/argv, validates profile containment and symlinks, removes API-key env vars, and caps concurrent login PTYs at two. Frontend tracks bounded PTY output only for allowlisted HTTPS auth URLs; it is never rendered or logged.
+- OpenCode current releases store credentials in SQLite. Removed the outdated legacy `auth.json` existence check; state remains unknown until a verified status mechanism is added.
+- Verification: `./init.sh` TypeScript passed; Vitest 88 files / 753 tests passed; Clippy passed; Rust tests 332 passed / 11 failed / 3 ignored. The ten FSEvent startup failures and `completed_session_keeps_buffered_events_until_attached` failure match the prior baseline. Focused impacted suites passed (137 tests), targeted Rust auth tests passed, and `git diff --check` passed.
+- Manual native login matrix is ready at `docs/testing/agent-provider-login-manual-e2e.md`. Feature remains in review pending user walkthrough. No commit, push, merge, release tag, or version bump performed. The separate blank Agent screen diagnosis remains follow-up work.
+- Build compatibility follow-up: replaced unstable `AtomicUsize::try_update` with a stable `compare_exchange_weak` loop. `cargo test ... auth_login_slots_are_capped_at_two_and_released`, `cargo check`, Clippy, `rustfmt --edition 2024 --check src-tauri/src/pty.rs`, and `git diff --check` passed. The reported older-toolchain error was not reproducible on local Rust 1.99.1, but the replacement uses a long-stable primitive.
+- Removed the hard cap of eight active terminal sessions after tracing the rejection to `MAX_SESSIONS` in the PTY manager. Updated regression test failed at the ninth session before the change, then passed after removal; it also confirms a new session can open after closing one. The independent two-session cap for background provider logins remains. `cargo check`, Clippy, rustfmt, and `git diff --check` passed.
+
+## 2026-11-16: Terminal blank on tab/page switch — fix (uncommitted)
+
+- Root cause matched the resolved Agents issue `a8b289c`: `CliPane` unmounted on every tab/page switch, disposing its xterm while the backend only replays detached-period output, so the fresh terminal rendered blank until new output or a TUI redraw on resize.
+- Fix, following the Agents keep-mounted pattern: `TerminalScreen` and `TerminalDock` render every tab and hide inactive ones (`hidden` + `display:none`), so tab/project switches no longer detach the PTY. `CliPane` caches its xterm view per session id (new `src/terminal/viewCache.ts` disposal registry) and re-adopts the rendered element on remount, which also covers page and stage-tab switches (`Pane key={id}`, `Stage key={activeTabId:paneId}`). Backend replay stays detached-only, so no duplicated output.
+- Cached views are disposed on all explicit close/replace paths: `screen.ts` removePane/closeTab, `dock.ts` closeTab/closeOrphan, `sessions.ts` closeSession/switchProfile-replace/rollback/orphan. Handovers (screen↔dock, profile switch undo) reuse the live view.
+- Complexity: retained DOM is O(tabs × panes); PTY sessions were already O(same) and no new IPC, timers, or payloads were added. Hidden panes never send resizes (zero-size fit is rejected by the existing dimension guard), so no SIGWINCH storms.
+- Verification: `npm run typecheck` clean; full Vitest 88 files / 756 tests passed (baseline 753; +3 new: view reuse across unmount, dispose-on-close, tab-switch keeps mounted); `git diff --check` clean. `./init.sh`, Rust checks, and native desktop retest not run — left for integration. No commit/push per repo rule.
+
+## 2026-11-16: Project workspaces — native implementation (uncommitted)
+
+- Implemented the approved plan (Tasks 1–9) natively in this session. Task 7 (per-project worktree cache) was built before Task 6 because Task 6's visibility filter and new-tab/new-agent targeting need exact per-project worktree sets; deviations are recorded in the plan's Execution notes.
+- Toggle: `recentProjectIds` (cap 5, persisted) + `togglePreviousProject()` in repos store (dirty-edit guard reused); ⌘⇧P hotkey (repeat/palette/dialog-safe), palette command, ShortcutSheet row, Recents section in the project popover.
+- Pins: `paneProjects` on the stage model persisted as stage v4 (v3 loads with empty pins); `PaneProjectContext` + `usePaneProject*` + `usePaneWorktrees()`; pin chip in every pane header opening the existing project popover with an Unpin row. Terminal, Agents, Files, Changes, Graph, Blame, Rebase, and BasePicker follow the pane project; unpinned panes keep byte-for-byte old behavior (two pre-existing Agent filter tests caught and pinned down an over-broad first version).
+- Palette: dark `--bg` .18/.006, `--text` .92, default accent hue 215 (chroma .14), muted group swatches (.13); the shared hue change dropped light-mode accent contrast to 4.39, so the light accent was darkened (.53→.50, chroma .17) and the existing AA gate passes again.
+- Verification: `npm run typecheck` clean; full Vitest 89 files / 780 tests passed (up from 88/753 at session start; includes all new regression tests). `./init.sh` Rust gate does not pass in this sandbox: 26 failures, all environmental (openpty `Operation not permitted`, FSEvent streams unavailable, no network) — zero Rust files touched; same failure family as the recorded baseline (10 FSEvent + 1 replay). Native desktop walkthrough (plan Task 10 step 2) is pending the user. No commit/push per repo rule.
+
+## 2026-11-17: Duplicate project popover — fixed (uncommitted)
+
+- Symptom: clicking a group trigger could show two project popovers at once.
+- Root cause: two render sites (Sidebar, TitleBar) each gated one global `useSwitcher.open` flag with their own never-cleared local anchor; the new pin chip added a third independent copy. Any trigger opened after another had ever been used rendered a duplicate.
+- Reproduced first with `src/shell/ProjectPopoverSingle.test.tsx` (failed with exactly 2 dialogs, passes after the fix).
+- Fix: single `GroupSwitcherHost` at the App root; anchor + per-open callbacks moved into the `useSwitcher` store; all triggers call `show`/`toggle` with their anchor. Popover position recomputes when the anchor changes.
+- Verification: `npm run typecheck` clean; full Vitest 90 files / 781 tests passed. No commit/push per repo rule.
+
+## 2026-11-17: Switcher prototype for the simple-project-switch direction (uncommitted)
+
+- Reworked only the `projPop` popover in `docs/design/prototype.html`; the project rail and `groupModal` are untouched.
+- Switch mode (default): Recents section, flat list of all matching projects with dead group labels, keyboard navigation (↑↓ highlight, Enter opens, Esc closes), footer hint + “Kelola grup & repo…” entry. Manage mode preserves the previous grouped UI verbatim plus a ← Kembali button.
+- Verified via throwaway jsdom harness (since removed): 8 rows + recents heading, no group buttons in switch mode, keyboard select + Enter opens and closes, manage-mode parity, search narrows to 1 row and hides recents. `node --check` clean on the page script.
+
+## 2026-11-17: Whole-app design direction + shell mockup (uncommitted)
+
+- Added `docs/design/app-direction.md` and standalone interactive mockup `docs/design/app-shell-v2.html` for a simple, easy-to-use Branchwork shell: one active context, one command field, a 10-destination icon rail, Switch/Manage project and worktree selection, one-pane default with optional split, standardized pane headers, and a status-only bottom bar.
+- The design preserves all current screens and workflows (Home/Changes/History/Files/Agents/Terminal/GitHub/Browser/Conflicts/Settings, stage tabs/split, terminal dock, palette, theme, shortcuts) and maps each to a simpler surface without cutting features.
+- Verification: `node --check` passes on the mockup's inline script, and a throwaway jsdom harness confirmed rail/stage/pane/status rendering, switcher recents/keyboard/manage parity, cross-screen navigation, split panes, and palette filtering before removal.
+
+## 2026-11-17: Navigation-only design revision (uncommitted)
+
+- Superseded the icon-rail shell direction after user feedback: current Branchwork appearance stays unchanged; only navigation changes.
+- Added `docs/design/app-navigation-direction.md` and interactive current-look mockup `docs/design/navigation-v2.html`.
+- Direction adopts Orca-style jump navigation without copying its visual identity: all projects visible flat, worktrees visible, attention-ranked recents, Cmd-J jump across projects/worktrees/sessions/tabs, tab attention badges.
+- Verified the new mockup's inline script with `node --check` and a temporary jsdom harness (flat project/worktree visibility, jump recents/keyboard/search/Escape). Harness removed afterward.

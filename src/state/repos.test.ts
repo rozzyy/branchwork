@@ -59,7 +59,7 @@ beforeEach(() => {
   vi.mocked(ask).mockReset();
   vi.mocked(classifyFolder).mockResolvedValue({ kind: "repository" });
   vi.mocked(cloneRepository).mockReset();
-  useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, openProjectIds: [], collapsedGroupIds: [], status: "idle", error: null });
+  useRepos.setState({ groups: [], projects: [], activeGroupId: null, activeProjectId: null, openProjectIds: [], collapsedGroupIds: [], recentProjectIds: [], status: "idle", error: null });
   useStage.setState(stageSnapshot(initialStage));
   useToasts.setState({ toasts: [] });
 });
@@ -81,7 +81,7 @@ it("selectProject sets the active project and group, and persists", () => {
   useRepos.setState({ groups, projects, status: "ready" });
   useRepos.getState().selectProject("p3");
   expect(useRepos.getState()).toMatchObject({ activeProjectId: "p3", activeGroupId: null });
-  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: null, activeProjectId: "p3", openProjectIds: ["p3"], collapsedGroupIds: [] });
+  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: null, activeProjectId: "p3", openProjectIds: ["p3"], collapsedGroupIds: [], recentProjectIds: ["p3"] });
 });
 
 it("selecting an orphaned project activates Ungrouped and keeps its tab visible", () => {
@@ -103,7 +103,7 @@ it("selectGroup selects the group's first project, and persists", () => {
   useRepos.setState({ groups, projects, status: "ready" });
   useRepos.getState().selectGroup("g1");
   expect(useRepos.getState()).toMatchObject({ activeGroupId: "g1", activeProjectId: "p2" });
-  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p2", openProjectIds: ["p2"], collapsedGroupIds: [] });
+  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p2", openProjectIds: ["p2"], collapsedGroupIds: [], recentProjectIds: ["p2"] });
 });
 
 it("load() in flight: a selectProject bump still lets the freshly loaded groups/projects through, keeping the newer selection", async () => {
@@ -167,7 +167,7 @@ it("restoreGroup restores activeGroupId when the active project is among the res
   expect(useRepos.getState().activeGroupId).toBeNull();
   await useRepos.getState().restoreGroup(snapshot!);
   expect(useRepos.getState().activeGroupId).toBe("g1");
-  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: [], collapsedGroupIds: [] });
+  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: [], collapsedGroupIds: [], recentProjectIds: [] });
 });
 
 it("load() with legacy persisted data (no openProjectIds) opens every project", async () => {
@@ -205,7 +205,7 @@ it("closeTab on the active tab selects the neighbor to its right", () => {
   useRepos.setState({ groups, projects, status: "ready", activeGroupId: "g1", activeProjectId: "p2", openProjectIds: ["p1", "p2"] });
   useRepos.getState().closeTab("p2");
   expect(useRepos.getState()).toMatchObject({ activeProjectId: "p1", openProjectIds: ["p1"] });
-  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"], collapsedGroupIds: [] });
+  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"], collapsedGroupIds: [], recentProjectIds: [] });
 });
 
 it("closeTab falls back to the left neighbor when there is none to the right", () => {
@@ -285,11 +285,11 @@ it("toggleGroupCollapsed toggles and persists", () => {
   useRepos.setState({ groups, projects, status: "ready", activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"] });
   useRepos.getState().toggleGroupCollapsed("g1");
   expect(useRepos.getState().collapsedGroupIds).toEqual(["g1"]);
-  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"], collapsedGroupIds: ["g1"] });
+  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"], collapsedGroupIds: ["g1"], recentProjectIds: [] });
 
   useRepos.getState().toggleGroupCollapsed("g1");
   expect(useRepos.getState().collapsedGroupIds).toEqual([]);
-  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"], collapsedGroupIds: [] });
+  expect(saveSetting).toHaveBeenCalledWith("repos", { activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"], collapsedGroupIds: [], recentProjectIds: [] });
 });
 
 it("load() with legacy persisted data (no collapsedGroupIds) defaults to all expanded", async () => {
@@ -369,4 +369,38 @@ it("openRepo offers the enclosing repository instead of init", async () => {
   expect(ask).toHaveBeenCalledWith(expect.objectContaining({ title: "This folder is inside the repository /r", ok: "Open that repository" }));
   expect(openRepository).toHaveBeenCalledWith("/r");
   expect(initRepository).not.toHaveBeenCalled();
+});
+
+it("tracks recently used projects, most-recent-first, capped at five", () => {
+  useRepos.setState({ groups, projects: [...projects,
+    { id: "p4", owner: null, name: "D", localPath: "/d", groupId: null },
+    { id: "p5", owner: null, name: "E", localPath: "/e", groupId: null },
+    { id: "p6", owner: null, name: "F", localPath: "/f", groupId: null },
+  ], activeGroupId: null, activeProjectId: null });
+  const { selectProject } = useRepos.getState();
+  for (const id of ["p1", "p2", "p3", "p4", "p5", "p6"]) selectProject(id);
+  expect(useRepos.getState().recentProjectIds).toEqual(["p6", "p5", "p4", "p3", "p2"]);
+  useRepos.getState().selectProject("p3");
+  expect(useRepos.getState().recentProjectIds).toEqual(["p3", "p6", "p5", "p4", "p2"]);
+});
+
+it("togglePreviousProject switches to the last project and back", () => {
+  useRepos.setState({ groups, projects, activeGroupId: null, activeProjectId: null });
+  useRepos.getState().selectProject("p1");
+  useRepos.getState().selectProject("p2");
+  useRepos.getState().togglePreviousProject();
+  expect(useRepos.getState().activeProjectId).toBe("p1");
+  useRepos.getState().togglePreviousProject();
+  expect(useRepos.getState().activeProjectId).toBe("p2");
+});
+
+it("toggle with unsaved editor changes stays blocked", () => {
+  useRepos.setState({ groups, projects, activeGroupId: null, activeProjectId: null });
+  useRepos.getState().selectProject("p1");
+  useRepos.getState().selectProject("p2");
+  useFiles.setState({ dirty: { "/a/file": true } } as never);
+  useRepos.getState().togglePreviousProject();
+  expect(useRepos.getState().activeProjectId).toBe("p2");
+  expect(useToasts.getState().toasts).toHaveLength(1);
+  useFiles.setState({ dirty: {} } as never);
 });

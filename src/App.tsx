@@ -4,6 +4,7 @@ import { PublishDialogHost } from "./screens/repo/PublishDialog";
 import { TitleBar } from "./shell/TitleBar";
 import { Sidebar } from "./shell/Sidebar";
 import { StatusBar } from "./shell/StatusBar";
+import { GroupSwitcherHost } from "./shell/GroupSwitcher";
 import { ShortcutSheet } from "./shell/ShortcutSheet";
 import { Stage } from "./stage/Stage";
 import { useSettings } from "./state/settings";
@@ -26,6 +27,7 @@ import { toast } from "./ui/toast";
 import { startWindowSync } from "./state/windows";
 import { useWorktrees } from "./state/worktrees";
 import { ProjectLoadingOverlay } from "./shell/ProjectLoadingOverlay";
+import { SplashScreen } from "./shell/SplashScreen";
 import { Onboarding } from "./onboarding/Onboarding";
 
 export default function App() {
@@ -89,6 +91,7 @@ export default function App() {
       data-sidebar={collapsed ? "collapsed" : "expanded"}
       data-dock={dockFlow}
     >
+      <SplashScreen />
       <TitleBar />
       <div className="body">
         <Sidebar />
@@ -105,6 +108,7 @@ export default function App() {
       <Toaster />
       <DialogHost />
       <Palette />
+      <GroupSwitcherHost />
       <Onboarding />
     </div>
   );

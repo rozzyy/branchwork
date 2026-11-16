@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branchwork — Project Switcher (arah desain baru)</title>
+<style>
+:root{
+  --bg:oklch(.18 .006 265); --surf:oklch(.205 .011 265); --raised:oklch(.245 .012 265);
+  --overlay:oklch(.27 .013 265); --line:oklch(1 0 0 / .11); --line2:oklch(1 0 0 / .2);
+  --text:oklch(.92 .004 265); --text-2:oklch(.80 .010 265); --text-3:oklch(.70 .012 265);
+  --acc:oklch(.70 .14 215); --accs:oklch(.70 .14 215 / .16);
+  --shadow:0 30px 80px -20px oklch(0 0 0 / .6);
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;color:var(--text);font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;background:
+  radial-gradient(45% 55% at 15% 20%,oklch(.30 .10 260) 0%,transparent 70%),
+  radial-gradient(40% 50% at 85% 15%,oklch(.28 .09 25) 0%,transparent 70%),
+  radial-gradient(50% 55% at 75% 90%,oklch(.27 .09 200) 0%,transparent 70%),
+  oklch(.14 .02 265);
+  display:grid;place-items:center;min-height:100dvh}
+button{font:inherit;color:inherit}
+.stage{width:min(760px,92vw);display:flex;flex-direction:column;gap:14px;align-items:stretch}
+.fakebar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:color-mix(in oklch,var(--surf) 82%,transparent);border:1px solid var(--line2)}
+.fakebar .dot{width:10px;height:10px;border-radius:50%;background:var(--acc);flex:none}
+.fakebar b{font-size:13px}
+.fakebar small{color:var(--text-3)}
+.fakebar .sp{flex:1}
+.hintline{color:var(--text-3);font-size:12px;text-align:center}
+.hintline kbd{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--raised);border:1px solid var(--line2);border-bottom-width:2px;border-radius:6px;padding:0 6px}
+/* ===== popover ===== */
+.ppop{border-radius:18px;background:var(--overlay);border:1px solid var(--line2);box-shadow:var(--shadow);overflow:hidden}
+.phd{padding:10px 10px 6px}
+.in{width:100%;background:var(--surf);border:1px solid var(--line2);color:var(--text);border-radius:var(--r);padding:8px 12px;font:inherit;outline:none}
+.in:focus{border-color:var(--acc)}
+.in::placeholder{color:var(--text-3)}
+.pl{overflow:auto;padding:4px 8px 8px;max-height:min(52vh,420px)}
+.pf{display:flex;gap:6px;align-items:center;padding:8px 10px;border-top:1px solid var(--line2);color:var(--text-3);font-size:11.5px}
+.pf .grow{flex:1}
+.btn{border:0;border-radius:8px;padding:6px 12px;cursor:pointer;background:var(--raised);color:var(--text)}
+.btn:hover{filter:brightness(1.12)}
+.btn.ghost{background:transparent;color:var(--text-2)}
+.btn.ghost:hover{background:var(--raised);color:var(--text)}
+.sec-h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding:8px 8px 2px}
+.pg-r{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:9px;cursor:pointer;font-size:12.5px;border:0;background:none;width:100%;text-align:left}
+.pg-r:hover{background:var(--raised)}
+.pg-r.sel{background:var(--raised);box-shadow:inset 2px 0 0 var(--acc)}
+.pg-r.on{background:var(--accs)}
+.pg-r i{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-style:normal;font-size:10px;font-weight:700;color:#fff;flex:none}
+.pg-r .m{color:var(--text-3)}
+.pg-tag{font-size:10.5px;color:var(--text-3);border:1px solid var(--line2);border-radius:99px;padding:0 7px;margin-left:auto;white-space:nowrap}
+.chip{font-size:11px;background:var(--accs);border-radius:99px;padding:1px 8px;white-space:nowrap}
+.empty{color:var(--text-3);font-size:12px;padding:6px 14px}
+.grp{border-radius:12px;padding:4px;margin-bottom:4px}
+.grp-head{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12.5px}
+.grp-head .sq{width:10px;height:10px;border-radius:3px;flex:none}
+.grp-head b{font-weight:650}
+.grp-head .m{color:var(--text-3)}
+.grp-head .tog{border:0;background:none;color:var(--text-3);cursor:pointer;border-radius:6px;padding:2px 7px;font-size:11px}
+.grp-head .tog:hover{background:var(--raised);color:var(--text)}
+.addrow{display:flex;gap:8px;padding:6px 8px}
+.addrow .in{padding:6px 10px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--raised);border:1px solid var(--line2);border-radius:12px;padding:8px 14px;box-shadow:var(--shadow);font-size:12.5px}
+</style>
+</head>
+<body>
+<main class="stage">
+  <div class="fakebar" aria-hidden="true">
+    <span class="dot"></span><b>web-app</b><small>Acme · Work · 4 projects</small><span class="sp"></span><small>⌘⇧P untuk toggle cepat</small>
+  </div>
+
+  <div class="ppop" id="ppop" role="dialog" aria-label="Pindah project">
+    <div class="phd"><input class="in" id="pq" placeholder="⌕ Cari project…" autocomplete="off" aria-label="Cari project"></div>
+    <div class="pl" id="plist"></div>
+    <div class="pf" id="ppopFoot"></div>
+  </div>
+
+  <p class="hintline">Coba: ketik untuk filter · <kbd>↑</kbd><kbd>↓</kbd> pilih · <kbd>Enter</kbd> buka · <kbd>Esc</kbd> tutup · tombol <b>Kelola grup &amp; repo…</b> untuk mode manage</p>
+</main>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ===== data demo (mirip data asli) ===== */
+const GROUPS=[
+  {id:"acme",n:"Acme · Work",c:"oklch(.66 .13 250)"},
+  {id:"personal",n:"Personal",c:"oklch(.72 .13 155)"},
+  {id:"client",n:"Client · Nusantara",c:"oklch(.72 .13 55)"}];
+const PROJ=[
+  {n:"web-app",o:"acme",g:"acme",c:"var(--acc)",pr:4},
+  {n:"api",o:"acme",g:"acme",c:"var(--grn)",pr:2},
+  {n:"design-system",o:"acme",g:"acme",c:"oklch(.72 .13 350)"},
+  {n:"dotfiles",o:"rozzy",g:"personal",c:"oklch(.75 .13 60)"},
+  {n:"blog",o:"rozzy",g:"personal",c:"var(--acc)"},
+  {n:"pos-app",o:"nusantara",g:"client",c:"oklch(.75 .13 45)",pr:3},
+  {n:"landing",o:"nusantara",g:"client",c:"oklch(.70 .13 200)"},
+  {n:"scratch",o:"local",g:null,c:"var(--text-3)"}];
+const S={active:"web-app",manage:false,recent:["blog","web-app","api"],collapsed:new Set(),index:-1,items:[]};
+
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const gname=id=>(GROUPS.find(g=>g.id===id)||{}).n||"Tanpa grup";
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;$("#toasts").append(t);setTimeout(()=>t.remove(),2600)}
+
+function openProj(n){
+  const p=PROJ.find(x=>x.n===n);if(!p)return;
+  S.recent=[n,...S.recent.filter(x=>x!==n)].slice(0,5);
+  S.active=n;S.index=-1;renderPop();
+  toast(`Pindah ke ${p.o}/${p.n}`);
+}
+function rowHtml(p){
+  const on=p.n===S.active?" on":"";
+  return `<button class="pg-r${on}" data-p="${p.n}"><i style="background:${p.c}">${p.n[0].toUpperCase()}</i><span><span class="m">${p.o}/</span><b>${p.n}</b></span>${p.pr?`<span class="chip">${p.pr} PR</span>`:""}<span class="pg-tag">${gname(p.g)}</span></button>`;
+}
+function paintSel(){
+  $$("#plist .pg-r").forEach(r=>{
+    const on=r.dataset.p===(S.items[S.index]||null);
+    r.classList.toggle("sel",on);
+    if(on&&r.scrollIntoView)r.scrollIntoView({block:"nearest"});
+  });
+}
+function hoverRow(n){const i=S.items.indexOf(n);if(i>=0&&i!==S.index){S.index=i;paintSel()}}
+function popKeys(e){
+  const items=S.items;
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault();if(!items.length)return;
+    S.index=((S.index??-1)+(e.key==="ArrowDown"?1:-1)+items.length)%items.length;paintSel();
+  }else if(e.key==="Enter"){const n=items[S.index??-1];if(n)openProj(n)}
+  else if(e.key==="Escape"){$("#ppop").style.display="none";toast("Ditutup (Esc) — di app, popover tertutup");}
+}
+function toggleManage(){S.manage=!S.manage;S.index=-1;renderPop();const i=$("#pq");if(i)i.focus()}
+function toggleGroup(id){if(S.collapsed.has(id))S.collapsed.delete(id);else S.collapsed.add(id);renderPop();const i=$("#pq");if(i)i.focus()}
+
+function renderPop(){
+  const q=($("#pq")?.value||"").toLowerCase(),l=$("#plist"),f=$("#ppopFoot");
+  S.index=-1;
+  if(!S.manage){
+    /* ===== MODE SWITCH: cepat, tanpa chrome manajemen ===== */
+    const all=PROJ.filter(p=>(p.o+"/"+p.n).toLowerCase().includes(q));
+    const recents=q?[]:S.recent.map(n=>PROJ.find(p=>p.n===n)).filter(p=>p&&(p.o+"/"+p.n).toLowerCase().includes(q));
+    const rest=all.filter(p=>!recents.includes(p));
+    let h="";
+    if(recents.length)h+=`<div class="sec-h">Terakhir dibuka</div>`+recents.map(rowHtml).join("");
+    h+=rest.map(rowHtml).join("");
+    if(!h)h=`<div class="empty">Tidak ada project yang cocok</div>`;
+    l.innerHTML=h;S.items=[...recents,...rest].map(p=>p.n);
+    f.innerHTML=`<span>↑↓ pilih · Enter buka · Esc tutup</span><span class="grow"></span><button class="btn ghost" id="manageBtn">Kelola grup &amp; repo…</button>`;
+    $("#manageBtn").onclick=toggleManage;
+    return;
+  }
+  /* ===== MODE MANAGE: semua kontrol grup tetap ada ===== */
+  const groups=[...GROUPS,{id:null,n:"Tanpa grup",c:"var(--text-3)"}];
+  l.innerHTML=groups.map(g=>{
+    const ps=PROJ.filter(p=>p.g===g.id&&(p.o+"/"+p.n).toLowerCase().includes(q));
+    if(q&&!ps.length)return"";
+    const key=g.id||"ungrouped",collapsed=S.collapsed.has(key);
+    return `<div class="grp"><div class="grp-head"><button class="tog" aria-expanded="${!collapsed}" data-g="${key}">${collapsed?"▸":"▾"}</button><span class="sq" style="background:${g.c};width:10px;height:10px;border-radius:3px;flex:none"></span><b>${g.n}</b><span class="m">${ps.length}</span></div>`
+      +(collapsed?"":ps.map(rowHtml).join("")||`<div class="empty">Belum ada project</div>`)+`</div>`;
+  }).join("");
+  S.items=[...l.querySelectorAll(".pg-r")].map(r=>r.dataset.p);
+  l.querySelectorAll(".grp-head .tog").forEach(b=>b.onclick=()=>toggleGroup(b.dataset.g));
+  f.innerHTML=`<button class="btn sm" id="backBtn">← Kembali</button><button class="btn sm" id="addGroupBtn">＋ Grup</button><button class="btn sm" id="addProjBtn">＋ Project</button><span class="m" style="margin-left:auto;font-size:11px;align-self:center">klik project untuk pindah</span>`;
+  $("#backBtn").onclick=toggleManage;
+  $("#addGroupBtn").onclick=()=>{const n=prompt("Nama grup baru:","Contoh · Grup");if(!n||!n.trim())return;GROUPS.push({id:"g"+Date.now(),n:n.trim(),c:"oklch(.7 .13 200)"});renderPop()};
+  $("#addProjBtn").onclick=()=>{const n=prompt("Nama project baru (owner/nama):","acme/proyek-baru");if(!n||!n.includes("/"))return;const[o,nm]=n.split("/");PROJ.push({n:nm.trim(),o:o.trim(),g:null,c:"var(--text-3)"});S.recent=[nm.trim(),...S.recent.filter(x=>x!==nm.trim())].slice(0,5);renderPop()};
+}
+document.getElementById("pq").addEventListener("input",renderPop);
+document.getElementById("pq").addEventListener("keydown",popKeys);
+document.getElementById("plist").addEventListener("mouseover",e=>{const r=e.target.closest(".pg-r");if(r)hoverRow(r.dataset.p)});
+document.getElementById("plist").addEventListener("click",e=>{const r=e.target.closest(".pg-r");if(r)openProj(r.dataset.p)});
+renderPop();
+</script>
+</body>
+</html>

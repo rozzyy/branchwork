@@ -64,7 +64,8 @@ describe("CLI registry", () => {
     expect(CLI_REGISTRY.claude.profileEnv("/p")).toEqual({ CLAUDE_CONFIG_DIR: "/p" });
     expect(CLI_REGISTRY.codex.profileEnv("/p")).toEqual({ CODEX_HOME: "/p" });
     expect(CLI_REGISTRY.opencode.profileEnv("/p")).toEqual({ HOME: "/p/home" });
-    expect(CLI_REGISTRY.gemini.profileEnv("/p")).toEqual({ HOME: "/p/home" });
+    expect(CLI_REGISTRY.gemini.profileEnv("/p")).toEqual({ GEMINI_CLI_HOME: "/p/home" });
+    expect(CLI_REGISTRY.gemini.credentialPaths).toEqual(["home/.gemini/oauth_creds.json"]);
     expect(CLI_REGISTRY.copilot.profileEnv("/p")).toEqual({ HOME: "/p/home" });
     expect(CLI_REGISTRY.muse.profileEnv("/p")).toEqual({});
   });

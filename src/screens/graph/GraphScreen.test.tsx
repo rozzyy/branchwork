@@ -545,3 +545,37 @@ it("shows an empty state for a repository with no commits", async () => {
   await userEvent.click(within(empty).getByRole("button", { name: "Open in Changes" }));
   expect(useStage.getState().go).toHaveBeenCalledWith("changes");
 });
+
+it("ignores a pane pin and loads the global project's graph", async () => {
+  const { PaneProjectProvider } = await import("../../stage/paneProject");
+  vi.mocked(readGraphPage).mockResolvedValue({
+    page: 0,
+    pageSize: 50,
+    commits: [],
+    wip: null as never,
+    userEmail: null,
+    hasMore: false,
+    totalCommits: 0,
+  });
+  useRepos.setState({
+    activeProjectId: "p1",
+    projects: [
+      { id: "p1", owner: null, name: "A", localPath: "/wt/a", groupId: null },
+      { id: "p2", owner: null, name: "B", localPath: "/wt/b", groupId: null },
+    ],
+  });
+  useWorktrees.setState({
+    projectId: "p1",
+    activePath: "/wt/a",
+    worktrees: [{ path: "/wt/a" } as never],
+    pinnedPaths: [],
+    loading: false,
+    error: null,
+  });
+  render(
+    <PaneProjectProvider projectId="p2">
+      <GraphView />
+    </PaneProjectProvider>,
+  );
+  await waitFor(() => expect(readGraphPage).toHaveBeenCalledWith("p1", "/wt/a", 0));
+});

@@ -29,3 +29,12 @@ it("returns the trimmed input value on Enter", async () => {
   await userEvent.type(box, "  src/b.ts {Enter}");
   await expect(p).resolves.toBe("src/b.ts");
 });
+
+it("returns a selected choice when confirmed", async () => {
+  render(<DialogHost />);
+  let p!: Promise<unknown>;
+  act(() => { p = ask({ title: "OpenCode login", choices: [{ value: "openai:device", label: "OpenAI browser" }] }); });
+  await screen.findByRole("dialog");
+  await userEvent.click(screen.getByRole("button", { name: "OK" }));
+  await expect(p).resolves.toBe("openai:device");
+});

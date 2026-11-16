@@ -252,7 +252,7 @@ export const useChanges = create<ChangesStore>((set, get) => ({
             ? t("changes.stashDropped")
             : t("changes.actionDone", { action }),
           detail: command.type === "stash-drop" ? `stash@{${command.index}}` : undefined,
-          icon: command.type === "stash-drop" ? "🗑" : "✓",
+          icon: command.type === "stash-drop" ? "✕" : "✓",
           action: {
             label: t("toast.undo"),
             undo: true,

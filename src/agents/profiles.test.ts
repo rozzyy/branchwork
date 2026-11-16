@@ -8,12 +8,10 @@ import {
   removeProfileData,
   seedClaudeOnboarding,
 } from "../ipc/cli";
-import { writeTerminal } from "../ipc/pty";
 import { loadSetting, saveSetting } from "../ipc/settings";
 import { ask } from "../ui/dialog";
 import { useToasts } from "../ui/toast";
-import { useWorktrees } from "../state/worktrees";
-import { useStage } from "../state/stage";
+import { agentLoginManager } from "./AgentLoginManager";
 
 vi.mock("../ipc/cli", () => ({
   ensureProfileDir: vi.fn(),
@@ -24,9 +22,14 @@ vi.mock("../ipc/cli", () => ({
   seedClaudeOnboarding: vi.fn(),
 }));
 
-vi.mock("../ipc/pty", () => ({
-  waitTerminalReady: vi.fn(async () => true),
-  writeTerminal: vi.fn(),
+vi.mock("./AgentLoginManager", () => ({
+  agentLoginManager: {
+    start: vi.fn(async () => undefined),
+    cancel: vi.fn(async () => undefined),
+    cancelAll: vi.fn(async () => undefined),
+    isActive: vi.fn(() => false),
+    get activeCount() { return 0; },
+  },
 }));
 
 vi.mock("../ipc/settings", () => ({
@@ -36,17 +39,6 @@ vi.mock("../ipc/settings", () => ({
 
 vi.mock("../ui/dialog", () => ({
   ask: vi.fn(),
-}));
-
-const newTab = vi.fn();
-vi.mock("../terminal/screen", () => ({
-  useTerminalScreen: {
-    getState: () => ({
-      load: vi.fn().mockResolvedValue(undefined),
-      newTab,
-      tabs: [{ id: "tab-1", focusedPaneId: "p1", panes: { p1: { sessionId: "pty-9" } } }],
-    }),
-  },
 }));
 
 function reset() {
@@ -70,36 +62,30 @@ beforeEach(() => {
   vi.mocked(removeProfileData).mockReset().mockResolvedValue(true);
   vi.mocked(profileHasCredentials).mockReset().mockResolvedValue(true);
   vi.mocked(probeCli).mockReset().mockRejectedValue(new Error("no probe"));
-  vi.mocked(writeTerminal).mockReset().mockResolvedValue(undefined);
   vi.mocked(loadSetting).mockReset().mockResolvedValue(null);
   vi.mocked(saveSetting).mockReset().mockResolvedValue(undefined);
   vi.mocked(ask).mockReset().mockResolvedValue(true);
-  newTab.mockReset().mockResolvedValue("tab-1");
+  vi.mocked(agentLoginManager.start).mockReset().mockResolvedValue(undefined);
+  vi.mocked(agentLoginManager.cancel).mockReset().mockResolvedValue(undefined);
+  vi.mocked(agentLoginManager.isActive).mockReset().mockReturnValue(false);
   useToasts.setState({ toasts: [] });
-  useWorktrees.setState({ activePath: "/wt/a" });
-  useStage.setState({ panes: ["settings"], focus: 0, dir: "h" });
   reset();
 });
 
 describe("addProfile", () => {
-  it("creates the dir, opens an isolated login tab, and runs the login command", async () => {
+  it("creates the dir and starts background login without navigating to Terminal", async () => {
     const profile = await useProfiles.getState().addProfile("codex", "Work");
     expect(profile).toMatchObject({ cliId: "codex", slug: "work", name: "Work" });
     expect(ensureProfileDir).toHaveBeenCalledWith("codex", "work");
-    expect(newTab).toHaveBeenCalledWith("/wt/a", { CODEX_HOME: "/home/u/.branchwork/profiles/codex-work" });
-    expect(writeTerminal).toHaveBeenCalledWith("pty-9", new TextEncoder().encode("codex login\n"));
-    expect(useStage.getState().panes).toContain("terminal");
+    expect(agentLoginManager.start).toHaveBeenCalledWith({ cliId: "codex", slug: "work" }, undefined);
   });
 
-  it("asks for a name and signs in through the browser before opening Claude", async () => {
+  it("asks for a name and starts Claude browser login without its TUI", async () => {
     vi.mocked(ask).mockResolvedValueOnce("Personal");
     const profile = await useProfiles.getState().addProfile("claude");
     expect(profile).toMatchObject({ slug: "personal" });
     expect(ask).toHaveBeenCalledWith(expect.objectContaining({ input: "" }));
-    expect(writeTerminal).toHaveBeenCalledWith(
-      "pty-9",
-      new TextEncoder().encode("claude auth login && claude\n"),
-    );
+    expect(agentLoginManager.start).toHaveBeenCalledWith({ cliId: "claude", slug: "personal" }, undefined);
   });
 
   it("seeds Claude onboarding at creation so a verified login skips the wizard", async () => {
@@ -122,11 +108,14 @@ describe("addProfile", () => {
     expect(profile).toMatchObject({ cliId: "claude", slug: "personal" });
   });
 
-  it("tells the user to finish Claude setup once the login is detected", async () => {
+  it("confirms Claude login only after the profile probe succeeds", async () => {
+    vi.mocked(agentLoginManager.isActive).mockImplementation(() => vi.mocked(agentLoginManager.start).mock.calls.length > 0);
     vi.mocked(probeCli)
       .mockResolvedValueOnce(JSON.stringify({ loggedIn: false }))
       .mockResolvedValue(JSON.stringify({ loggedIn: true }));
     await useProfiles.getState().addProfile("claude", "Work");
+    expect(agentLoginManager.start).toHaveBeenCalledWith({ cliId: "claude", slug: "work" }, undefined);
+    expect(agentLoginManager.isActive).toHaveBeenCalled();
     await vi.waitFor(
       () => {
         expect(useProfiles.getState().loginPending["claude:work"]).toBeUndefined();
@@ -136,10 +125,11 @@ describe("addProfile", () => {
     const noticed = useToasts
       .getState()
       .toasts.find((item) => item.title.includes("Claude Code"));
-    expect(noticed?.detail).toMatch(/setup/i);
+    expect(noticed?.title).toMatch(/logged in/i);
   });
 
   it("monitors login until the vendor credentials actually appear", async () => {
+    vi.mocked(agentLoginManager.isActive).mockImplementation(() => vi.mocked(agentLoginManager.start).mock.calls.length > 0);
     vi.mocked(profileHasCredentials)
       .mockResolvedValueOnce(false)
       .mockResolvedValue(true);
@@ -164,36 +154,34 @@ describe("addProfile", () => {
     expect(useToasts.getState().toasts.some((item) => item.title.includes("Muse"))).toBe(true);
   });
 
-  it("runs the real shell login for opencode (interactive picker in the PTY)", async () => {
+  it("starts OpenCode browser login after choices are supplied in Settings", async () => {
+    vi.mocked(ask).mockResolvedValueOnce("openai:device");
     const profile = await useProfiles.getState().addProfile("opencode", "Work");
     expect(profile).toMatchObject({ cliId: "opencode", slug: "work" });
-    expect(writeTerminal).toHaveBeenCalledWith("pty-9", new TextEncoder().encode("opencode auth login\n"));
+    expect(agentLoginManager.start).toHaveBeenCalledWith(
+      { cliId: "opencode", slug: "work" },
+      { providerId: "openai", methodId: "device" },
+    );
   });
 
-  it("lands in the gemini TUI when the CLI exposes no login argv", async () => {
+  it("starts Gemini browser auth without opening the TUI", async () => {
     const profile = await useProfiles.getState().addProfile("gemini", "Work");
     expect(profile).toMatchObject({ cliId: "gemini", slug: "work" });
-    expect(writeTerminal).toHaveBeenCalledWith("pty-9", new TextEncoder().encode("gemini\n"));
+    expect(agentLoginManager.start).toHaveBeenCalledWith({ cliId: "gemini", slug: "work" }, undefined);
   });
 
   it("explains and rolls back when a custom CLI has no launch override", async () => {
     vi.mocked(ask).mockResolvedValueOnce("Mine");
     expect(await useProfiles.getState().addProfile("custom")).toBeNull();
-    expect(newTab).not.toHaveBeenCalled();
-    expect(writeTerminal).not.toHaveBeenCalled();
+    expect(agentLoginManager.start).not.toHaveBeenCalled();
     expect(useProfiles.getState().profiles).toHaveLength(0);
   });
 
-  it("rolls the profile back when the login tab cannot open", async () => {
-    newTab.mockRejectedValueOnce(new Error("no worktree"));
-    expect(await useProfiles.getState().addProfile("codex", "Work")).toBeNull();
-    expect(useProfiles.getState().profiles).toHaveLength(0);
-  });
-
-  it("rolls the profile back when starting the login step fails", async () => {
-    vi.mocked(writeTerminal).mockRejectedValueOnce(new Error("pty gone"));
-    expect(await useProfiles.getState().addProfile("codex", "Work")).toBeNull();
-    expect(useProfiles.getState().profiles).toHaveLength(0);
+  it("keeps the profile when background login cannot start", async () => {
+    vi.mocked(agentLoginManager.start).mockRejectedValueOnce(new Error("spawn failed"));
+    const profile = await useProfiles.getState().addProfile("codex", "Work");
+    expect(profile).toMatchObject({ cliId: "codex", slug: "work" });
+    expect(useProfiles.getState().profiles).toHaveLength(1);
   });
 
   it("aborts on cancel, blank names, and duplicate slugs", async () => {
@@ -211,23 +199,19 @@ describe("addProfile", () => {
 });
 
 describe("loginProfile", () => {
-  it("re-opens the login tab for an existing profile and keeps the record", async () => {
+  it("restarts background login for an existing profile and keeps the record", async () => {
     await useProfiles.getState().addProfile("claude", "Personal");
-    vi.mocked(writeTerminal).mockClear();
+    vi.mocked(agentLoginManager.start).mockClear();
     expect(await useProfiles.getState().loginProfile({ cliId: "claude", slug: "personal" })).toBe(true);
-    expect(newTab).toHaveBeenCalledTimes(2);
-    expect(writeTerminal).toHaveBeenCalledWith(
-      "pty-9",
-      new TextEncoder().encode("claude auth login && claude\n"),
-    );
+    expect(agentLoginManager.start).toHaveBeenCalledWith({ cliId: "claude", slug: "personal" }, undefined);
     expect(useProfiles.getState().profiles).toHaveLength(1);
   });
 
-  it("fails closed on unknown profiles without opening a tab", async () => {
+  it("fails closed on unknown profiles without starting a login", async () => {
     expect(
       await useProfiles.getState().loginProfile({ cliId: "claude", slug: "ghost" }),
     ).toBe(false);
-    expect(newTab).not.toHaveBeenCalled();
+    expect(agentLoginManager.start).not.toHaveBeenCalled();
   });
 });
 

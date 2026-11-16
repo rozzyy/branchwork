@@ -124,8 +124,65 @@ describe("TerminalScreen", () => {
     expect(screen.queryByRole("tab", { name: "Project A" })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Project B" })).toBeInTheDocument();
     expect(screen.getByTestId("clipane-Project B-session")).toBeInTheDocument();
-    expect(screen.queryByTestId("clipane-Project A-session")).not.toBeInTheDocument();
+    // The off-project tab stays mounted but hidden so its rendered buffer
+    // survives the project switch; the PTY session is never closed.
+    expect(screen.getByTestId("clipane-Project A-session")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("clipane-Project A-session").closest(".term-screen-tabpage"),
+    ).toHaveAttribute("hidden");
+    expect(
+      screen.getByTestId("clipane-Project B-session").closest(".term-screen-tabpage"),
+    ).not.toHaveAttribute("hidden");
     expect(useTerminalScreen.getState().tabs).toHaveLength(2);
+    expect(closeTerminal).not.toHaveBeenCalled();
+  });
+
+  it("keeps inactive tabs mounted so switching tabs never blanks the terminal", () => {
+    const tabFor = (id: string) => {
+      const paneId = `${id}-pane`;
+      return {
+        id,
+        name: id,
+        layout: { kind: "pane" as const, id: paneId },
+        panes: {
+          [paneId]: {
+            id: paneId,
+            sessionId: `${id}-session`,
+            worktreePath: "/wt/a",
+            cwd: "/wt/a",
+            error: null,
+            cols: 80,
+            rows: 24,
+          },
+        },
+        focusedPaneId: paneId,
+        maximizedPaneId: null,
+        broadcast: false,
+      };
+    };
+    useTerminalScreen.setState({
+      tabs: [tabFor("t1"), tabFor("t2")],
+      selectedTabId: "t1",
+      loaded: true,
+    });
+    render(<TerminalScreen />);
+
+    expect(screen.getByTestId("clipane-t1-session")).toBeInTheDocument();
+    expect(screen.getByTestId("clipane-t2-session")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("clipane-t2-session").closest(".term-screen-tabpage"),
+    ).toHaveAttribute("hidden");
+
+    act(() => useTerminalScreen.getState().selectTab("t2"));
+
+    expect(screen.getByTestId("clipane-t1-session")).toBeInTheDocument();
+    expect(screen.getByTestId("clipane-t2-session")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("clipane-t1-session").closest(".term-screen-tabpage"),
+    ).toHaveAttribute("hidden");
+    expect(
+      screen.getByTestId("clipane-t2-session").closest(".term-screen-tabpage"),
+    ).not.toHaveAttribute("hidden");
     expect(closeTerminal).not.toHaveBeenCalled();
   });
 
@@ -201,4 +258,60 @@ describe("TerminalScreen", () => {
     });
     expect(screen.getByRole("status")).toHaveTextContent("Broadcasting to 2 panes");
   });
+});
+
+it("ignores a pane pin and shows the global project's tabs", async () => {
+  const { PaneProjectProvider } = await import("../stage/paneProject");
+  const tabFor = (id: string, worktreePath: string, sessionId: string) => {
+    const paneId = `${id}-pane`;
+    return {
+      id,
+      name: id,
+      layout: { kind: "pane" as const, id: paneId },
+      panes: {
+        [paneId]: {
+          id: paneId,
+          sessionId,
+          worktreePath,
+          cwd: worktreePath,
+          error: null,
+          cols: 80,
+          rows: 24,
+        },
+      },
+      focusedPaneId: paneId,
+      maximizedPaneId: null,
+      broadcast: false,
+    };
+  };
+  useRepos.setState({
+    projects: [
+      { id: "p1", owner: null, name: "Project A", localPath: "/wt/a", groupId: null },
+      { id: "p2", owner: null, name: "Project B", localPath: "/wt/b", groupId: null },
+    ],
+    activeProjectId: "p1",
+  });
+  useWorktrees.setState({
+    projectId: "p1",
+    worktrees: [{ path: "/wt/a" } as never],
+    activePath: "/wt/a",
+    loading: false,
+  });
+  useTerminalScreen.setState({
+    tabs: [tabFor("t1", "/wt/a", "pty-a"), tabFor("t2", "/wt/b", "pty-b")],
+    selectedTabId: "t1",
+    loaded: true,
+  });
+  render(
+    <PaneProjectProvider projectId="p2">
+      <TerminalScreen />
+    </PaneProjectProvider>,
+  );
+  // Both terminals stay mounted; only the global project's tab is visible
+  // (pane pins were removed), and no PTY session is closed.
+  expect(screen.getByTestId("clipane-pty-a")).toBeInTheDocument();
+  expect(screen.getByTestId("clipane-pty-b")).toBeInTheDocument();
+  expect(screen.getByTestId("clipane-pty-a").closest(".term-screen-tabpage")).not.toHaveAttribute("hidden");
+  expect(screen.getByTestId("clipane-pty-b").closest(".term-screen-tabpage")).toHaveAttribute("hidden");
+  expect(closeTerminal).not.toHaveBeenCalled();
 });

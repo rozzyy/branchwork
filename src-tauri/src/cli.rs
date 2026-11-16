@@ -138,6 +138,106 @@ pub fn validate_profile_ref(cli_id: &str, slug: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+pub struct LoginLaunch {
+    pub binary: String,
+    pub args: Vec<String>,
+    pub profile_dir: PathBuf,
+    pub env: std::collections::HashMap<String, String>,
+}
+
+pub fn login_argv(
+    cli_id: &str,
+    provider_id: Option<&str>,
+    method_id: Option<&str>,
+) -> Result<Vec<String>, AppError> {
+    let args = match cli_id {
+        "claude" => vec!["auth", "login"],
+        "codex" => vec!["login"],
+        "gemini" => vec![],
+        "copilot" => vec!["login", "--web-flow"],
+        "muse" => vec!["login"],
+        "opencode" => {
+            let valid = matches!((provider_id, method_id), (Some("anthropic"), Some("oauth")) | (Some("openai"), Some("device")));
+            if !valid {
+                return Err(AppError::validation("unsupported OpenCode browser login method"));
+            }
+            vec!["auth", "login", provider_id.unwrap(), "--method", method_id.unwrap()]
+        }
+        _ => return Err(AppError::validation("unknown agent profile provider")),
+    };
+    Ok(args.into_iter().map(str::to_owned).collect())
+}
+
+fn checked_login_profile(home: &Path, cli_id: &str, slug: &str) -> Result<PathBuf, AppError> {
+    validate_profile_ref(cli_id, slug)?;
+    let path = profile_dir(home, cli_id, slug)?;
+    let branchwork = home.join(".branchwork");
+    let profiles = branchwork.join("profiles");
+    for candidate in [&branchwork, &profiles, &path, &path.join("home")] {
+        reject_symlink(candidate)?;
+    }
+    let profile_root = std::fs::canonicalize(&profiles)
+        .map_err(|_| AppError::validation("agent profile directory is unavailable"))?;
+    let profile_dir = std::fs::canonicalize(&path)
+        .map_err(|_| AppError::validation("agent profile directory is unavailable"))?;
+    if !profile_dir.starts_with(&profile_root) {
+        return Err(AppError::validation("agent profile must stay inside profile storage"));
+    }
+    Ok(profile_dir)
+}
+
+fn prepare_login_in(
+    home: &Path,
+    cli_id: &str,
+    slug: &str,
+    provider_id: Option<&str>,
+    method_id: Option<&str>,
+    binary: &str,
+) -> Result<LoginLaunch, AppError> {
+    validate_profile_ref(cli_id, slug)?;
+    let args = login_argv(cli_id, provider_id, method_id)?;
+    let profile_dir = checked_login_profile(home, cli_id, slug)?;
+    let mut env = std::collections::HashMap::new();
+    match cli_id {
+        "claude" => { env.insert("CLAUDE_CONFIG_DIR".into(), profile_dir.to_string_lossy().into_owned()); }
+        "codex" => { env.insert("CODEX_HOME".into(), profile_dir.to_string_lossy().into_owned()); }
+        "opencode" | "copilot" => { env.insert("HOME".into(), profile_dir.join("home").to_string_lossy().into_owned()); }
+        "gemini" => { env.insert("GEMINI_CLI_HOME".into(), profile_dir.join("home").to_string_lossy().into_owned()); }
+        _ => {}
+    }
+    if cli_id == "gemini" {
+        env.insert("GEMINI_DEFAULT_AUTH_TYPE".into(), "oauth-personal".into());
+    }
+    Ok(LoginLaunch { binary: binary.to_owned(), args, profile_dir, env })
+}
+
+pub fn prepare_login(
+    cli_id: &str,
+    slug: &str,
+    provider_id: Option<&str>,
+    method_id: Option<&str>,
+) -> Result<LoginLaunch, AppError> {
+    let binary_name = match cli_id {
+        "claude" => "claude",
+        "codex" => "codex",
+        "opencode" => "opencode",
+        "gemini" => "gemini",
+        "copilot" => "copilot",
+        "muse" => "muse",
+        _ => return Err(AppError::validation("unknown agent profile provider")),
+    };
+    let home = system_home().ok_or_else(|| AppError::internal("no home directory"))?;
+    prepare_login_in(
+        &home,
+        cli_id,
+        slug,
+        provider_id,
+        method_id,
+        &lookup_binary(binary_name)?,
+    )
+}
+
 fn reject_symlink(path: &Path) -> Result<(), AppError> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() => Err(AppError::validation(
@@ -856,4 +956,53 @@ mod tests {
         let base = profile_base(Path::new("/home/u"));
         assert_eq!(base, Path::new("/home/u/.branchwork/profiles"));
     }
+
+    #[test]
+    fn login_argv_is_fixed_and_rejects_unlisted_opencode_methods() {
+        assert_eq!(login_argv("claude", None, None).unwrap(), vec!["auth", "login"]);
+        assert_eq!(login_argv("codex", None, None).unwrap(), vec!["login"]);
+        assert_eq!(login_argv("gemini", None, None).unwrap(), Vec::<String>::new());
+        assert_eq!(login_argv("copilot", None, None).unwrap(), vec!["login", "--web-flow"]);
+        assert_eq!(login_argv("muse", None, None).unwrap(), vec!["login"]);
+        assert_eq!(
+            login_argv("opencode", Some("openai"), Some("device")).unwrap(),
+            vec!["auth", "login", "openai", "--method", "device"]
+        );
+        assert!(login_argv("custom", None, None).is_err());
+        assert!(login_argv("opencode", Some("openai;touch"), Some("device")).is_err());
+        assert!(login_argv("opencode", Some("anthropic"), Some("key")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn checked_login_profile_rejects_symlinks_and_path_escape() {
+        let home = std::env::temp_dir().join(format!("branchwork-cli-login-{}", std::process::id()));
+        let profiles = home.join(".branchwork/profiles");
+        std::fs::create_dir_all(profiles.join("codex-work/home")).unwrap();
+        assert_eq!(
+            checked_login_profile(&home, "codex", "work").unwrap(),
+            std::fs::canonicalize(profiles.join("codex-work")).unwrap()
+        );
+        assert!(checked_login_profile(&home, "codex", "../outside").is_err());
+
+        let outside = home.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::remove_dir_all(&profiles).unwrap();
+        std::os::unix::fs::symlink(&outside, &profiles).unwrap();
+        assert!(checked_login_profile(&home, "codex", "work").is_err());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn prepare_login_builds_profile_environment_and_never_accepts_custom_binary() {
+        let home = std::env::temp_dir().join(format!("branchwork-cli-launch-{}", std::process::id()));
+        ensure_in(&home, "codex", "work").unwrap();
+        let launch = prepare_login_in(&home, "codex", "work", None, None, "/trusted/codex").unwrap();
+        assert_eq!(launch.binary, "/trusted/codex");
+        assert_eq!(launch.args, vec!["login"]);
+        assert_eq!(launch.env.get("CODEX_HOME").unwrap(), launch.profile_dir.to_str().unwrap());
+        assert!(prepare_login_in(&home, "custom", "work", None, None, "/tmp/evil").is_err());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
 }

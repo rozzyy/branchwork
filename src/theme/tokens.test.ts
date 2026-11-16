@@ -14,12 +14,12 @@ function block(selector: string): string {
 
 // Resolve a custom property's value within a block, substituting the
 // user-settable hue variables with the defaults the spec's contrast table
-// was measured against (accent hue 250, neutral tint 265).
+// was measured against (accent hue 215, neutral tint 265).
 function tokenValue(cssBlock: string, name: string): string {
   const re = new RegExp(`--${name}\\s*:\\s*([^;]+);`);
   const m = re.exec(cssBlock);
   if (!m) throw new Error(`token --${name} not found`);
-  return m[1].trim().replace(/var\(--ah\)/g, "250").replace(/var\(--bh\)/g, "265");
+  return m[1].trim().replace(/var\(--ah\)/g, "215").replace(/var\(--bh\)/g, "265");
 }
 
 const TEXT_ROLES = ["text", "text-2", "text-3", "accent", "success", "warning", "danger", "info", "agent"];
@@ -73,4 +73,14 @@ describe("contrastRatio", () => {
   it("equal colors have a ratio of 1", () => {
     expect(contrastRatio("oklch(.5 .1 200)", "oklch(.5 .1 200)")).toBeCloseTo(1, 5);
   });
+});
+
+it("ships the approved eye-comfort defaults", () => {
+  const dark = block(":root {");
+  // Slightly lifted, more neutral background; no full-white body text on dark.
+  expect(tokenValue(dark, "bg")).toBe("oklch(.18 .006 265)");
+  expect(tokenValue(dark, "text")).toBe("oklch(.92 .004 265)");
+  // Calm blue default accent instead of vivid purple; washes unchanged.
+  expect(tokenValue(dark, "accent")).toBe("oklch(.70 .14 215)");
+  expect(tokenValue(dark, "agent-bg")).toBe("oklch(.76 .14 300 / .14)");
 });

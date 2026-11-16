@@ -8,11 +8,14 @@ import { useWorktrees } from "../state/worktrees";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { SCREEN_MIME } from "../stage/dnd";
 import { t } from "../i18n/t";
-import { onGitChanged, type Worktree } from "../ipc/worktrees";
+import { createWorktree, onGitChanged, removeWorktree, type Worktree } from "../ipc/worktrees";
+import { ask } from "../ui/dialog";
+import { errorMessage } from "../ipc/errors";
+import type { Project } from "../ipc/catalog";
 import { useDock } from "../terminal/dock";
 import { toast } from "../ui/toast";
 import { useSessions } from "../agents/sessions";
-import { GroupSwitcherPopover, projectLabel, useSwitcher } from "./GroupSwitcher";
+import { GroupInlineList } from "./GroupSwitcher";
 import { StatusLabel } from "../ui/StatusLabel";
 
 /** ⌘-number hints shown on the right of each screen row (prototype `.row .k`). */
@@ -59,14 +62,14 @@ function WorktreeStatus({ worktree }: { worktree: Worktree }) {
 
 function WorktreePicker({
   anchorEl,
-  projectId,
+  project,
   worktrees,
   pinnedPaths,
   activePath,
   onClose,
 }: {
   anchorEl: HTMLElement | null;
-  projectId: string;
+  project: Project;
   worktrees: Worktree[];
   pinnedPaths: string[];
   activePath: string | null;
@@ -87,6 +90,48 @@ function WorktreePicker({
         )
       : worktrees;
   }, [query, worktrees]);
+
+  const handleNew = async () => {
+    const answer = await ask({
+      title: t("sidebar.createWorktreeTitle"),
+      input: "",
+      placeholder: t("sidebar.createWorktreePlaceholder"),
+      icon: "⌂",
+    });
+    if (typeof answer !== "string") return;
+    const branch = answer.trim();
+    if (!branch) return;
+    const parent = project.localPath.slice(0, project.localPath.lastIndexOf("/")) || "/";
+    const destination = `${parent}/${branch.replaceAll("/", "-")}`;
+    try {
+      const created = await createWorktree(project.id, destination, branch);
+      await useWorktrees.getState().load(project);
+      useWorktrees.getState().select(created.path);
+      onClose();
+      toast({ title: t("sidebar.worktreeCreated", { branch }), icon: "✓" });
+    } catch (error) {
+      toast({ title: errorMessage(error), icon: "⚠" });
+    }
+  };
+
+  const handleRemove = async (worktree: Worktree) => {
+    const branch = branchName(worktree);
+    const confirmed = await ask({
+      title: t("sidebar.removeWorktreeTitle", { branch }),
+      body: t("sidebar.removeWorktreeBody"),
+      danger: true,
+      ok: t("sidebar.removeWorktreeOk"),
+      icon: "⚠",
+    });
+    if (confirmed !== true) return;
+    try {
+      await removeWorktree(project.id, worktree.path);
+      await useWorktrees.getState().load(project);
+      toast({ title: t("sidebar.worktreeRemoved", { branch }), icon: "✓" });
+    } catch (error) {
+      toast({ title: errorMessage(error), icon: "⚠" });
+    }
+  };
 
   useEffect(() => {
     searchRef.current?.focus();
@@ -142,7 +187,7 @@ function WorktreePicker({
                   disabled={active}
                   aria-label={t(checked ? "sidebar.unpinCheckbox" : "sidebar.pinCheckbox", { branch })}
                   onChange={(event) =>
-                    void useWorktrees.getState().setPinned(projectId, worktree.path, event.currentTarget.checked)
+                    void useWorktrees.getState().setPinned(project.id, worktree.path, event.currentTarget.checked)
                   }
                 />
               </label>
@@ -160,12 +205,26 @@ function WorktreePicker({
               {active ? (
                 <span className="worktree-picker-active">{t("sidebar.active")}</span>
               ) : (
-                <span className="worktree-status-chip" data-state={worktree.state}><WorktreeStatus worktree={worktree} /></span>
+                <>
+                  <span className="worktree-status-chip" data-state={worktree.state}><WorktreeStatus worktree={worktree} /></span>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={t("sidebar.removeWorktree", { branch })}
+                    title={t("sidebar.removeWorktree", { branch })}
+                    onClick={() => void handleRemove(worktree)}
+                  >
+                    ✕
+                  </button>
+                </>
               )}
             </div>
           );
         })}
         {filtered.length === 0 && <div className="side-empty">{t("sidebar.noWorktreeMatches")}</div>}
+      </div>
+      <div className="worktree-picker-foot">
+        <button className="btn sm" onClick={() => void handleNew()}>＋ {t("sidebar.newWorktree")}</button>
       </div>
     </div>,
     document.body,
@@ -342,7 +401,7 @@ function WorktreeSection() {
       {pickerOpen && project && (
         <WorktreePicker
           anchorEl={pickerButtonRef.current}
-          projectId={project.id}
+          project={project}
           worktrees={worktrees}
           pinnedPaths={pinnedPaths}
           activePath={activePath}
@@ -358,18 +417,7 @@ export function Sidebar() {
   const focus = useStage((s) => s.focus);
   const dir = useStage((s) => s.dir);
   const [ctx, setCtx] = useState<{ x: number; y: number; id: ScreenId } | null>(null);
-  const [projectAnchor, setProjectAnchor] = useState<HTMLElement | null>(null);
-  const projectTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const wasProjectOpen = useRef(false);
-  const projectOpen = useSwitcher((s) => s.open);
-  const activeProject = useRepos((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
-  const activeGroup = useRepos((s) => s.groups.find((g) => g.id === s.activeGroupId) ?? null);
-  const groupProjectCount = useRepos((s) => s.projects.filter((p) => (p.groupId ?? null) === (s.activeGroupId ?? null)).length);
   const dirtyCount = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath)?.dirtyCount ?? 0);
-  useEffect(() => {
-    if (!projectOpen && wasProjectOpen.current && document.activeElement === document.body) projectTriggerRef.current?.focus();
-    wasProjectOpen.current = projectOpen;
-  }, [projectOpen]);
   const { go, newTab, openSplit, closePane } = useStage.getState();
 
   const glyph = (id: ScreenId) => {
@@ -441,12 +489,6 @@ export function Sidebar() {
           <span className="app-mark" aria-hidden />
           <span className="app-name">{t("app.name")}</span>
         </div>
-        <button ref={projectTriggerRef} className="project-picker-trigger group-pop-trigger" type="button" aria-haspopup="menu" onClick={(e) => { setProjectAnchor(e.currentTarget); useSwitcher.getState().toggle(); }}>
-          <span className="project-mark" aria-hidden style={{ background: activeGroup?.color ?? "var(--accent)" }}>{(activeProject ? projectLabel(activeProject) : "?").trim().charAt(0).toUpperCase()}</span>
-          <span className="project-picker-copy"><strong>{activeProject ? projectLabel(activeProject) : t("groups.noProjectSelected")}</strong><small>{t("sidebar.projectsInGroup", { group: activeGroup?.name ?? t("groups.ungrouped"), count: groupProjectCount })}</small></span>
-          <span className="faint" aria-hidden>▾</span>
-        </button>
-        {projectOpen && projectAnchor && <GroupSwitcherPopover anchorEl={projectAnchor} />}
         <WorktreeSection />
         {NAV_SECTIONS.map((section) => (
           <Fragment key={section.id}>
@@ -454,6 +496,7 @@ export function Sidebar() {
             {SCREENS.filter((s) => s.section === section.id).map(item)}
           </Fragment>
         ))}
+        <GroupInlineList />
       </nav>
       <div className="side-foot">{item(screenById("settings"))}</div>
       {ctx && <Menu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)} items={menuItems(ctx.id)} />}

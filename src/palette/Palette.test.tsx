@@ -130,3 +130,26 @@ it("confirms before dispatching discard-all for the active worktree", async () =
     });
   });
 });
+
+it("lists Toggle previous project and runs it", async () => {
+  const { useRepos } = await import("../state/repos");
+  useRepos.setState({
+    groups: [],
+    projects: [
+      { id: "p1", owner: null, name: "A", localPath: "/a", groupId: null },
+      { id: "p2", owner: null, name: "B", localPath: "/b", groupId: null },
+    ],
+    activeGroupId: null,
+    activeProjectId: "p1",
+    openProjectIds: ["p1", "p2"],
+    collapsedGroupIds: [],
+    recentProjectIds: ["p1", "p2"],
+    status: "ready",
+    error: null,
+  });
+  render(<Palette />);
+  await userEvent.type(screen.getByRole("combobox"), "previous project");
+  expect(screen.getByRole("option")).toHaveTextContent("Toggle previous project");
+  await userEvent.keyboard("{Enter}");
+  expect(useRepos.getState().activeProjectId).toBe("p2");
+});

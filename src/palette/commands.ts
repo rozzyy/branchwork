@@ -8,6 +8,7 @@ import { toast } from "../ui/toast";
 import { useSidebar } from "../state/sidebar";
 import { useWorktrees } from "../state/worktrees";
 import { useDock } from "../terminal/dock";
+import { useRepos } from "../state/repos";
 import { useTerminalScreen } from "../terminal/screen";
 import { undoLast } from "../ipc/undo";
 import { useChanges } from "../state/changes";
@@ -104,6 +105,7 @@ export function buildCommands(): Command[] {
     },
   ];
   const open: Command[] = [
+    { id: "project.togglePrevious", group: "palette.group.navigate", icon: "⇄", title: t("palette.togglePreviousProject"), kbd: "⌘⇧P", run: () => useRepos.getState().togglePreviousProject() },
     { id: "open.changes", group: "palette.group.navigate", icon: "±", title: t("palette.openChanges"), run: () => stage().go("changes") },
     { id: "open.files", group: "palette.group.navigate", icon: "▤", title: t("palette.openFiles"), run: () => stage().go("files") },
     { id: "open.blame", group: "palette.group.navigate", icon: "≡", title: t("palette.openBlame"), run: () => openHistory("file") },

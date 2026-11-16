@@ -15,7 +15,7 @@ import { undoLast } from "../../ipc/undo";
 import { beginGitWrite, endGitWrite, reloadWorktreesFor, runGitAction, showGitError } from "../../state/gitActions";
 import { useStage } from "../../state/stage";
 import { openHistory } from "../../state/history";
-import { useWorktrees } from "../../state/worktrees";
+import { usePaneWorktrees } from "../../stage/paneProject";
 import { ask } from "../../ui/dialog";
 import { ScreenLoader } from "../../ui/ScreenLoader";
 import { toast } from "../../ui/toast";
@@ -64,7 +64,8 @@ export function announce(worktree: string, outcome: RebaseOutcome): boolean {
 }
 
 export function RebaseToolbar() {
-  const branch = useWorktrees((state) => state.worktrees.find((item) => item.path === state.activePath)?.branch ?? null);
+  const { worktrees, activePath } = usePaneWorktrees();
+  const branch = worktrees.find((item) => item.path === activePath)?.branch ?? null;
   return (
     <h1 className="pane-title">
       {t("rebase.title")}
@@ -154,7 +155,7 @@ function Row({ row, index, count, update, move }: {
 }
 
 export function RebaseView() {
-  const worktree = useWorktrees((state) => state.activePath);
+  const { activePath: worktree } = usePaneWorktrees();
   const chosen = useRebaseUi((state) => state.base);
   const base = chosen && chosen.worktree === worktree ? chosen.sha : null;
   const needsLeasePush = useRebaseUi((state) => worktree !== null && state.needsLeasePush[worktree] === true);

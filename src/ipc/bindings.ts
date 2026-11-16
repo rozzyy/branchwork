@@ -101,6 +101,7 @@ export const commands = {
 	blame: (worktreePath: string, path: string, options: BlameRequest) => __TAURI_INVOKE<BlameResult>("blame", { worktreePath, path, options }),
 	fileHistory: (worktreePath: string, path: string, options: FileHistoryRequest) => __TAURI_INVOKE<FileHistoryEntry[]>("file_history", { worktreePath, path, options }),
 	ptySpawn: (worktreePath: string, columns: number, rows: number, env: { [key in string]: string } | null) => __TAURI_INVOKE<PtySession>("pty_spawn", { worktreePath, columns, rows, env }),
+	ptyAuthSpawn: (cliId: string, profileSlug: string, columns: number, rows: number, providerId: string | null, methodId: string | null) => __TAURI_INVOKE<PtySession>("pty_auth_spawn", { cliId, profileSlug, columns, rows, providerId, methodId }),
 	ptyWrite: (sessionId: string, data: number[]) => __TAURI_INVOKE<null>("pty_write", { sessionId, data }),
 	ptyResize: (sessionId: string, columns: number, rows: number) => __TAURI_INVOKE<null>("pty_resize", { sessionId, columns, rows }),
 	ptyAttach: (sessionId: string, attachmentId: number) => __TAURI_INVOKE<null>("pty_attach", { sessionId, attachmentId }),

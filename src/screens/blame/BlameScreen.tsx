@@ -6,6 +6,7 @@ import { fsRead, fsTree, type FsEntry } from "../../ipc/fs";
 import { useFiles } from "../../state/files";
 import { useStage } from "../../state/stage";
 import { useWorktrees } from "../../state/worktrees";
+import { usePaneWorktrees } from "../../stage/paneProject";
 import { Button } from "../../ui/Button";
 import { Segmented } from "../../ui/controls";
 import { FileIcon } from "../../ui/fileIcon";
@@ -165,7 +166,7 @@ function CompactTreeNode({
 }
 
 function BlameTree() {
-  const activePath = useWorktrees((s) => s.activePath);
+  const { activePath } = usePaneWorktrees();
   const openFile = useFiles((s) => s.openFile);
   const [treeMap, setTreeMap] = useState<TreeMap>({});
   const [expanded, setExpanded] = useState<Record<string, true>>({});
@@ -204,7 +205,7 @@ function BlameTree() {
 }
 
 export function BlameView() {
-  const activePath = useWorktrees((s) => s.activePath);
+  const { activePath } = usePaneWorktrees();
   const worktreesLoading = useWorktrees((s) => s.loading);
   const current = useFiles((s) => s.current);
   const go = useStage((s) => s.go);

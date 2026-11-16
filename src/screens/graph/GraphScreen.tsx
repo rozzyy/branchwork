@@ -15,8 +15,8 @@ import {
 import { createWorktreeAtCommit, onGitChanged } from "../../ipc/worktrees";
 import { useDock } from "../../terminal/dock";
 import { useTerminalScreen } from "../../terminal/screen";
-import { useRepos } from "../../state/repos";
 import { useWorktrees } from "../../state/worktrees";
+import { usePaneWorktrees } from "../../stage/paneProject";
 import { useStage } from "../../state/stage";
 import { runSync, useGitRunning, type SyncOperation } from "../../state/sync";
 import { runGitAction } from "../../state/gitActions";
@@ -183,7 +183,7 @@ function filterLabel(filter: GraphFilter): string {
 /** Ref pills for a commit row or the inspector's meta row: tinted with the commit's lane color.
  * The active worktree's own head pill (criterion 4) gets a solid lane-color fill instead. */
 function RefPills({ commit }: { commit: GraphCommit }) {
-  const activePath = useWorktrees((state) => state.activePath);
+  const { activePath } = usePaneWorktrees();
   const style = { "--ref-c": laneColor(commit.lane) } as CSSProperties;
   return (
     <>
@@ -209,13 +209,8 @@ function RefPills({ commit }: { commit: GraphCommit }) {
 export function GraphToolbar() {
   const selectedCommit = useGraphUi((state) => state.selectedCommit);
   const selection = useGraphUi((state) => state.selection);
-  const projectId = useRepos((state) => state.activeProjectId);
-  const project = useRepos((state) => state.projects.find((item) => item.id === state.activeProjectId) ?? null);
-  const activePath = useWorktrees((state) => state.activePath);
-  const worktreesProjectId = useWorktrees((state) => state.projectId);
-  const activeWorktree = useWorktrees(
-    (state) => state.worktrees.find((worktree) => worktree.path === state.activePath) ?? null,
-  );
+  const { project, projectId, worktrees, worktreesProjectId, activePath } = usePaneWorktrees();
+  const activeWorktree = worktrees.find((worktree) => worktree.path === activePath) ?? null;
   const activeBranch = activeWorktree?.branch ?? null;
   const running = useGitRunning(activePath);
   const syncDisabled = !activePath || worktreesProjectId !== projectId || running !== undefined;
@@ -407,14 +402,9 @@ interface MenuPosition {
 }
 
 export function GraphView() {
-  const projectId = useRepos((state) => state.activeProjectId);
-  const project = useRepos((state) => state.projects.find((item) => item.id === state.activeProjectId) ?? null);
-  const activePath = useWorktrees((state) => state.activePath);
-  const worktreesProjectId = useWorktrees((state) => state.projectId);
+  const { project, projectId, worktrees, worktreesProjectId, activePath } = usePaneWorktrees();
   const worktreesLoading = useWorktrees((state) => state.loading);
-  const activeWorktreeHead = useWorktrees(
-    (state) => state.worktrees.find((worktree) => worktree.path === state.activePath)?.head ?? null,
-  );
+  const activeWorktreeHead = worktrees.find((worktree) => worktree.path === activePath)?.head ?? null;
   const filter = useGraphUi((state) => state.filter);
   const selection = useGraphUi((state) => state.selection);
   const setSelectedCommit = useGraphUi((state) => state.setSelectedCommit);
@@ -708,7 +698,7 @@ export function GraphView() {
       if (activePath) void useTerminalScreen.getState().openHere(activePath);
     } },
     { kind: "separator" },
-    { kind: "item", label: t("graph.action.diff"), icon: "⇄", disabled: !activePath || useWorktrees.getState().worktrees.length < 2, onSelect: () => { setMenu(null); setCompareOpen(true); } },
+    { kind: "item", label: t("graph.action.diff"), icon: "⇄", disabled: !activePath || worktrees.length < 2, onSelect: () => { setMenu(null); setCompareOpen(true); } },
     { kind: "header", label: t("graph.deferredActions") },
     ...deferredMenuActions.map((labelKey) => ({
       kind: "item" as const,
@@ -1013,7 +1003,7 @@ function CommitInspector({
   onRetry(): void;
 }) {
   const color = avatarColor(commit.authorEmail ?? commit.authorName ?? commit.sha);
-  const activePath = useWorktrees((state) => state.activePath);
+  const { activePath } = usePaneWorktrees();
   const busy = useGitRunning(activePath) !== undefined;
   return (
     <div className="graph-inspector-content">
