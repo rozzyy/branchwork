@@ -1,12 +1,8 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { useConflictCount } from "../screens/conflicts/conflictsState";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { NAV_SECTIONS, SCREENS, screenById, type ScreenDef, type ScreenId } from "../screens/registry";
 import { useStage } from "../state/stage";
 import { useRepos } from "../state/repos";
 import { useWorktrees } from "../state/worktrees";
-import { Menu, type MenuItem } from "../ui/Menu";
-import { SCREEN_MIME } from "../stage/dnd";
 import { t } from "../i18n/t";
 import { createWorktree, onGitChanged, removeWorktree, type Worktree } from "../ipc/worktrees";
 import { ask } from "../ui/dialog";
@@ -14,12 +10,9 @@ import { errorMessage } from "../ipc/errors";
 import type { Project } from "../ipc/catalog";
 import { useDock } from "../terminal/dock";
 import { toast } from "../ui/toast";
-import { useSessions } from "../agents/sessions";
 import { GroupInlineList } from "./GroupSwitcher";
 import { StatusLabel } from "../ui/StatusLabel";
-
-/** ⌘-number hints shown on the right of each screen row (prototype `.row .k`). */
-const SCREEN_KEYS: Partial<Record<ScreenId, string>> = { home: "⌘1", changes: "⌘2", history: "⌘3", files: "⌘4", agents: "⌘5", terminal: "⌘6", github: "⌘7" };
+import { Icon } from "../ui/Icon";
 
 // Deterministic color stripe/dot per worktree path, picked from a small token palette.
 // Ordered so adjacent hashes don't land on near-identical hues (--acc and --blu are both blue-ish).
@@ -137,7 +130,7 @@ function WorktreePicker({
     searchRef.current?.focus();
     const onMouseDown = (event: globalThis.MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (pickerRef.current?.contains(target) || target.closest(".worktree-picker-trigger")) return;
+      if (pickerRef.current?.contains(target) || target.closest(".worktree-picker-trigger") || target.closest(".worktree-overflow")) return;
       onClose();
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -198,7 +191,13 @@ function WorktreePicker({
                 aria-current={active ? "true" : undefined}
                 aria-label={t("sidebar.selectWorktree", { branch })}
                 title={worktree.path}
-                onClick={() => useWorktrees.getState().select(worktree.path)}
+                onClick={() => {
+                  useRepos.getState().selectProject(project.id);
+                  void useWorktrees.getState().load(project).then(() => {
+                    useWorktrees.getState().select(worktree.path);
+                    useStage.getState().showEmptyWorkspace();
+                  });
+                }}
               >
                 {branch}
               </button>
@@ -231,21 +230,28 @@ function WorktreePicker({
   );
 }
 
-function WorktreeSection() {
-  const projects = useRepos((state) => state.projects);
+function WorktreeSection({ project }: { project: Project }) {
   const activeProjectId = useRepos((state) => state.activeProjectId);
-  const project = projects.find((item) => item.id === activeProjectId) ?? null;
-  const worktrees = useWorktrees((state) => state.worktrees);
-  const pinnedPaths = useWorktrees((state) => state.pinnedPaths);
-  const activePath = useWorktrees((state) => state.activePath);
-  const loading = useWorktrees((state) => state.loading);
-  const error = useWorktrees((state) => state.error);
+  const liveWorktrees = useWorktrees((state) => state.worktrees);
+  const livePinnedPaths = useWorktrees((state) => state.pinnedPaths);
+  const liveActivePath = useWorktrees((state) => state.activePath);
+  const liveLoading = useWorktrees((state) => state.loading);
+  const liveError = useWorktrees((state) => state.error);
+  const cached = useWorktrees((state) => state.byProject[project.id]);
+  const isActive = activeProjectId === project.id;
+  const worktrees = isActive ? liveWorktrees : (cached?.worktrees ?? []);
+  const pinnedPaths = isActive ? livePinnedPaths : [];
+  const activePath = isActive ? liveActivePath : (cached?.activePath ?? null);
+  const loading = isActive ? liveLoading : !cached;
+  const error = isActive ? liveError : null;
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerButtonRef = useRef<HTMLButtonElement>(null);
+  const overflowButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    void useWorktrees.getState().load(project);
-  }, [project?.id, project?.localPath]);
+    if (isActive) void useWorktrees.getState().load(project);
+    else void useWorktrees.getState().ensureProjectWorktrees(project);
+  }, [project.id, project.localPath, isActive]);
 
   useEffect(() => {
     if (!project || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
@@ -299,28 +305,22 @@ function WorktreeSection() {
     ];
   }, [activePath, pinnedPaths, worktrees]);
   const moreCount = worktrees.length - visible.length;
-  const countLabel = t("sidebar.worktreeCount", { visible: visible.length, total: worktrees.length });
   const closePicker = () => setPickerOpen(false);
+  const activateWorktree = (worktree: Worktree) => {
+    if (!isActive) {
+      useRepos.getState().selectProject(project.id);
+      void useWorktrees.getState().load(project).then(() => {
+        useWorktrees.getState().select(worktree.path);
+        useStage.getState().showEmptyWorkspace();
+      });
+    } else {
+      useWorktrees.getState().select(worktree.path);
+      useStage.getState().showEmptyWorkspace();
+    }
+  };
 
   return (
     <section className="worktree-section" aria-label={t("sidebar.worktrees")}>
-      <div className="side-h worktree-head" aria-label={countLabel}>
-        <span className="worktree-head-title">{t("sidebar.worktrees")}</span>
-        <span className="worktree-count" aria-hidden>{visible.length}/{worktrees.length}</span>
-        <button
-          ref={pickerButtonRef}
-          type="button"
-          className="icon-btn worktree-picker-trigger"
-          aria-label={t("sidebar.openPicker")}
-          title={t("sidebar.openPicker")}
-          aria-haspopup="dialog"
-          aria-expanded={pickerOpen}
-          disabled={!project || loading || worktrees.length === 0}
-          onClick={() => setPickerOpen((open) => !open)}
-        >
-          ☰
-        </button>
-      </div>
       {!project ? (
         <div className="side-empty">{t("sidebar.noRepo")}</div>
       ) : loading ? (
@@ -345,9 +345,11 @@ function WorktreeSection() {
                     aria-label={label}
                     aria-current={selected ? "true" : undefined}
                     title={`${branch} · ${statusLabel(worktree)} · ${worktree.path}`}
-                    onClick={() => useWorktrees.getState().select(worktree.path)}
+                    onClick={() => activateWorktree(worktree)}
                   >
-                    <span className="worktree-row-stripe" aria-hidden style={{ background: worktreeColor(worktree.path) }} />
+                    <span className="worktree-row-icon" aria-hidden>
+                      <Icon name="branch" size={15} />
+                    </span>
                     <span className="worktree-row-detail">
                       <span className="worktree-row-label">{branch}</span>
                       <span className="worktree-row-meta">
@@ -358,7 +360,7 @@ function WorktreeSection() {
                       </span>
                     </span>
                   </button>
-                  {worktree.state === "conflict" ? <button className="worktree-status-chip wt-conflict-action" data-state={worktree.state} aria-label={t("operation.resolve") + ` · ${branch}`} onClick={(event) => { event.stopPropagation(); useWorktrees.getState().select(worktree.path); useStage.getState().go("conflicts"); }}><WorktreeStatus worktree={worktree} /></button> : <span className="worktree-status-chip" data-state={worktree.state}><WorktreeStatus worktree={worktree} /></span>}
+                  {worktree.state === "conflict" ? <button className="worktree-status-chip wt-conflict-action" data-state={worktree.state} aria-label={t("operation.resolve") + ` · ${branch}`} onClick={(event) => { event.stopPropagation(); if (!isActive) { useRepos.getState().selectProject(project.id); void useWorktrees.getState().load(project).then(() => useWorktrees.getState().select(worktree.path)); } else { useWorktrees.getState().select(worktree.path); } useStage.getState().go("conflicts"); }}><WorktreeStatus worktree={worktree} /></button> : <span className="worktree-status-chip" data-state={worktree.state}><WorktreeStatus worktree={worktree} /></span>}
                   <span className="worktree-row-actions">
                     <button
                       type="button"
@@ -367,7 +369,7 @@ function WorktreeSection() {
                       title={t("sidebar.terminalPlaceholder")}
                       onClick={() => void useDock.getState().openHere(worktree.path)}
                     >
-                      ❯_
+                      <Icon name="terminal" size={14} />
                     </button>
                     {pinned && (
                       <button
@@ -377,7 +379,7 @@ function WorktreeSection() {
                         title={t("sidebar.unpin", { branch })}
                         onClick={() => void useWorktrees.getState().setPinned(project.id, worktree.path, false)}
                       >
-                        ×
+                        <Icon name="close" size={13} />
                       </button>
                     )}
                   </span>
@@ -387,6 +389,7 @@ function WorktreeSection() {
           </div>
           {moreCount > 0 && (
             <button
+              ref={overflowButtonRef}
               type="button"
               className="worktree-overflow"
               aria-label={t("sidebar.moreWorktrees", { count: moreCount })}
@@ -396,11 +399,29 @@ function WorktreeSection() {
               <span className="worktree-overflow-label">{t("sidebar.moreWorktrees", { count: moreCount })}</span>
             </button>
           )}
+          {moreCount === 0 && (
+            <div className="worktree-picker-footer">
+              <button
+                ref={pickerButtonRef}
+                type="button"
+                className="worktree-picker-trigger"
+                aria-label={t("sidebar.openPicker")}
+                title={t("sidebar.openPicker")}
+                aria-haspopup="dialog"
+                aria-expanded={pickerOpen}
+                disabled={!project || loading || worktrees.length === 0}
+                onClick={() => setPickerOpen((open) => !open)}
+              >
+                <span aria-hidden><Icon name="more" size={15} /></span>
+                <span>{t("sidebar.openPicker")}</span>
+              </button>
+            </div>
+          )}
         </>
       )}
       {pickerOpen && project && (
         <WorktreePicker
-          anchorEl={pickerButtonRef.current}
+          anchorEl={pickerButtonRef.current ?? overflowButtonRef.current}
           project={project}
           worktrees={worktrees}
           pinnedPaths={pinnedPaths}
@@ -413,93 +434,27 @@ function WorktreeSection() {
 }
 
 export function Sidebar() {
-  const panes = useStage((s) => s.panes);
-  const focus = useStage((s) => s.focus);
-  const dir = useStage((s) => s.dir);
-  const [ctx, setCtx] = useState<{ x: number; y: number; id: ScreenId } | null>(null);
-  const dirtyCount = useWorktrees((s) => s.worktrees.find((w) => w.path === s.activePath)?.dirtyCount ?? 0);
-  const { go, newTab, openSplit, closePane } = useStage.getState();
-
-  const glyph = (id: ScreenId) => {
-    const i = panes.indexOf(id);
-    if (panes.length < 2 || i < 0) return null;
-    // Two panes keep the side glyphs; three or four show the pane number.
-    const g = panes.length > 2 ? String(i + 1) : i === 0 ? (dir === "h" ? "◧" : "⬒") : dir === "h" ? "◨" : "⬓";
-    return <span className="nav-split" aria-hidden>{g}</span>;
-  };
-
-  const onClick = (e: MouseEvent, id: ScreenId) => {
-    if (e.altKey) openSplit(id, "bottom");
-    else if (e.metaKey || e.ctrlKey || e.shiftKey) openSplit(id, "right");
-    else go(id);
-  };
-
-  const menuItems = (id: ScreenId): MenuItem[] => [
-    { kind: "item", label: t("split.openHere"), onSelect: () => go(id) },
-    { kind: "item", icon: "＋", label: t("stage.tabs.openInNew"), onSelect: () => { newTab(id); setCtx(null); } },
-    { kind: "item", icon: "◨", label: t("split.right"), kbd: "⌘-click", onSelect: () => openSplit(id, "right") },
-    { kind: "item", icon: "◧", label: t("split.left"), onSelect: () => openSplit(id, "left") },
-    { kind: "item", icon: "⬒", label: t("split.top"), onSelect: () => openSplit(id, "top") },
-    { kind: "item", icon: "⬓", label: t("split.bottom"), kbd: "⌥-click", onSelect: () => openSplit(id, "bottom") },
-    ...(panes.length > 1 && panes.includes(id)
-      ? ([{ kind: "separator" }, { kind: "item", icon: "✕", label: t("split.closeFromSplit"), onSelect: () => closePane(panes.indexOf(id)) }] as MenuItem[])
-      : []),
-  ];
-
-  const waitingAgents = useSessions((store) => store.sessions.filter((s) => s.status === "waiting").length);
-  const conflictCount = useConflictCount();
-
-  const item = (s: ScreenDef) => (
-    <button
-      key={s.id}
-      className={"nav" + (panes[focus] === s.id ? " on" : panes.includes(s.id) ? " on2" : "")}
-      draggable
-      aria-label={t(s.label)}
-      title={`${t(s.label)} · ${t("sidebar.splitHint")}`}
-      onDragStart={(e) => { e.dataTransfer.setData(SCREEN_MIME, s.id); e.dataTransfer.effectAllowed = "copy"; }}
-      onClick={(e) => onClick(e, s.id)}
-      onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: s.id }); }}
-    >
-      <span className="nav-ic" aria-hidden>{s.icon}</span>
-      <span className="nav-label">{t(s.label)}</span>
-      {s.id === "changes" && dirtyCount > 0 && (
-        <span className="count" role="status" aria-label={t("sidebar.changed", { count: dirtyCount })}>
-          {dirtyCount}
-        </span>
-      )}
-      {s.id === "agents" && waitingAgents > 0 && (
-        <span className="count agent" role="status" aria-label={t("agents.waitingBadge", { count: waitingAgents })}>
-          {waitingAgents}
-        </span>
-      )}
-      {s.id === "conflicts" && conflictCount > 0 && (
-        <span className="count bad" role="status" aria-label={t("conflicts.badge", { count: conflictCount })}>
-          {conflictCount}
-        </span>
-      )}
-      {glyph(s.id)}
-      {SCREEN_KEYS[s.id] && <span className="nav-k" aria-hidden>{SCREEN_KEYS[s.id]}</span>}
-    </button>
-  );
-
   return (
     <aside className="sidebar">
-      <nav className="side-scroll">
+      <div className="side-scroll">
         <div className="side-brand">
           <span className="app-mark" aria-hidden />
           <span className="app-name">{t("app.name")}</span>
         </div>
-        <WorktreeSection />
-        {NAV_SECTIONS.map((section) => (
-          <Fragment key={section.id}>
-            <div className="side-h">{t(section.label)}</div>
-            {SCREENS.filter((s) => s.section === section.id).map(item)}
-          </Fragment>
-        ))}
-        <GroupInlineList />
-      </nav>
-      <div className="side-foot">{item(screenById("settings"))}</div>
-      {ctx && <Menu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)} items={menuItems(ctx.id)} />}
+        <GroupInlineList renderProjectContent={(project) => <WorktreeSection project={project} />} />
+      </div>
+      <div className="sidebar-settings">
+        <button
+          type="button"
+          className="sidebar-settings-button"
+          aria-label={t("nav.settings")}
+          title={t("nav.settings")}
+          onClick={() => useStage.getState().go("settings")}
+        >
+          <span aria-hidden><Icon name="settings" size={16} /></span>
+          <span>{t("nav.settings")}</span>
+        </button>
+      </div>
     </aside>
   );
 }

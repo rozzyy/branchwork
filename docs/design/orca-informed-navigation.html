@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Branchwork — workspace navigation prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #18191d;
+      --surface: #202126;
+      --raised: #292b31;
+      --hover: #32343b;
+      --line: #ffffff19;
+      --line-strong: #ffffff2c;
+      --text: #e7e8eb;
+      --muted: #a4a6ae;
+      --faint: #777a84;
+      --accent: #77a9f7;
+      --accent-bg: #77a9f71c;
+      --green: #83cfa0;
+      --yellow: #e6bf72;
+      --red: #ef8585;
+      font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box }
+    body { margin: 0; height: 100dvh; overflow: hidden; color: var(--text); background: var(--bg) }
+    button, input, select { color: inherit; font: inherit }
+    button { border: 0; cursor: pointer }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+    .app { display: grid; height: 100%; grid-template-rows: 44px minmax(0, 1fr) 25px }
+    .titlebar { display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line) }
+    .traffic { width: 58px; flex: none; color: var(--faint); letter-spacing: 3px }
+    .brand { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-weight: 650 }
+    .brand-mark { width: 17px; height: 17px; border-radius: 5px; background: linear-gradient(140deg, #93b9fa, #536fba) }
+    .crumbs { display: flex; min-width: 0; align-items: center; gap: 5px; color: var(--muted) }
+    .crumbs button { overflow: hidden; max-width: 170px; padding: 5px 7px; background: transparent; border-radius: 5px; text-overflow: ellipsis; white-space: nowrap }
+    .crumbs button:hover, .small-button:hover, .icon-button:hover { background: var(--hover) }
+    .crumbs .active { color: var(--text); font-weight: 600 }
+    .crumbs .sep { color: var(--faint) }
+    .jump { display: flex; width: min(390px, 30vw); height: 30px; align-items: center; gap: 8px; margin: 0 auto; padding: 0 10px; text-align: left; color: var(--muted); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 6px }
+    .jump:hover { border-color: #ffffff55 }
+    kbd { margin-left: auto; padding: 1px 5px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace }
+    .small-button, .icon-button { display: inline-flex; height: 28px; align-items: center; justify-content: center; gap: 7px; padding: 0 9px; color: var(--muted); background: transparent; border-radius: 5px }
+    .icon-button { width: 30px; padding: 0; font-size: 15px }
+    .body { display: grid; min-height: 0; grid-template-columns: 252px minmax(0, 1fr) 222px }
+    .sidebar { display: flex; min-height: 0; flex-direction: column; background: var(--surface); border-right: 1px solid var(--line) }
+    .side-head { padding: 12px 10px 8px }
+    .side-title { display: flex; align-items: center; gap: 7px; padding: 0 5px 9px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase }
+    .side-title span:first-child { flex: 1 }
+    .side-title button { width: 24px; height: 24px; color: var(--muted); background: transparent; border-radius: 5px; font-size: 14px }
+    .filter { display: flex; height: 29px; align-items: center; gap: 7px; padding: 0 8px; color: var(--faint); background: var(--bg); border: 1px solid var(--line); border-radius: 5px }
+    .filter input { width: 100%; min-width: 0; color: var(--text); background: transparent; border: 0; outline: 0; font-size: 12px }
+    .tree { min-height: 0; flex: 1; overflow: auto; padding: 2px 7px 10px }
+    .workspace-group { margin: 2px 0 }
+    .group-toggle { display: flex; width: 100%; align-items: center; gap: 7px; padding: 6px 6px; color: var(--muted); text-align: left; background: transparent; border-radius: 5px; font-size: 12px; font-weight: 600 }
+    .group-toggle:hover, .project:hover, .worktree:hover { background: var(--hover) }
+    .group-toggle .caret { width: 11px; color: var(--faint); font-size: 10px }
+    .group-toggle .count { margin-left: auto; color: var(--faint); font-size: 11px; font-weight: 400 }
+    .group-projects[hidden], .worktree-list[hidden] { display: none }
+    .project { display: flex; width: 100%; align-items: center; gap: 8px; min-height: 31px; padding: 5px 8px 5px 23px; color: var(--muted); text-align: left; background: transparent; border-radius: 5px; font-size: 12px }
+    .project.selected { color: var(--text); background: var(--accent-bg) }
+    .project .dot { width: 8px; height: 8px; flex: none; border-radius: 3px }
+    .project .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+    .project .count { color: var(--faint); font-size: 10px }
+    .worktree-list { margin: 2px 0 6px 22px; padding-left: 9px; border-left: 1px solid var(--line) }
+    .worktree { display: flex; width: 100%; min-height: 30px; align-items: center; gap: 7px; padding: 4px 6px; color: var(--muted); text-align: left; background: transparent; border-radius: 5px; font-size: 11px }
+    .worktree.selected { color: var(--text); background: var(--raised) }
+    .worktree .branch { flex: 1; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap }
+    .worktree .state { color: var(--faint); font-size: 10px; white-space: nowrap }
+    .worktree .state.dirty { color: var(--yellow) }
+    .worktree .state.conflict { color: var(--red) }
+    .side-foot { padding: 8px; border-top: 1px solid var(--line) }
+    .manage { display: flex; width: 100%; align-items: center; gap: 8px; padding: 7px 8px; color: var(--muted); text-align: left; background: transparent; border-radius: 5px; font-size: 12px }
+    .manage:hover { color: var(--text); background: var(--hover) }
+    .center { display: flex; min-width: 0; min-height: 0; flex-direction: column }
+    .stage-tabs { display: flex; height: 40px; flex: none; align-items: stretch; gap: 2px; padding: 0 9px; background: var(--surface); border-bottom: 1px solid var(--line) }
+    .stage-tab { display: flex; min-width: 118px; align-items: center; gap: 7px; padding: 0 10px; color: var(--muted); background: transparent; border: 1px solid transparent; border-bottom: 0; border-radius: 7px 7px 0 0; font-size: 12px }
+    .stage-tab.selected { color: var(--text); background: var(--bg); border-color: var(--line); font-weight: 600 }
+    .stage-tab .waiting { margin-left: auto; color: var(--yellow); font-weight: 700 }
+    .stage-add { width: 28px; color: var(--muted); background: transparent }
+    .workspace-toolbar { display: flex; min-height: 42px; align-items: center; gap: 8px; padding: 0 11px; border-bottom: 1px solid var(--line) }
+    .workspace-name { font-weight: 650 }
+    .workspace-state { display: flex; align-items: center; gap: 5px; color: var(--green); font-size: 11px }
+    .toolbar-spacer { flex: 1 }
+    .button { display: inline-flex; height: 27px; align-items: center; gap: 6px; padding: 0 9px; color: var(--text); background: var(--raised); border: 1px solid var(--line-strong); border-radius: 5px; font-size: 11px }
+    .button:hover { background: var(--hover) }
+    .button.primary { color: #141a24; background: var(--accent); border-color: var(--accent); font-weight: 650 }
+    .split { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1.15fr) minmax(0, .95fr); gap: 8px; padding: 8px }
+    .pane { display: grid; min-width: 0; min-height: 0; grid-template-rows: 36px minmax(0, 1fr); overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 7px }
+    .pane-head { display: flex; align-items: center; gap: 7px; padding: 0 9px; border-bottom: 1px solid var(--line) }
+    .pane-head strong { font-size: 11px; font-weight: 600 }
+    .pane-head .subtle { color: var(--faint); font-size: 10px }
+    .pane-head .icon-button { width: 23px; height: 23px; margin-left: auto }
+    .agent-body { display: flex; min-height: 0; flex-direction: column }
+    .agent-log { min-height: 0; flex: 1; overflow: auto; padding: 12px; color: var(--muted); font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace }
+    .agent-log .prompt { color: var(--accent) }
+    .agent-log .success { color: var(--green) }
+    .agent-log .attention { color: var(--yellow) }
+    .agent-input { display: flex; align-items: center; gap: 7px; padding: 8px; border-top: 1px solid var(--line) }
+    .agent-input input { min-width: 0; flex: 1; padding: 7px 9px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; font-size: 11px }
+    .diff-head { display: flex; align-items: center; gap: 6px; padding: 8px 9px; color: var(--muted); border-bottom: 1px solid var(--line); font-size: 10px }
+    .file-list { min-height: 0; overflow: auto; padding: 5px }
+    .file-row { display: flex; min-height: 27px; align-items: center; gap: 7px; padding: 4px 5px; color: var(--muted); border-radius: 4px; font-size: 10px }
+    .file-row.selected { color: var(--text); background: var(--hover) }
+    .file-row .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+    .file-row .change { color: var(--yellow); font-weight: 700 }
+    .code { overflow: auto; margin: 3px 0 0; padding: 7px 0; color: var(--muted); font: 10px/1.75 ui-monospace, SFMono-Regular, Menlo, monospace }
+    .code div { padding: 0 8px; white-space: pre }
+    .code .add { background: #83cfa015; color: var(--green) }
+    .code .del { background: #ef858515; color: var(--red) }
+    .explorer { display: flex; min-height: 0; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line) }
+    .explorer-head { display: flex; height: 41px; flex: none; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--line) }
+    .explorer-head strong { flex: 1; font-size: 11px; font-weight: 700; letter-spacing: .04em }
+    .explorer-tree { min-height: 0; overflow: auto; padding: 8px 6px; color: var(--muted); font-size: 11px }
+    .explorer-row { display: flex; height: 25px; align-items: center; gap: 6px; padding: 0 5px; overflow: hidden; white-space: nowrap }
+    .explorer-row.indent { padding-left: 19px }
+    .explorer-row.deep { padding-left: 34px }
+    .explorer-row:hover { color: var(--text); background: var(--hover) }
+    .explorer-row.current { color: var(--text); background: var(--accent-bg) }
+    .bottom-dock { display: none; height: 132px; flex: none; padding: 9px 13px; color: var(--muted); background: #17181b; border-top: 1px solid var(--line); font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace }
+    .bottom-dock.open { display: block }
+    .statusbar { display: flex; align-items: center; gap: 12px; padding: 0 9px; color: var(--muted); background: var(--surface); border-top: 1px solid var(--line); font-size: 10px }
+    .statusbar .grow { flex: 1 }
+    .statusbar .warn { color: var(--yellow) }
+    .statusbar button { padding: 2px 5px; color: var(--muted); background: transparent; border-radius: 4px }
+    .statusbar button:hover { color: var(--text); background: var(--hover) }
+    .overlay { position: fixed; z-index: 20; inset: 0; display: grid; place-items: start center; padding: 8vh 14px 14px; background: #0008 }
+    .dialog { width: min(540px, 100%); max-height: 78vh; overflow: hidden; background: #282a30; border: 1px solid var(--line-strong); border-radius: 9px; box-shadow: 0 24px 70px #0009 }
+    .dialog-head { display: flex; align-items: center; gap: 9px; padding: 11px 13px; border-bottom: 1px solid var(--line) }
+    .dialog-head input { width: 100%; min-width: 0; padding: 2px; color: var(--text); background: transparent; border: 0; outline: 0; font-size: 14px }
+    .dialog-list { max-height: calc(78vh - 94px); overflow: auto; padding: 6px }
+    .dialog-section { padding: 7px 8px 4px; color: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase }
+    .option { display: flex; width: 100%; min-height: 36px; align-items: center; gap: 9px; padding: 6px 9px; text-align: left; background: transparent; border-radius: 5px }
+    .option:hover, .option.selected { background: var(--hover) }
+    .option.selected { box-shadow: inset 2px 0 var(--accent) }
+    .option-copy { min-width: 0; flex: 1 }
+    .option small { display: block; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 10px }
+    .option .meta { color: var(--faint); font-size: 10px }
+    .modal-foot { display: flex; align-items: center; gap: 12px; padding: 8px 11px; color: var(--faint); border-top: 1px solid var(--line); font-size: 10px }
+    .modal-foot button { margin-left: auto; padding: 5px 7px; color: var(--accent); background: transparent }
+    .form { display: grid; gap: 11px; padding: 14px }
+    .form label { display: grid; gap: 5px; color: var(--muted); font-size: 11px }
+    .form input, .form select { height: 31px; padding: 0 8px; color: var(--text); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 5px }
+    .form-actions { display: flex; justify-content: flex-end; gap: 7px; padding-top: 4px }
+    .toast { position: fixed; z-index: 30; right: 16px; bottom: 36px; padding: 9px 12px; color: var(--text); background: var(--raised); border: 1px solid var(--line-strong); border-radius: 6px }
+    .hidden { display: none !important }
+    @media (max-width: 1100px) {
+      .body { grid-template-columns: 224px minmax(0, 1fr) }
+      .explorer { display: none }
+      .jump { width: min(340px, 28vw) }
+    }
+    @media (max-width: 760px) {
+      .traffic { display: none }
+      .brand { display: none }
+      .body { grid-template-columns: 205px minmax(0, 1fr) }
+      .split { grid-template-columns: minmax(0, 1fr) }
+      .split .pane:nth-child(2) { display: none }
+      .crumbs .crumb-group, .crumbs .sep:first-of-type { display: none }
+      .jump { width: auto; flex: 1 }
+      .jump .jump-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar">
+      <div class="traffic" aria-hidden="true">● ● ●</div>
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Branchwork</div>
+      <nav class="crumbs" aria-label="Current workspace">
+        <button id="crumbGroup" class="crumb-group" title="Project group">Work · Acme</button><span class="sep" aria-hidden="true">/</span>
+        <button id="crumbProject" title="Project">branchwork</button><span class="sep" aria-hidden="true">/</span>
+        <button id="crumbWorktree" class="active" title="Switch worktree">feat/sidebar-cleanup⌄</button>
+      </nav>
+      <button class="jump" id="jumpButton" aria-label="Jump to workspace, session, or view"><span aria-hidden="true">⌕</span><span class="jump-label">Jump to anything…</span><kbd>⌘J</kbd></button>
+      <button class="small-button" id="viewsButton" aria-haspopup="dialog" aria-expanded="false">Views <span aria-hidden="true">⌄</span></button>
+      <button class="icon-button" id="helpButton" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
+    </header>
+    <div class="body" id="body">
+      <aside class="sidebar" aria-label="Workspaces">
+        <div class="side-head">
+          <div class="side-title"><span>Workspaces</span><button id="newWorkspaceButton" aria-label="Create workspace" title="Create workspace">＋</button><button id="manageButton" aria-label="Manage groups and repositories" title="Manage groups and repositories">···</button></div>
+          <label class="filter"><span aria-hidden="true">⌕</span><input id="projectFilter" placeholder="Filter groups and projects…" aria-label="Filter groups and projects"></label>
+        </div>
+        <div class="tree" id="workspaceTree">
+          <section class="workspace-group" data-group="Work · Acme">
+            <button class="group-toggle" aria-expanded="true"><span class="caret">▾</span><span>Work · Acme</span><span class="count">3</span></button>
+            <div class="group-projects">
+              <button class="project selected" data-project="branchwork"><span class="dot" style="background:#75a7f2"></span><span class="name">branchwork</span><span class="count">3</span></button>
+              <div class="worktree-list" data-project-worktrees="branchwork"></div>
+              <button class="project" data-project="api-gateway"><span class="dot" style="background:#49a976"></span><span class="name">api-gateway</span></button>
+              <button class="project" data-project="design-system"><span class="dot" style="background:#c96da5"></span><span class="name">design-system</span></button>
+            </div>
+          </section>
+          <section class="workspace-group" data-group="Personal">
+            <button class="group-toggle" aria-expanded="false"><span class="caret">▸</span><span>Personal</span><span class="count">2</span></button>
+            <div class="group-projects" hidden>
+              <button class="project" data-project="dotfiles"><span class="dot" style="background:#d7ad4c"></span><span class="name">dotfiles</span></button>
+              <button class="project" data-project="blog"><span class="dot" style="background:#70b0dc"></span><span class="name">blog</span></button>
+            </div>
+          </section>
+          <section class="workspace-group" data-group="Client · Nusantara">
+            <button class="group-toggle" aria-expanded="false"><span class="caret">▸</span><span>Client · Nusantara</span><span class="count">2</span></button>
+            <div class="group-projects" hidden>
+              <button class="project" data-project="pos-app"><span class="dot" style="background:#eb9c5f"></span><span class="name">pos-app</span></button>
+              <button class="project" data-project="landing"><span class="dot" style="background:#9577cf"></span><span class="name">landing</span></button>
+            </div>
+          </section>
+        </div>
+        <div class="side-foot"><button class="manage" id="manageGroups">⚙ <span>Manage groups & repositories…</span></button></div>
+      </aside>
+      <main class="center">
+        <div class="stage-tabs">
+          <button class="stage-tab selected">Main <span class="waiting" aria-label="Agent waiting">?</span></button>
+          <button class="stage-tab">Release prep</button>
+          <button class="stage-add" aria-label="New stage tab" title="New stage tab">＋</button>
+        </div>
+        <div class="workspace-toolbar">
+          <span class="workspace-name" id="workspaceName">feat/sidebar-cleanup</span>
+          <span class="workspace-state"><span>●</span> Agent waiting</span>
+          <span class="toolbar-spacer"></span>
+          <button class="button" id="terminalButton">❯_ Terminal</button>
+          <button class="button" id="explorerButton">▤ Explorer</button>
+          <button class="button primary" id="agentButton">＋ New agent</button>
+        </div>
+        <section class="split" aria-label="Workspace panes">
+          <article class="pane">
+            <header class="pane-head"><strong id="primaryPaneTitle">✦ Agents</strong><span class="subtle">feat/sidebar-cleanup</span><button class="icon-button" aria-label="Pane actions" title="Pane actions">···</button></header>
+            <div class="agent-body" id="primaryPaneContent">
+              <div class="agent-log">
+                <div class="prompt">› Simplify navigation without removing any existing screen.</div>
+                <br>
+                <div>I'll update the workspace list and keep the existing</div>
+                <div>screens available from the Views menu.</div>
+                <br>
+                <div class="success">✓ Inspected 6 files</div>
+                <div class="success">✓ 3 focused tests passing</div>
+                <br>
+                <div class="attention">Waiting for your review…</div>
+              </div>
+              <div class="agent-input"><input placeholder="Message Claude…" aria-label="Message agent"><button class="button primary" aria-label="Send message">↑</button></div>
+            </div>
+          </article>
+          <article class="pane">
+            <header class="pane-head"><strong>± Changes</strong><span class="subtle">3 files · +18 −6</span><button class="icon-button" aria-label="Diff actions" title="Diff actions">···</button></header>
+            <div class="file-list">
+              <div class="diff-head"><span>Changed files</span><span style="margin-left:auto">Review diff</span></div>
+              <div class="file-row selected"><span>▾</span><span class="file-name">src/shell/Sidebar.tsx</span><span class="change">M</span></div>
+              <pre class="code"><div class="del">- old worktree-scoped screen list</div><div class="add">+ workspace groups</div><div class="add">+ global Views menu</div><div>  current worktree stays visible</div></pre>
+              <div class="file-row"><span>▸</span><span class="file-name">src/i18n/en.ts</span><span class="change">M</span></div>
+              <div class="file-row"><span>▸</span><span class="file-name">src/shell/Sidebar.test.tsx</span><span class="change">M</span></div>
+            </div>
+          </article>
+        </section>
+        <div class="bottom-dock" id="terminalDock" aria-label="Terminal dock">
+          <div>❯ pnpm test</div><div style="color:var(--green)">✓ Test Files 92 passed · Tests 830 passed</div><div>❯ <span style="color:var(--accent)">▍</span></div>
+        </div>
+      </main>
+      <aside class="explorer" id="explorer" aria-label="File explorer">
+        <div class="explorer-head"><strong>EXPLORER</strong><button class="icon-button" id="closeExplorer" aria-label="Close Explorer">×</button></div>
+        <div class="explorer-tree">
+          <div class="explorer-row">▾ <b>BRANCHWORK</b></div>
+          <div class="explorer-row indent">▾ src</div>
+          <div class="explorer-row deep">▾ shell</div>
+          <div class="explorer-row deep current">Sidebar.tsx</div>
+          <div class="explorer-row deep">TitleBar.tsx</div>
+          <div class="explorer-row indent">▸ screens</div>
+          <div class="explorer-row indent">▸ stage</div>
+          <div class="explorer-row">▾ docs</div>
+          <div class="explorer-row indent">▸ design</div>
+          <div class="explorer-row">▸ src-tauri</div>
+          <div class="explorer-row">package.json</div>
+          <div class="explorer-row">README.md</div>
+        </div>
+      </aside>
+    </div>
+    <footer class="statusbar">
+      <span>⎇ feat/sidebar-cleanup</span><span class="warn">● 3 changed</span><span>↑2 ↓1</span><span class="grow"></span>
+      <span>✦ 2 agents · 1 waiting</span><span>Branchwork prototype</span>
+    </footer>
+  </div>
+  <div id="overlayRoot"></div>
+  <div id="toastRoot"></div>
+  <script>
+    "use strict";
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+    const projectGroups = [
+      { name: "Work · Acme", projects: ["branchwork", "api-gateway", "design-system"] },
+      { name: "Personal", projects: ["dotfiles", "blog"] },
+      { name: "Client · Nusantara", projects: ["pos-app", "landing"] }
+    ];
+    const worktreeMap = {
+      branchwork: ["feat/sidebar-cleanup", "main", "fix/agent-resume"],
+      "api-gateway": ["main", "feat/cache"],
+      "design-system": ["main"],
+      dotfiles: ["main"],
+      blog: ["main"],
+      "pos-app": ["main", "feat/checkout"],
+      landing: ["main"]
+    };
+    const allViews = [
+      ["home", "Home", "⌂", "⌘1"], ["changes", "Changes", "±", "⌘2"], ["history", "History", "⎇", "⌘3"],
+      ["files", "Files", "▤", "⌘4"], ["agents", "Agents", "✦", "⌘5"], ["terminal", "Terminal", "❯_", "⌘6"],
+      ["github", "GitHub", "◫", "⌘7"], ["browser", "Browser", "◎", ""], ["conflicts", "Conflicts", "⚠", ""], ["settings", "Settings", "⚙", ""]
+    ];
+    const jumpItems = [
+      { kind: "session", id: "Claude · branchwork", title: "Claude · branchwork", detail: "Agents · waiting for your input", icon: "✦", status: "?" },
+      { kind: "session", id: "Terminal · feat/sidebar-cleanup", title: "Terminal · feat/sidebar-cleanup", detail: "Terminal · active", icon: "❯_", status: "" },
+      ...projectGroups.flatMap(group => group.projects.map(project => ({ kind: "project", id: project, title: project, detail: group.name, icon: "◫", group: group.name }))),
+      ...Object.entries(worktreeMap).flatMap(([project, worktrees]) => worktrees.map(worktree => ({ kind: "worktree", id: worktree, title: worktree, detail: `${project} · worktree`, icon: "⎇" }))),
+      ...allViews.map(([id, title, icon]) => ({ kind: "view", id, title, detail: "View", icon }))
+    ];
+    const state = { project: "branchwork", group: "Work · Acme", worktree: "feat/sidebar-cleanup", view: "agents", overlay: null, focusReturn: null, selectedIndex: -1 };
+    const viewPanels = {
+      home: '<div class="agent-log"><b>Focus for this workspace</b><br><br>● 3 changed files to review<br>✦ 1 agent waiting for input<br>◉ 2 pull requests need review</div>',
+      changes: '<div class="agent-log"><b>Changed files · 3</b><br><br>src/shell/Sidebar.tsx <span class="attention">M</span><br>src/i18n/en.ts <span class="attention">M</span><br>src/shell/Sidebar.test.tsx <span class="attention">M</span><br><br>Open a file to inspect its diff in the adjacent pane.</div>',
+      history: '<div class="agent-log"><b>Recent commits</b><br><br>3c4d8e1 · Simplify workspace navigation<br>2f5a1c0 · Preserve worktree attention states<br>9ab03d2 · Add grouped project switching</div>',
+      files: '<div class="agent-log"><b>Repository files</b><br><br>▾ src<br>　▾ shell<br>　　Sidebar.tsx<br>　　TitleBar.tsx<br>　▸ screens<br>▸ docs<br>▸ src-tauri</div>',
+      agents: '<div class="agent-log"><span class="prompt">› Simplify navigation without removing any existing screen.</span><br><br>I updated the workspace list and kept the existing screens available from Views.<br><br><span class="success">✓ Inspected 6 files<br>✓ 3 focused tests passing</span><br><br><span class="attention">Waiting for your review…</span></div><div class="agent-input"><input placeholder="Message agent…" aria-label="Message agent"><button class="button primary" aria-label="Send message">↑</button></div>',
+      terminal: '<div class="agent-log">❯ pnpm test<br><span class="success">✓ Test Files 92 passed · Tests 830 passed</span><br><br>❯ git status --short<br><span class="muted"> M src/shell/Sidebar.tsx</span><br>❯ <span class="prompt">▍</span></div>',
+      github: '<div class="agent-log"><b>Pull requests</b><br><br>#482 · Simplify workspace navigation<br><span class="success">Checks passed · Review requested</span><br><br>#479 · Fix agent session restore<br><span class="muted">Changes requested</span></div>',
+      browser: '<div class="agent-log"><b>In-app browser</b><br><br>https://github.com/acme/branchwork<br><br><span class="muted">Browser tabs remain available from the Views menu.</span></div>',
+      conflicts: '<div class="agent-log"><b>Resolve conflicts</b><br><br><span class="attention">⚠ src/agents/sessions.ts</span><br><br>Select a conflict to open the existing merge editor.</div>',
+      settings: '<div class="agent-log"><b>Settings</b><br><br>Appearance<br>Agents & accounts<br>Keyboard shortcuts<br>Git & worktrees</div>'
+    };
+
+    function toast(message) {
+      const root = $("#toastRoot");
+      root.innerHTML = `<div class="toast" role="status">${message}</div>`;
+      window.setTimeout(() => root.replaceChildren(), 2200);
+    }
+    function updateContext() {
+      $("#crumbGroup").textContent = state.group;
+      $("#crumbProject").textContent = state.project;
+      $("#crumbWorktree").textContent = `${state.worktree}⌄`;
+      $("#workspaceName").textContent = state.worktree;
+      $$("[data-project]").forEach(button => button.classList.toggle("selected", button.dataset.project === state.project));
+      $$("[data-worktree]").forEach(button => button.classList.toggle("selected", button.dataset.worktree === state.worktree));
+    }
+    function renderProjectWorktrees() {
+      $$(".worktree-list").forEach(list => list.remove());
+      const projectButton = $(`[data-project="${CSS.escape(state.project)}"]`);
+      if (!projectButton) return;
+      const list = document.createElement("div");
+      list.className = "worktree-list";
+      list.dataset.projectWorktrees = state.project;
+      list.innerHTML = (worktreeMap[state.project] || ["main"]).map(name => {
+        const status = name.includes("fix/") ? '<span class="state conflict">⚠</span>'
+          : name === "main" ? '<span class="state">✓</span>'
+          : '<span class="state dirty">● 3</span>';
+        return `<button class="worktree ${name === state.worktree ? "selected" : ""}" data-worktree="${name}"><span>⎇</span><span class="branch">${name}</span>${status}</button>`;
+      }).join("");
+      projectButton.after(list);
+    }
+    function openOverlay(kind, trigger) {
+      closeOverlay(false);
+      state.overlay = kind;
+      $("#viewsButton").setAttribute("aria-expanded", String(kind === "views"));
+      state.focusReturn = trigger || document.activeElement;
+      state.selectedIndex = -1;
+      const root = $("#overlayRoot");
+      const titles = { jump: "Jump to anything", views: "Open a view", worktrees: "Switch worktree", newWorkspace: "Create workspace", manage: "Manage groups & repositories" };
+      const searchPlaceholder = kind === "jump" ? "Project, worktree, agent, or view…" : kind === "worktrees" ? "Filter worktrees…" : "Search…";
+      if (kind === "newWorkspace") {
+        root.innerHTML = `<div class="overlay" id="backdrop"><section class="dialog" role="dialog" aria-modal="true" aria-label="Create workspace"><header class="dialog-head"><strong>Create workspace</strong><kbd>Esc</kbd></header><form class="form" id="workspaceForm"><label>Repository<select name="repo"><option>branchwork</option><option>api-gateway</option><option>design-system</option></select></label><label>Workspace name (optional)<input name="name" placeholder="e.g. fix-login-race"></label><label>Agent<select name="agent"><option>Claude</option><option>Codex</option><option>OpenCode</option><option>Empty terminal</option></select></label><label>Start from<select name="base"><option>origin/main</option><option>Current branch</option></select></label><div class="form-actions"><button type="button" class="button" data-close>Cancel</button><button type="submit" class="button primary">Create workspace</button></div></form></section></div>`;
+        $("#backdrop").addEventListener("mousedown", event => { if (event.target.id === "backdrop") closeOverlay(); });
+        $("#workspaceForm").addEventListener("submit", event => {
+          event.preventDefault();
+          const name = new FormData(event.currentTarget).get("name")?.toString().trim() || "new-workspace";
+          closeOverlay();
+          toast(`Workspace "${name}" created`);
+        });
+        $("[data-close]").addEventListener("click", closeOverlay);
+        $("#workspaceForm select").focus();
+        return;
+      }
+      root.innerHTML = `<div class="overlay" id="backdrop"><section class="dialog" role="dialog" aria-modal="true" aria-label="${titles[kind]}"><header class="dialog-head"><span aria-hidden="true">⌕</span><input id="overlaySearch" placeholder="${searchPlaceholder}" autocomplete="off"><kbd>Esc</kbd></header><div class="dialog-list" id="overlayList"></div><footer class="modal-foot"><span>↑↓ move</span><span>Enter open</span><span>Esc close</span>${kind === "manage" ? "<span>Groups keep projects organized</span>" : ""}</footer></section></div>`;
+      $("#backdrop").addEventListener("mousedown", event => { if (event.target.id === "backdrop") closeOverlay(); });
+      $("#overlaySearch").addEventListener("input", event => renderOverlayItems(event.target.value));
+      $("#overlaySearch").addEventListener("keydown", handleOverlayKey);
+      $("#overlayList").addEventListener("click", event => {
+        const button = event.target.closest("[data-kind]");
+        if (button) chooseItem(button.dataset.kind, button.dataset.id);
+      });
+      renderOverlayItems("");
+      $("#overlaySearch").focus();
+    }
+    function renderOverlayItems(query) {
+      const list = $("#overlayList");
+      if (!list) return;
+      const needle = query.trim().toLowerCase();
+      if (state.overlay === "views") {
+        const matches = allViews.filter(([, label]) => label.toLowerCase().includes(needle));
+        list.innerHTML = `<div class="dialog-section">All screens and tools</div>${matches.map(([id, label, icon, shortcut]) => `<button class="option" data-kind="view" data-id="${id}"><span>${icon}</span><b class="option-copy">${label}</b><span class="meta">${shortcut}</span></button>`).join("")}`;
+        return;
+      }
+      if (state.overlay === "worktrees") {
+        const names = worktreeMap[state.project] || [];
+        const matches = names.filter(name => name.toLowerCase().includes(needle));
+        list.innerHTML = `<div class="dialog-section">Worktrees · ${state.project}</div>${matches.map(name => `<button class="option" data-kind="worktree" data-id="${name}"><span>⎇</span><b class="option-copy">${name}</b><span class="meta">${name === state.worktree ? "Current" : ""}</span></button>`).join("")}<button class="option" data-kind="new-worktree"><span>＋</span><b class="option-copy">Create worktree…</b></button>`;
+        return;
+      }
+      if (state.overlay === "manage") {
+        list.innerHTML = `<div class="dialog-section">Groups</div><button class="option" data-kind="manage"><span>＋</span><b class="option-copy">Create or reorder groups</b><span class="meta">Manage</span></button><div class="dialog-section">Repositories</div><button class="option" data-kind="manage"><span>＋</span><b class="option-copy">Add or clone repository</b><span class="meta">Manage</span></button><button class="option" data-kind="manage"><span>···</span><b class="option-copy">Move, rename, or remove repository</b><span class="meta">Manage</span></button>`;
+        return;
+      }
+      const matches = jumpItems.filter(item => `${item.title} ${item.detail}`.toLowerCase().includes(needle));
+      const groups = [
+        ["Needs attention", matches.filter(item => item.kind === "session" && item.status)],
+        [needle ? "Projects" : "Recent projects", matches.filter(item => item.kind === "project").slice(0, needle ? 12 : 2)],
+        ["Worktrees", matches.filter(item => item.kind === "worktree").slice(0, 5)],
+        ["Agents & terminals", matches.filter(item => item.kind === "session" && !item.status)],
+        ["Views", matches.filter(item => item.kind === "view").slice(0, 5)]
+      ].filter(([, items]) => items.length);
+      list.innerHTML = groups.map(([label, items]) => `<div class="dialog-section">${label}</div>${items.map(item => `<button class="option" data-kind="${item.kind}" data-id="${item.id}"><span>${item.icon}</span><span class="option-copy"><b>${item.title}</b><small>${item.detail}</small></span>${item.status ? `<span class="meta">${item.status}</span>` : ""}</button>`).join("")}`).join("") || '<div class="dialog-section">No matching results</div>';
+    }
+    function handleOverlayKey(event) {
+      const options = $$("#overlayList .option");
+      if (event.key === "Escape") { event.preventDefault(); closeOverlay(); return; }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (!options.length) return;
+        state.selectedIndex = state.selectedIndex < 0
+          ? (event.key === "ArrowDown" ? 0 : options.length - 1)
+          : (state.selectedIndex + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+        options.forEach((option, index) => option.classList.toggle("selected", index === state.selectedIndex));
+        options[state.selectedIndex]?.scrollIntoView?.({ block: "nearest" });
+      }
+      if (event.key === "Enter") {
+        const item = options[state.selectedIndex] || options[0];
+        if (item) chooseItem(item.dataset.kind, item.dataset.id);
+      }
+    }
+    function chooseItem(kind, id) {
+      if (kind === "project") {
+        const group = projectGroups.find(item => item.projects.includes(id));
+        if (!group) return;
+        setProject(id, group.name);
+      } else if (kind === "worktree") {
+        state.worktree = id;
+        updateContext();
+      } else if (kind === "view") {
+        openView(id);
+      } else if (kind === "session") {
+        openView(id.startsWith("Claude") ? "agents" : "terminal");
+      } else if (kind === "new-worktree") {
+        closeOverlay();
+        toast("Create a worktree from the selected repository");
+        return;
+      } else if (kind === "manage") {
+        closeOverlay();
+        toast("Group and repository management stays available here");
+        return;
+      }
+      closeOverlay();
+    }
+    function setProject(project, group) {
+      state.project = project;
+      state.group = group;
+      state.worktree = (worktreeMap[project] || ["main"])[0];
+      renderProjectWorktrees();
+      $$(".workspace-group").forEach(section => {
+        const contains = projectGroups.find(item => item.name === section.dataset.group)?.projects.includes(project);
+        if (contains) {
+          section.querySelector(".group-projects").hidden = false;
+          section.querySelector(".group-toggle").setAttribute("aria-expanded", "true");
+          section.querySelector(".caret").textContent = "▾";
+        }
+      });
+      updateContext();
+      toast(`Switched to ${group} / ${project}`);
+    }
+    function openView(id) {
+      const view = allViews.find(([key]) => key === id);
+      if (!view) return;
+      state.view = id;
+      $("#primaryPaneTitle").textContent = `${view[2]} ${view[1]}`;
+      $("#primaryPaneContent").innerHTML = viewPanels[id];
+    }
+    function closeOverlay(restoreFocus = true) {
+      $("#overlayRoot").replaceChildren();
+      state.overlay = null;
+      $("#viewsButton").setAttribute("aria-expanded", "false");
+      if (restoreFocus && state.focusReturn?.isConnected) state.focusReturn.focus();
+    }
+
+    $$(".group-toggle").forEach(button => button.addEventListener("click", () => {
+      const section = button.closest(".workspace-group");
+      const projects = section.querySelector(".group-projects");
+      projects.hidden = !projects.hidden;
+      button.setAttribute("aria-expanded", String(!projects.hidden));
+      button.querySelector(".caret").textContent = projects.hidden ? "▸" : "▾";
+    }));
+    $$(".project").forEach(button => button.addEventListener("click", () => {
+      const group = button.closest(".workspace-group").dataset.group;
+      setProject(button.dataset.project, group);
+    }));
+    $("#projectFilter").addEventListener("input", event => {
+      const needle = event.target.value.trim().toLowerCase();
+      $$(".workspace-group").forEach(section => {
+        const groupMatch = section.dataset.group.toLowerCase().includes(needle);
+        const projectButtons = $$(".project", section);
+        let visible = groupMatch;
+        projectButtons.forEach(button => {
+          const matches = groupMatch || button.dataset.project.toLowerCase().includes(needle);
+          button.hidden = !matches;
+          const worktrees = button.nextElementSibling;
+          if (worktrees?.classList.contains("worktree-list")) worktrees.hidden = !matches || !button.classList.contains("selected");
+          visible ||= matches;
+        });
+        section.hidden = !visible;
+        if (needle && visible) section.querySelector(".group-projects").hidden = false;
+      });
+    });
+    $("#workspaceTree").addEventListener("click", event => {
+      const button = event.target.closest(".worktree");
+      if (!button) return;
+      state.worktree = button.dataset.worktree;
+      updateContext();
+    });
+    $("#crumbWorktree").addEventListener("click", event => openOverlay("worktrees", event.currentTarget));
+    $("#crumbProject").addEventListener("click", event => openOverlay("jump", event.currentTarget));
+    $("#crumbGroup").addEventListener("click", event => openOverlay("jump", event.currentTarget));
+    $("#jumpButton").addEventListener("click", event => openOverlay("jump", event.currentTarget));
+    $("#viewsButton").addEventListener("click", event => {
+      $("#viewsButton").setAttribute("aria-expanded", "true");
+      openOverlay("views", event.currentTarget);
+    });
+    $("#newWorkspaceButton").addEventListener("click", event => openOverlay("newWorkspace", event.currentTarget));
+    $("#manageButton").addEventListener("click", event => openOverlay("manage", event.currentTarget));
+    $("#manageGroups").addEventListener("click", event => openOverlay("manage", event.currentTarget));
+    $("#agentButton").addEventListener("click", () => toast(`New agent session for ${state.project} / ${state.worktree}`));
+    $("#terminalButton").addEventListener("click", () => $("#terminalDock").classList.toggle("open"));
+    $("#explorerButton").addEventListener("click", () => $("#body").classList.toggle("hide-explorer"));
+    $("#closeExplorer").addEventListener("click", () => $("#body").classList.add("hide-explorer"));
+    document.addEventListener("keydown", event => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        openOverlay("jump", $("#jumpButton"));
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openOverlay("views", $("#viewsButton"));
+      } else if ((event.metaKey || event.ctrlKey) && /^[1-7]$/.test(event.key)) {
+        event.preventDefault();
+        const view = ["home", "changes", "history", "files", "agents", "terminal", "github"][Number(event.key) - 1];
+        openView(view);
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        $("#body").classList.toggle("hide-sidebar");
+      } else if (event.key === "Escape" && state.overlay) {
+        closeOverlay();
+      }
+    });
+    const hideStyles = document.createElement("style");
+    hideStyles.textContent = ".body.hide-sidebar{grid-template-columns:0 minmax(0,1fr) 222px}.body.hide-sidebar .sidebar{display:none}.body.hide-explorer{grid-template-columns:252px minmax(0,1fr)}.body.hide-explorer .explorer{display:none}@media(max-width:1100px){.body.hide-explorer{grid-template-columns:224px minmax(0,1fr)}}";
+    document.head.append(hideStyles);
+    renderProjectWorktrees();
+    updateContext();
+  </script>
+</body>
+</html>

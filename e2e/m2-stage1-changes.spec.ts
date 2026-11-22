@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 type SerializedDiffLine = {
   kind: "context" | "add" | "del";
@@ -214,7 +215,7 @@ async function seedChangesBackend(
 async function openChangesScreen(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "main, 2 changes" })).toBeVisible();
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await openView(page, "Changes");
   await expect(page.getByRole("button", { name: "Changes 1", exact: true })).toBeVisible();
 }
 

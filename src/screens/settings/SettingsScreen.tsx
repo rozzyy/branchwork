@@ -4,60 +4,19 @@ import { useSettings } from "../../state/settings";
 import { CLI_IDS, CLI_REGISTRY, type CliId } from "../../agents/registry";
 import { CliIcon } from "../../agents/cliIcons";
 import { useProfiles, usageKey } from "../../agents/profiles";
+import { QUOTA_CLIS, useAgentMeters } from "../../agents/quota";
 import { GithubAccounts } from "./GithubAccounts";
-import { parseClaudeAuth, parseMuseLoginStatus, parseMuseUsage, PROBED_CLIS } from "../../agents/probe";
-import { probeCli, profileHasCredentials } from "../../ipc/cli";
-
-/** Outcome of one vendor probe round; null when the probe itself failed. */
-interface ProbeOutcome {
-  linked: boolean;
-  identity: string | null;
-}
-
-/**
- * Run the vendor probe and publish the result to the store (identity label,
- * muse usage bars). Failed probes leave the
- * store untouched — unknown stays unknown, never fabricated.
- */
-async function probeOnce(cliId: CliId): Promise<ProbeOutcome | null> {
-  const store = useProfiles.getState();
-  let raw: string;
-  try {
-    raw = await probeCli(cliId);
-  } catch {
-    return null;
-  }
-  if (cliId === "claude") {
-    const auth = parseClaudeAuth(raw);
-    if (!auth) return null;
-    store.setCliProbe(cliId, { linked: auth.loggedIn, identity: auth.email });
-    return { linked: auth.loggedIn, identity: auth.email };
-  }
-  if (cliId === "muse") {
-    const usage = parseMuseUsage(raw);
-    if (!usage) {
-      const linked = parseMuseLoginStatus(raw);
-      if (linked === null) return null;
-      store.setCliProbe(cliId, { linked, identity: null });
-      return { linked, identity: null };
-    }
-    store.setCliProbe(cliId, { linked: true, identity: null });
-    for (const profile of store.profiles.filter((item) => item.cliId === cliId)) {
-      store.setProfileUsage({ cliId, slug: profile.slug }, usage);
-    }
-    return { linked: true, identity: null };
-  }
-  return null;
-}
-
-const AGENT_CLIS = CLI_IDS.filter((id): id is Exclude<CliId, "custom"> => id !== "custom");
-import { UsageBar } from "../../agents/usage";
+import { AccountRow } from "./AccountRow";
+import { probeOnce } from "./accountProbe";
+import { PROBED_CLIS } from "../../agents/probe";
 import { Segmented, Switch } from "../../ui/controls";
 import { Button } from "../../ui/Button";
 import { BusyButton } from "../../ui/BusyButton";
-import { toast } from "../../ui/toast";
+import { Menu } from "../../ui/Menu";
 import { ask } from "../../ui/dialog";
 import type { Density, TextSize, ThemeMode } from "../../theme/theme";
+
+const AGENT_CLIS = CLI_IDS.filter((id): id is Exclude<CliId, "custom"> => id !== "custom");
 
 const SWATCHES = [250, 300, 350, 25, 60, 155, 200];
 
@@ -74,173 +33,27 @@ function Row({ label, hint, children }: { label: ReactNode; hint?: string; child
   );
 }
 
-/**
- * Actions for one profile row. Linked state comes from a credential-file
- * check (providers with per-profile credentials) or a host-global vendor
- * probe (claude/muse) — otherwise it stays unknown. A verified-unlinked row
- * shows Log in + Remove; Logout exists only where profile-dir credentials
- * can actually be deleted (spec §6.6.4), so a row never looks connected
- * when it is not.
- */
-function AccountActions({
-  cliId,
-  slug,
-  name,
-  isDefault,
-  onCheckingChange,
-}: {
-  cliId: CliId;
-  slug: string;
-  name: string;
-  isDefault: boolean;
-  onCheckingChange: (key: string, checking: boolean) => void;
-}) {
-  const def = CLI_REGISTRY[cliId];
-  const store = useProfiles.getState();
-  const ref = { cliId, slug };
-  const key = usageKey(ref);
-  const pending = useProfiles((s) => s.loginPending[usageKey(ref)] != null);
-  const observedProbe = useProfiles((s) =>
-    cliId === "claude" ? s.profileProbes[key] : s.cliProbes[cliId],
-  );
-  const verifiable = def.credentialPaths.length > 0 || PROBED_CLIS.includes(cliId);
-  // null = still checking: render no Logout affordance at all until the
-  // check resolves, so a row never flashes "connected".
-  const [linked, setLinked] = useState<boolean | null | "unknown">(null);
-  const readLoginStatus = useCallback(async (): Promise<boolean | null> => {
-    if (cliId === "claude") {
-      return useProfiles.getState().checkProfileLogin({ cliId, slug });
-    }
-    if (def.credentialPaths.length > 0) {
-      try {
-        return await profileHasCredentials(cliId, slug, def.credentialPaths);
-      } catch {
-        return false;
-      }
-    }
-    if (!PROBED_CLIS.includes(cliId)) return null;
-    return (await probeOnce(cliId))?.linked ?? null;
-  }, [cliId, slug, def.credentialPaths]);
-  const check = useCallback(() => {
-    let live = true;
-    setLinked(null);
-    onCheckingChange(key, true);
-    void readLoginStatus()
-      .then((value) => {
-        if (live) setLinked(value ?? "unknown");
-      })
-      .catch(() => {
-        if (live) setLinked("unknown");
-      })
-      .finally(() => {
-        if (live) onCheckingChange(key, false);
-      });
-    return () => {
-      live = false;
-      onCheckingChange(key, false);
-    };
-  }, [key, onCheckingChange, readLoginStatus]);
-  useEffect(() => check(), [check]);
-  useEffect(() => {
-    if (observedProbe) setLinked(observedProbe.linked);
-  }, [observedProbe]);
-  // Re-check while unlinked: the user may finish the vendor login in the
-  // login PTY at any moment — flip without requiring a reload.
-  useEffect(() => {
-    if ((linked !== false && linked !== "unknown") || !verifiable) return undefined;
-    const timer = setInterval(() => {
-      void readLoginStatus().then((value) => setLinked(value ?? "unknown"));
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [linked, verifiable, readLoginStatus]);
-  const remove = async () => {
-    const confirmed = await ask({
-      title: t("settings.removeAccountTitle", { name }),
-      body: t(cliId === "muse" ? "settings.removeMuseAccountBody" : "settings.removeAccountBody"),
-      ok: t("settings.removeAccountOk"),
-      danger: true,
-      icon: "◔",
-    });
-    if (confirmed !== true) return;
-    await store.removeAccount(ref);
-  };
-  // After logout the credential files are gone: re-check immediately so
-  // the row flips to Log in without requiring a reload.
-  const logout = async () => {
-    const removed = await store.logoutProfile(ref);
-    if (removed !== null) check();
-  };
-  return (
-    <>
-      <Button
-        size="sm"
-        variant="ghost"
-        title={isDefault ? t("settings.clearDefault") : t("settings.setDefault")}
-        onClick={() => store.setCliDefault(cliId, isDefault ? null : ref)}
-      >
-        {isDefault ? `✓ ${t("settings.isDefault")}` : t("settings.setDefault")}
-      </Button>
-      {pending ? (
-        <span className="agent-acct-status" role="status">
-          <span className="spin" aria-hidden="true" /> {t("settings.waitingLogin")}
-        </span>
-      ) : !verifiable || linked === "unknown" ? (
-        <span className="agent-acct-status">{t("settings.loginStatusUnknown")}</span>
-      ) : linked === true ? (
-        <span className="chip cg">✓ {t("settings.loggedIn")}</span>
-      ) : linked === false ? (
-        <span className="chip">{t("settings.notLoggedIn")}</span>
-      ) : null}
-      {!verifiable || pending ? null : linked === true ? (
-        // Logout only deletes profile-dir credentials. Probe-based providers
-        // have no verified credential file to remove.
-        def.credentialPaths.length > 0 ? (
-          <Button size="sm" variant="danger" onClick={() => void logout()}>
-            {t("agents.logoutOk")}
-          </Button>
-        ) : null
-      ) : linked === null ? (
-        <span className="agent-acct-check" role="status" aria-label={t("settings.checkingLogin")}>
-          <span className="spin" aria-hidden="true" />
-        </span>
-      ) : null}
-      {linked !== null && linked !== true && (
-        <BusyButton size="sm" onExecute={() => store.loginProfile(ref)}>
-          {t("settings.signInAgain")}
-        </BusyButton>
-      )}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={async () => {
-          const nextName = await ask({
-            title: t("settings.editProfileTitle", { name }),
-            body: t("settings.editProfileBody"),
-            input: name,
-            ok: t("settings.editProfileOk"),
-            icon: "✎",
-          });
-          if (typeof nextName === "string") store.renameProfile(ref, nextName);
-        }}
-      >
-        {t("settings.editProfile")}
-      </Button>
-      <BusyButton size="sm" variant="ghost" onExecute={remove}>
-        {t("settings.removeAccount")}
-      </BusyButton>
-    </>
-  );
+/** Read every account's usage once: quota files for Claude/Codex, the vendor probe for Muse. */
+function refreshAllUsage(profiles: { cliId: CliId; slug: string }[]): Promise<unknown> {
+  const meters = useAgentMeters.getState();
+  return Promise.all([
+    ...profiles
+      .filter((profile) => QUOTA_CLIS.includes(profile.cliId))
+      .map((profile) => meters.refreshProfile({ cliId: profile.cliId, slug: profile.slug })),
+    // Muse usage is CLI-global. Claude rows probe their selected profile's
+    // config dir independently.
+    ...AGENT_CLIS.filter((cliId) => PROBED_CLIS.includes(cliId) && cliId !== "claude").map(probeOnce),
+  ]);
 }
 
 /** Per-CLI account management on top of the profiles store (spec Accounts). */
 function AgentAccounts() {
   const profiles = useProfiles((s) => s.profiles);
   const cliDefaults = useProfiles((s) => s.cliDefaults);
-  const usageBy = useProfiles((s) => s.usage);
-  const cliProbes = useProfiles((s) => s.cliProbes);
-  const profileProbes = useProfiles((s) => s.profileProbes);
   const store = useProfiles.getState();
   const [checking, setChecking] = useState<Set<string>>(new Set());
+  const [addMenuAt, setAddMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const closeAddMenu = useCallback(() => setAddMenuAt(null), []);
   const onCheckingChange = useCallback((key: string, isChecking: boolean) => {
     setChecking((current) => {
       const next = new Set(current);
@@ -264,89 +77,93 @@ function AgentAccounts() {
     const profile = await store.createProfile(cliId, name);
     if (profile) await store.loginProfile({ cliId, slug: profile.slug });
   };
-  // Muse usage is CLI-global. Claude rows probe their selected profile's
-  // config dir independently.
+  // On open (and when the account list changes): one read per account, no polling.
+  const accountKeys = profiles.map(usageKey).join("|");
   useEffect(() => {
-    for (const cliId of AGENT_CLIS) {
-      if (PROBED_CLIS.includes(cliId) && cliId !== "claude") void probeOnce(cliId);
-    }
-  }, []);
+    void refreshAllUsage(useProfiles.getState().profiles);
+  }, [accountKeys]);
+  const connected = AGENT_CLIS.filter((cliId) => profiles.some((p) => p.cliId === cliId));
+  const unconnected = AGENT_CLIS.filter((cliId) => !connected.includes(cliId));
   return (
     <div className="card agent-accts">
-      {checking.size > 0 && (
-        <div className="settings-account-loading" role="status">
-          <span className="spin" aria-hidden="true" />
-          {t("settings.checkingAccounts", { count: checking.size })}
-        </div>
+      <div className="acct-toolbar">
+        {checking.size > 0 && (
+          <span className="settings-account-loading" role="status">
+            <span className="spin" aria-hidden="true" />
+            {t("settings.checkingAccounts", { count: checking.size })}
+          </span>
+        )}
+        <span className="grow" />
+        <BusyButton size="sm" variant="ghost" onExecute={() => refreshAllUsage(profiles)}>
+          <span aria-hidden="true">↻</span> {t("settings.checkAllUsage")}
+        </BusyButton>
+        <Button
+          size="sm"
+          aria-haspopup="menu"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setAddMenuAt({ x: rect.right - 220, y: rect.bottom + 4 });
+          }}
+        >
+          {t("settings.addAccount")}
+        </Button>
+      </div>
+      {addMenuAt && (
+        <Menu
+          x={addMenuAt.x}
+          y={addMenuAt.y}
+          width={220}
+          onClose={closeAddMenu}
+          items={AGENT_CLIS.map((cliId) => ({
+            kind: "item" as const,
+            label: CLI_REGISTRY[cliId].name,
+            onSelect: () => void addProfile(cliId),
+          }))}
+        />
       )}
-      {AGENT_CLIS.map((cliId) => {
+      {connected.map((cliId) => {
         const def = CLI_REGISTRY[cliId];
-        const list = profiles.filter((p) => p.cliId === cliId);
         return (
           <div key={cliId} className="agent-acct-cli">
-            <div className="opt">
-              <div className="opt-label">
-                <b>
-                  <CliIcon id={cliId} /> {def.name}
-                </b>
-                <small className={cliId === "copilot" || cliId === "muse" ? undefined : "mono agent-acct-path"}>
-                  {cliId === "copilot"
-                    ? t("settings.copilotSharedCredentials")
-                    : cliId === "muse"
-                      ? t("settings.museSharedCredentials")
-                      : `~/.branchwork/profiles/${cliId}-<account>`}
+            <div className="acct-prov-h">
+              <CliIcon id={cliId} />
+              <h4>{def.name}</h4>
+              {(cliId === "copilot" || cliId === "muse") && (
+                <small>
+                  {cliId === "copilot" ? t("settings.copilotSharedCredentials") : t("settings.museSharedCredentials")}
                 </small>
-              </div>
-              <div className="opt-ctl">
-                <BusyButton size="sm" onExecute={() => addProfile(cliId)}>
-                  {t("settings.addAccount")}
-                </BusyButton>
-              </div>
+              )}
             </div>
-            {list.map((profile) => {
-              const isDefault = cliDefaults[cliId]?.slug === profile.slug;
-              const usage = usageBy[usageKey({ cliId, slug: profile.slug })];
-              const identity =
-                (cliId === "claude"
-                  ? profileProbes[usageKey({ cliId, slug: profile.slug })]
-                  : cliProbes[cliId]
-                )?.identity ?? null;
-              return (
-                <div key={profile.slug} className="opt agent-acct-row">
-                  <div className="opt-label">
-                    <b>
-                      {profile.name}{" "}
-                      {isDefault && <span className="chip cg">{t("settings.isDefault")}</span>}
-                    </b>
-                    <small className="mono agent-acct-path">
-                      ~/.branchwork/profiles/{cliId}-{profile.slug}
-                    </small>
-                  </div>
-                  <div className="opt-ctl">
-                    {usage ? (
-                      <div className="agent-acct-usage">
-                        {t("settings.usageLimit", { window: usage.window, percent: usage.percent })}
-                        <UsageBar usage={usage} className="agent-acct-bar" />
-                      </div>
-                    ) : identity ? (
-                      <span className="agent-acct-nousage">{identity}</span>
-                    ) : (
-                      <span className="agent-acct-nousage">{t("settings.noUsageLimit")}</span>
-                    )}
-                    <AccountActions
-                      cliId={cliId}
-                      slug={profile.slug}
-                      name={profile.name}
-                      isDefault={isDefault}
-                      onCheckingChange={onCheckingChange}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+            {profiles
+              .filter((p) => p.cliId === cliId)
+              .map((profile) => (
+                <AccountRow
+                  key={profile.slug}
+                  cliId={cliId}
+                  profile={profile}
+                  isDefault={cliDefaults[cliId]?.slug === profile.slug}
+                  onCheckingChange={onCheckingChange}
+                />
+              ))}
           </div>
         );
       })}
+      {unconnected.length > 0 && (
+        <div className="acct-unconnected" role="group" aria-label={t("settings.notConnected")}>
+          <span>{t("settings.notConnected")}</span>
+          {unconnected.map((cliId) => (
+            <BusyButton
+              key={cliId}
+              size="sm"
+              variant="ghost"
+              aria-label={t("settings.addCliAccount", { name: CLI_REGISTRY[cliId].name })}
+              onExecute={() => addProfile(cliId)}
+            >
+              <CliIcon id={cliId} /> {CLI_REGISTRY[cliId].name}
+            </BusyButton>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -374,7 +191,11 @@ function SaverProtectedInput() {
   );
 }
 
+type SettingsTab = "general" | "agents" | "accounts" | "github";
+const SETTINGS_TABS: SettingsTab[] = ["general", "agents", "accounts", "github"];
+
 export function SettingsView() {
+  const [tab, setTab] = useState<SettingsTab>("general");
   const theme = useSettings((s) => s.theme);
   const setTheme = useSettings((s) => s.setTheme);
   const agentAutoSwitch = useSettings((s) => s.agentAutoSwitch);
@@ -386,22 +207,6 @@ export function SettingsView() {
   const profilesLoaded = useProfiles((s) => s.loaded);
   const profileLoadError = useProfiles((s) => s.loadError);
   const loadProfiles = useProfiles((s) => s.load);
-
-  const demoConfirm = async () => {
-    const r = await ask({ title: t("demo.confirm.title"), body: t("demo.confirm.body"), ok: t("demo.confirm.ok"), icon: "↑" });
-    toast({ title: r ? t("demo.result.confirmed") : t("demo.result.cancelled"), icon: r ? "✓" : "✕" });
-  };
-  const demoDanger = async () => {
-    const r = await ask({
-      title: t("demo.danger.title"), body: t("demo.danger.body"), ok: t("demo.danger.ok"), danger: true, icon: "↶",
-      meta: "M  src/auth/callback.ts\nA  src/ui/LoginButton.tsx\nD  src/auth/legacy.ts",
-    });
-    toast({ title: r ? t("demo.result.confirmed") : t("demo.result.cancelled"), icon: r ? "✓" : "✕" });
-  };
-  const demoInput = async () => {
-    const r = await ask({ title: t("demo.input.title"), body: t("demo.input.body"), ok: t("demo.input.ok"), icon: "＋", input: "src/new-file.ts" });
-    toast(typeof r === "string" ? { title: t("demo.result.created", { name: r }) } : { title: t("demo.result.cancelled"), icon: "✕" });
-  };
 
   if (!profilesLoaded) {
     return (
@@ -425,104 +230,122 @@ export function SettingsView() {
 
   return (
     <div className="settings">
-      <section className="panel">
-        <div className="section-h"><h3>{t("settings.appearance")}</h3></div>
-        <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
-          <Segmented<ThemeMode>
-            label={t("settings.theme")}
-            value={theme.mode}
-            onChange={(mode) => setTheme({ mode })}
-            options={[
-              { value: "system", label: t("settings.theme.system") },
-              { value: "light", label: t("settings.theme.light") },
-              { value: "dark", label: t("settings.theme.dark") },
-            ]}
-          />
-        </Row>
-        <Row label={t("settings.accent")}>
-          <div className="swatches">
-            {SWATCHES.map((h) => (
-              <button key={h} aria-label={t("settings.accentHue", { hue: h })} className={"swatch" + (theme.accentHue === h ? " on" : "")} style={{ background: `oklch(.68 .19 ${h})` }} onClick={() => setTheme({ accentHue: h })} />
-            ))}
-          </div>
-          <input type="range" min={0} max={360} value={theme.accentHue} aria-label={t("settings.accent")} onChange={(e) => setTheme({ accentHue: Number(e.target.value) })} />
-        </Row>
-        <Row label={t("settings.baseTint")}>
-          <input type="range" min={0} max={360} value={theme.baseHue} aria-label={t("settings.baseTint")} onChange={(e) => setTheme({ baseHue: Number(e.target.value) })} />
-        </Row>
-        <Row label={t("settings.textSize")} hint={t("settings.textSizeHint")}>
-          <Segmented<TextSize>
-            label={t("settings.textSize")}
-            value={theme.textSize}
-            onChange={(textSize) => setTheme({ textSize })}
-            options={[
-              { value: "default", label: t("settings.textSize.default") },
-              { value: "large", label: t("settings.textSize.large") },
-            ]}
-          />
-        </Row>
-        <Row label={t("settings.density")} hint={t("settings.densityHint")}>
-          <Segmented<Density>
-            label={t("settings.density")}
-            value={theme.density}
-            onChange={(density) => setTheme({ density })}
-            options={[
-              { value: "compact", label: t("settings.density.compact") },
-              { value: "default", label: t("settings.density.default") },
-              { value: "comfy", label: t("settings.density.comfy") },
-            ]}
-          />
-        </Row>
-      </section>
+      <div className="settings-tabs" role="tablist" aria-label={t("settings.tabs")}>
+        {SETTINGS_TABS.map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            id={`settings-tab-${value}`}
+            className="tab"
+            aria-selected={tab === value}
+            aria-controls="settings-tabpanel"
+            onClick={() => setTab(value)}
+          >
+            {t(`settings.tab.${value}`)}
+          </button>
+        ))}
+      </div>
+      <div className="settings-body" role="tabpanel" id="settings-tabpanel" aria-labelledby={`settings-tab-${tab}`}>
+        {tab === "general" && (
+          <>
+            <section className="panel">
+              <div className="section-h"><h3>{t("settings.appearance")}</h3></div>
+              <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
+                <Segmented<ThemeMode>
+                  label={t("settings.theme")}
+                  value={theme.mode}
+                  onChange={(mode) => setTheme({ mode })}
+                  options={[
+                    { value: "system", label: t("settings.theme.system") },
+                    { value: "light", label: t("settings.theme.light") },
+                    { value: "dark", label: t("settings.theme.dark") },
+                  ]}
+                />
+              </Row>
+              <Row label={t("settings.accent")}>
+                <div className="swatches">
+                  {SWATCHES.map((h) => (
+                    <button key={h} aria-label={t("settings.accentHue", { hue: h })} className={"swatch" + (theme.accentHue === h ? " on" : "")} style={{ background: `oklch(.68 .19 ${h})` }} onClick={() => setTheme({ accentHue: h })} />
+                  ))}
+                </div>
+                <input type="range" min={0} max={360} value={theme.accentHue} aria-label={t("settings.accent")} onChange={(e) => setTheme({ accentHue: Number(e.target.value) })} />
+              </Row>
+              <Row label={t("settings.baseTint")}>
+                <input type="range" min={0} max={360} value={theme.baseHue} aria-label={t("settings.baseTint")} onChange={(e) => setTheme({ baseHue: Number(e.target.value) })} />
+              </Row>
+              <Row label={t("settings.textSize")} hint={t("settings.textSizeHint")}>
+                <Segmented<TextSize>
+                  label={t("settings.textSize")}
+                  value={theme.textSize}
+                  onChange={(textSize) => setTheme({ textSize })}
+                  options={[
+                    { value: "default", label: t("settings.textSize.default") },
+                    { value: "large", label: t("settings.textSize.large") },
+                  ]}
+                />
+              </Row>
+              <Row label={t("settings.density")} hint={t("settings.densityHint")}>
+                <Segmented<Density>
+                  label={t("settings.density")}
+                  value={theme.density}
+                  onChange={(density) => setTheme({ density })}
+                  options={[
+                    { value: "compact", label: t("settings.density.compact") },
+                    { value: "default", label: t("settings.density.default") },
+                    { value: "comfy", label: t("settings.density.comfy") },
+                  ]}
+                />
+              </Row>
+            </section>
 
-      <section className="panel">
-        <div className="section-h"><h3>{t("settings.keyboard")}</h3></div>
-        <Row label={t("settings.singleKeyShortcuts")} hint={t("settings.singleKeyShortcutsHint")}>
-          <Switch label={t("settings.singleKeyShortcuts")} checked={singleKeyShortcuts} onChange={setSingleKeyShortcuts} />
-        </Row>
-        <Row label={t("settings.terminalShortcut")} hint={t("settings.terminalShortcutHint")}><kbd className="kbd">Ctrl+`</kbd></Row>
-      </section>
+            <section className="panel">
+              <div className="section-h"><h3>{t("settings.keyboard")}</h3></div>
+              <Row label={t("settings.singleKeyShortcuts")} hint={t("settings.singleKeyShortcutsHint")}>
+                <Switch label={t("settings.singleKeyShortcuts")} checked={singleKeyShortcuts} onChange={setSingleKeyShortcuts} />
+              </Row>
+              <Row label={t("settings.terminalShortcut")} hint={t("settings.terminalShortcutHint")}><kbd className="kbd">Ctrl+`</kbd></Row>
+            </section>
+          </>
+        )}
 
-      <section className="panel">
-        <div className="section-h"><h3>{t("settings.agents")}</h3></div>
-        <Row label={t("settings.autoSwitch")}>
-          <Switch
-            label={t("settings.autoSwitch")}
-            checked={agentAutoSwitch}
-            onChange={(on) => setAgentAutoSwitch(on)}
-          />
-        </Row>
-        <Row label={t("settings.tokenSaver")} hint={t("settings.tokenSaverHint")}>
-          <Switch
-            label={t("settings.tokenSaver")}
-            checked={agentTokenSaver}
-            onChange={(on) => setAgentTokenSaver(on)}
-          />
-        </Row>
-        <Row label={t("settings.saverProtected")}>
-          <SaverProtectedInput />
-        </Row>
-      </section>
+        {tab === "agents" && (
+          <section className="panel">
+            <div className="section-h"><h3>{t("settings.agents")}</h3></div>
+            <Row label={t("settings.autoSwitch")}>
+              <Switch
+                label={t("settings.autoSwitch")}
+                checked={agentAutoSwitch}
+                onChange={(on) => setAgentAutoSwitch(on)}
+              />
+            </Row>
+            <Row label={t("settings.tokenSaver")} hint={t("settings.tokenSaverHint")}>
+              <Switch
+                label={t("settings.tokenSaver")}
+                checked={agentTokenSaver}
+                onChange={(on) => setAgentTokenSaver(on)}
+              />
+            </Row>
+            <Row label={t("settings.saverProtected")}>
+              <SaverProtectedInput />
+            </Row>
+          </section>
+        )}
 
-      <section className="panel">
-        <div className="section-h"><h3>{t("settings.agentAccounts")}</h3></div>
-        <AgentAccounts />
-      </section>
+        {tab === "accounts" && (
+          <section className="panel">
+            <div className="section-h"><h3>{t("settings.agentAccounts")}</h3></div>
+            <AgentAccounts />
+          </section>
+        )}
 
-      <section className="panel">
-        <div className="section-h"><h3>{t("settings.githubAccounts")}</h3></div>
-        <GithubAccounts />
-      </section>
-
-      <section className="panel">
-        <div className="section-h"><h3>{t("settings.demo")}</h3></div>
-        <div className="demo">
-        <Button onClick={() => toast({ title: t("demo.toast.title"), detail: t("demo.toast.detail"), action: { label: t("toast.undo"), run: () => toast({ title: t("demo.undone"), icon: "↶" }) } })}>{t("settings.demo.toast")}</Button>
-        <Button variant="primary" onClick={demoConfirm}>{t("settings.demo.confirm")}</Button>
-        <Button variant="danger" onClick={demoDanger}>{t("settings.demo.danger")}</Button>
-        <Button onClick={demoInput}>{t("settings.demo.input")}</Button>
-        </div>
-      </section>
+        {tab === "github" && (
+          <section className="panel">
+            <div className="section-h"><h3>{t("settings.githubAccounts")}</h3></div>
+            <GithubAccounts />
+          </section>
+        )}
+      </div>
     </div>
   );
 }

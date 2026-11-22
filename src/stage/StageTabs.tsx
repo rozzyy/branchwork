@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useStage } from "../state/stage";
 import { screenById } from "../screens/registry";
 import { t } from "../i18n/t";
+import { ViewsMenu } from "../shell/ViewsMenu";
+import { Icon } from "../ui/Icon";
 
 export function StageTabs() {
   const tabs = useStage((s) => s.tabs);
@@ -11,7 +13,7 @@ export function StageTabs() {
   const [invalid, setInvalid] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
-  const { newTab, activateTab, closeTab, renameTab } = useStage.getState();
+  const { activateTab, closeTab, renameTab } = useStage.getState();
 
   useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
 
@@ -100,14 +102,13 @@ export function StageTabs() {
               className="stage-tab-close"
               aria-label={`${t("stage.tabs.close")} ${label}`}
               title={t("stage.tabs.close")}
-              disabled={tabs.length === 1}
               onClick={() => closeTab(tab.id)}
-            >×</button>
+            ><Icon name="close" size={12} /></button>
           </div>
         );
       })}
         <div className="stage-tab-new-slot" role="presentation">
-          <button type="button" className="stage-tab-new" aria-label={t("stage.tabs.new")} title={t("stage.tabs.new")} onClick={() => newTab()}>＋</button>
+          <ViewsMenu mode="newTab" />
         </div>
       </div>
       <span className={invalid ? "stage-tab-feedback invalid" : "stage-tab-feedback"} id={invalid ? "stage-tab-name-error" : "stage-tab-rename-hint"} aria-live="polite">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { create } from "zustand";
 import { t } from "../i18n/t";
@@ -7,6 +7,7 @@ import { toast } from "../ui/toast";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { byName, projectsForGroup, useRepos } from "../state/repos";
 import { isRepository, pickFolder, type Group, type Project } from "../ipc/catalog";
+import { Icon } from "../ui/Icon";
 
 const SWATCH_HUES = [250, 300, 350, 25, 60, 155, 200];
 export const swatchColor = (hue: number): string => `oklch(.68 .13 ${hue})`;
@@ -122,9 +123,35 @@ function useActiveProjectIds(): Set<string> {
   }, [activeId, projects]);
 }
 
-function ProjectRow({ project, onSelect, onMove, active }: { project: Project; onSelect(id: string): void; onMove(project: Project, at: { x: number; y: number }): void; active?: boolean }) {
+function ProjectRow({
+  project,
+  onSelect,
+  onMove,
+  onToggleWorktrees,
+  expanded,
+  active,
+}: {
+  project: Project;
+  onSelect(id: string): void;
+  onMove(project: Project, at: { x: number; y: number }): void;
+  onToggleWorktrees?(id: string): void;
+  expanded?: boolean;
+  active?: boolean;
+}) {
   return (
-    <div className="group-row">
+    <div className={"group-row" + (active ? " is-active" : "")}>
+      {onToggleWorktrees && (
+        <button
+          type="button"
+          className="icon-btn group-project-toggle"
+          aria-label={t(expanded ? "groups.collapseWorktrees" : "groups.expandWorktrees", { name: projectLabel(project) })}
+          aria-expanded={expanded}
+          title={t(expanded ? "groups.collapseWorktrees" : "groups.expandWorktrees", { name: projectLabel(project) })}
+          onClick={() => onToggleWorktrees(project.id)}
+        >
+          <Icon name={expanded ? "chevronDown" : "chevronRight"} size={13} />
+        </button>
+      )}
       <button className={"group-row-main" + (active ? " is-active" : "")} aria-current={active ? "true" : undefined} onClick={() => onSelect(project.id)}>
         <span className="group-row-name">{projectLabel(project)}</span>
       </button>
@@ -134,7 +161,7 @@ function ProjectRow({ project, onSelect, onMove, active }: { project: Project; o
         title={t("groups.moveTo")}
         onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); onMove(project, { x: r.left, y: r.bottom + 4 }); }}
       >
-        ⇄
+        <Icon name="move" size={15} />
       </button>
     </div>
   );
@@ -397,13 +424,15 @@ export function GroupSwitcherPopover({
                       aria-controls={listId}
                       onClick={() => useRepos.getState().toggleGroupCollapsed(key)}
                     >
-                      <span className="group-sec-chevron" aria-hidden>{collapsed ? "▸" : "▾"}</span>
+                      <span className="group-sec-chevron" aria-hidden>
+                        <Icon name={collapsed ? "chevronRight" : "chevronDown"} size={13} />
+                      </span>
                       <span className="group-sec-sw" aria-hidden style={{ background: section.color ?? "var(--s3)" }} />
                       <span className="group-sec-name">{section.name}{collapsed ? ` · ${section.projects.length}` : ""}</span>
                     </button>
                     {section.id && (
                       <>
-                        <button className="icon-btn" aria-label={t("groups.addRepo", { name: section.name })} title={t("groups.addRepo", { name: section.name })} onClick={() => void handleAddRepository(section.id!)}>＋</button>
+                        <button className="icon-btn" aria-label={t("groups.addRepo", { name: section.name })} title={t("groups.addRepo", { name: section.name })} onClick={() => void handleAddRepository(section.id!)}><Icon name="plus" size={14} /></button>
                         <button className="icon-btn" aria-label={t("groups.edit")} title={t("groups.edit")} onClick={() => setEditing(groups.find((g) => g.id === section.id) ?? null)}>✎</button>
                         <button className="icon-btn" aria-label={t("groups.delete")} title={t("groups.delete")} onClick={() => void handleDelete(section.id!, section.name)}>✕</button>
                       </>
@@ -437,14 +466,16 @@ export function GroupSwitcherPopover({
   );
 }
 
-/** Inline group list for the sidebar, below the "For this worktree" nav.
+/** Inline group list for the sidebar, with the active project's worktrees nested beneath it.
  *  Renders every group and project in place — no popover/modal — so the whole
  *  catalog is visible without an extra click. The list scrolls internally so
  *  it never expands the sidebar. Create/open/clone are icon buttons in the
  *  heading row; search, collapse, move/remove mirror the popover. */
-export function GroupInlineList() {
+export function GroupInlineList({ renderProjectContent }: { renderProjectContent?: (project: Project) => ReactNode }) {
   const groups = useRepos((s) => s.groups);
   const projects = useRepos((s) => s.projects);
+  const activeProjectId = useRepos((s) => s.activeProjectId);
+  const openProjectIds = useRepos((s) => s.openProjectIds);
   const activeGroupId = useRepos((s) => s.activeGroupId);
   const collapsedGroupIds = useRepos((s) => s.collapsedGroupIds);
   const activeProjectIds = useActiveProjectIds();
@@ -452,10 +483,29 @@ export function GroupInlineList() {
   const [editing, setEditing] = useState<Group | "new" | null>(null);
   const [moveMenu, setMoveMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
   const [groupMenu, setGroupMenu] = useState<{ x: number; y: number; section: Section } | null>(null);
+  const [collapsedWorktreeProjects, setCollapsedWorktreeProjects] = useState<Set<string>>(() => new Set());
 
   const sections = useMemo(() => buildSections(groups, projects, query), [groups, projects, query]);
 
-  const selectProject = (id: string) => useRepos.getState().selectProject(id);
+  const selectProject = (id: string) => useRepos.getState().openProject(id);
+  const toggleProjectWorktrees = (id: string) => {
+    if (id !== activeProjectId) {
+      if (openProjectIds.includes(id)) useRepos.getState().closeProject(id);
+      else useRepos.getState().openProject(id);
+      setCollapsedWorktreeProjects((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+      return;
+    }
+    setCollapsedWorktreeProjects((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleDelete = async (id: string, name: string) => {
     const confirmed = await ask({ title: t("groups.deleteTitle", { name }), body: t("groups.deleteBody"), danger: true, ok: t("groups.deleteOk") });
@@ -522,9 +572,9 @@ export function GroupInlineList() {
         <span className="group-head-title">{t("groups.title")}</span>
         {!editing && (
           <>
-            <button className="icon-btn group-inline-action" aria-label={t("groups.new")} title={t("groups.new")} onClick={() => setEditing("new")}>＋</button>
-            <button className="icon-btn group-inline-action" aria-label={t("groups.openProject")} title={t("groups.openProject")} onClick={() => void handleOpen()}>📂</button>
-            <button className="icon-btn group-inline-action" aria-label={t("groups.cloneRepo")} title={t("groups.cloneRepo")} onClick={() => void handleClone()}>⧉</button>
+            <button className="icon-btn group-inline-action" aria-label={t("groups.new")} title={t("groups.new")} onClick={() => setEditing("new")}><Icon name="plus" size={14} /></button>
+            <button className="icon-btn group-inline-action" aria-label={t("groups.openProject")} title={t("groups.openProject")} onClick={() => void handleOpen()}><Icon name="folder" size={15} /></button>
+            <button className="icon-btn group-inline-action" aria-label={t("groups.cloneRepo")} title={t("groups.cloneRepo")} onClick={() => void handleClone()}><Icon name="branch" size={15} /></button>
           </>
         )}
       </div>
@@ -562,23 +612,33 @@ export function GroupInlineList() {
                         aria-controls={listId}
                         onClick={() => useRepos.getState().toggleGroupCollapsed(key)}
                       >
-                        <span className="group-sec-chevron" aria-hidden>{collapsed ? "▸" : "▾"}</span>
+                        <span className="group-sec-chevron" aria-hidden>
+                          <Icon name={collapsed ? "chevronRight" : "chevronDown"} size={13} />
+                        </span>
                         <span className="group-sec-sw" aria-hidden style={{ background: section.color ?? "var(--s3)" }} />
                         <span className="group-sec-name">{section.name}{collapsed ? ` · ${section.projects.length}` : ""}</span>
                       </button>
                       {section.id && (
-                        <button className="icon-btn" aria-label={t("groups.manage", { name: section.name })} title={t("groups.manage", { name: section.name })} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setGroupMenu({ x: r.right, y: r.bottom + 4, section }); }}>☰</button>
+                        <button className="icon-btn" aria-label={t("groups.manage", { name: section.name })} title={t("groups.manage", { name: section.name })} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setGroupMenu({ x: r.right, y: r.bottom + 4, section }); }}><Icon name="more" size={16} /></button>
                       )}
                     </div>
                     <div id={listId}>
                       {!collapsed && section.projects.map((p) => (
-                        <ProjectRow
-                          key={p.id}
-                          project={p}
-                          onSelect={selectProject}
-                          onMove={(project, at) => setMoveMenu({ ...at, project })}
-                          active={activeProjectIds.has(p.id)}
-                        />
+                        <div className="group-project-entry" key={p.id}>
+                          <ProjectRow
+                            project={p}
+                            onSelect={selectProject}
+                            onMove={(project, at) => setMoveMenu({ ...at, project })}
+                            onToggleWorktrees={toggleProjectWorktrees}
+                            expanded={(openProjectIds.includes(p.id) || p.id === activeProjectId) && !collapsedWorktreeProjects.has(p.id)}
+                            active={activeProjectIds.has(p.id)}
+                          />
+                          {(openProjectIds.includes(p.id) || p.id === activeProjectId) && (
+                            <div className="group-project-worktrees" id={`project-worktrees-${p.id}`} hidden={collapsedWorktreeProjects.has(p.id)}>
+                              {renderProjectContent?.(p)}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

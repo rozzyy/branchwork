@@ -56,6 +56,8 @@ interface ReposStore {
   error: string | null;
   load(): Promise<void>;
   selectProject(id: string): void;
+  openProject(id: string): void;
+  closeProject(id: string): void;
   selectGroup(id: string | null): void;
   togglePreviousProject(): void;
   closeTab(id: string): void;
@@ -228,6 +230,25 @@ export const useRepos = create<ReposStore>((set, get) => ({
       openProjectIds,
       recentProjectIds: touchRecent(get().recentProjectIds, project.id),
     });
+    persistRepos(get());
+  },
+  openProject(id) {
+    const project = get().projects.find((item) => item.id === id);
+    if (!project) return;
+    const openProjectIds = get().openProjectIds.includes(id) ? get().openProjectIds : [...get().openProjectIds, id];
+    revision++;
+    set({
+      activeGroupId: effectiveGroupId(project, get().groups),
+      openProjectIds,
+      recentProjectIds: touchRecent(get().recentProjectIds, id),
+    });
+    persistRepos(get());
+  },
+  closeProject(id) {
+    if (!get().openProjectIds.includes(id)) return;
+    const openProjectIds = get().openProjectIds.filter((projectId) => projectId !== id);
+    revision++;
+    set({ openProjectIds });
     persistRepos(get());
   },
   selectGroup(id) {

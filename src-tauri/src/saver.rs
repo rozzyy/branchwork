@@ -47,13 +47,69 @@ fn allowlisted(tokens: &[&str]) -> bool {
     }
 }
 
+/// Characters a bare `cd` directory token must not contain, beyond
+/// `SHELL_SYNTAX`: quotes (ambiguous end) and `~`/`=` (shell expansion).
+const DIR_BLOCKED: &[char] = &['\'', '"', '~', '='];
+
+/// bash/zsh split command words on space and tab only. Rust's `char::trim`,
+/// `is_whitespace` and `split_whitespace` also treat Unicode blanks (NBSP,
+/// U+2000–U+200A, U+2028, U+0085) as separators, and ASCII VT/FF are plain
+/// data bytes to the shell, not separators at all. A command that differs
+/// from its rewritten form only in one of those characters would parse
+/// differently before and after (security review, Low) — see
+/// `is_shell_safe_command` below, which rejects them outright.
+fn is_shell_blank(c: char) -> bool {
+    c == ' ' || c == '\t'
+}
+
+fn trim_blank(s: &str) -> &str {
+    s.trim_matches(is_shell_blank)
+}
+
+/// True when every character is either a shell blank (space/tab) or a
+/// printable ASCII character — i.e. no other Unicode or ASCII whitespace,
+/// and no other ASCII control character (also rejects embedded `\n`/`\r`,
+/// already covered by `SHELL_SYNTAX`, and `\x0B`/`\x0C`, which were not).
+fn is_shell_safe_command(command: &str) -> bool {
+    command.chars().all(|c| c == '\t' || (c.is_ascii() && !c.is_control()))
+}
+
 /// Wrap an allowlisted simple command for the run mode, or None to leave it.
+/// Also accepts exactly `cd <dir> && <allowlisted command>` (spec G4): the
+/// `cd` runs unfiltered in the outer shell, then the saver wraps the rest.
 pub fn rewrite_command(command: &str, protected: &[String], bin: &str) -> Option<String> {
-    let command = command.trim();
+    if !is_shell_safe_command(command) {
+        return None;
+    }
+    let command = trim_blank(command);
+    if let Some(rest) = command.strip_prefix("cd ") {
+        return rewrite_cd_prefixed(rest, protected, bin);
+    }
+    rewrite_simple(command, protected, bin)
+}
+
+/// `rest` is everything after `cd ` (not yet trimmed). Splits into `<dir>
+/// && <rest>`, validates `<dir>`, and rewrites `<rest>` as a simple command.
+fn rewrite_cd_prefixed(rest: &str, protected: &[String], bin: &str) -> Option<String> {
+    let (dir, tail) = rest.split_once("&&")?;
+    let dir = trim_blank(dir);
+    if dir.is_empty() || dir.contains(is_shell_blank) || dir.contains(SHELL_SYNTAX) || dir.contains(DIR_BLOCKED) {
+        return None;
+    }
+    let tail = trim_blank(tail);
+    if tail.contains(['\'', '"']) {
+        return None;
+    }
+    let rewritten = rewrite_simple(tail, protected, bin)?;
+    Some(format!("cd {dir} && {rewritten}"))
+}
+
+fn rewrite_simple(command: &str, protected: &[String], bin: &str) -> Option<String> {
+    let command = trim_blank(command);
     if command.is_empty() || command.contains(SHELL_SYNTAX) || command.contains("branchwork-saver") {
         return None;
     }
-    let tokens: Vec<&str> = command.split_whitespace().collect();
+    let tokens: Vec<&str> = command.split(is_shell_blank).filter(|t| !t.is_empty()).collect();
     if tokens[0].contains('=') || !allowlisted(&tokens) {
         return None;
     }
@@ -269,6 +325,65 @@ mod tests {
         assert!(rewrite_command("git status", &strings(&["git status"]), BIN).is_none());
         assert!(rewrite_command("cargo test", &strings(&["cargo"]), BIN).is_none());
         assert!(rewrite_command("cargo build", &strings(&["cargo test"]), BIN).is_some());
+    }
+
+    #[test]
+    fn rewrite_accepts_cd_prefix() {
+        assert_eq!(
+            rewrite_command("cd src && cargo test", &[], BIN).as_deref(),
+            Some("cd src && '/b/branchwork-saver' run -- cargo test")
+        );
+        assert_eq!(
+            rewrite_command("cd src-tauri && pnpm test", &[], BIN).as_deref(),
+            Some("cd src-tauri && '/b/branchwork-saver' run -- pnpm test")
+        );
+    }
+
+    #[test]
+    fn rewrite_rejects_bad_cd_prefix_shapes() {
+        for command in [
+            "cd \"a b\" && git status",
+            "cd ~ && ls",
+            "cd a && b && git status",
+            "cd a; git status",
+            "cd a && git status | head",
+            "cd $X && ls",
+            "cd a && FOO=1 ls",
+            "cd && ls",
+            "cd a && rm -rf x",
+            "cd a && git diff",
+            "cd a=b && git status",
+            "cd a b && git status",
+        ] {
+            assert!(rewrite_command(command, &[], BIN).is_none(), "rewrote {command:?}");
+        }
+        // Protected `<rest>` applies the same as a bare command.
+        assert!(rewrite_command("cd a && cargo test", &strings(&["cargo test"]), BIN).is_none());
+        assert!(rewrite_command("cd a && cargo build", &strings(&["cargo test"]), BIN).is_some());
+    }
+
+    #[test]
+    fn rewrite_rejects_non_ascii_and_non_tab_control_whitespace() {
+        // Security review (Low): Rust's Unicode-aware trim/split treat these
+        // as blanks, but bash/zsh do not, so the rewrite would parse the
+        // command differently than the shell does. Fail open instead.
+        for command in [
+            "cd src\u{a0}&& ls",      // NBSP in the dir token
+            "\u{a0}ls",               // leading NBSP
+            "cd src && ls\u{c}",      // trailing form feed
+            "cd src\u{b}&& ls",       // vertical tab before `&&`
+        ] {
+            assert!(rewrite_command(command, &[], BIN).is_none(), "rewrote {command:?}");
+        }
+        // Plain ASCII space/tab still work exactly as before.
+        assert_eq!(
+            rewrite_command("cd src && ls", &[], BIN).as_deref(),
+            Some("cd src && '/b/branchwork-saver' run -- ls")
+        );
+        assert_eq!(
+            rewrite_command("cargo\ttest", &[], BIN).as_deref(),
+            Some("'/b/branchwork-saver' run -- cargo\ttest")
+        );
     }
 
     #[test]

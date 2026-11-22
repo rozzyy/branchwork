@@ -24,6 +24,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 type StatusEntry = {
   path: string;
@@ -201,7 +202,7 @@ async function seedChangesBackend(
 async function openChangesScreen(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("button", { name: /^main,/ })).toBeVisible();
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await openView(page, "Changes");
   await expect(page.locator(".changes-commit-box textarea")).toBeVisible();
 }
 

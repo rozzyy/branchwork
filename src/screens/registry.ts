@@ -31,7 +31,7 @@ export const SCREENS: ScreenDef[] = [
   { id: "settings", icon: "⚙", label: "nav.settings", section: "footer" },
 ];
 export const NAV_SECTIONS: { id: NavSection; label: MsgKey }[] = [
-  { id: "screens", label: "sidebar.sectionScreens" },
+  { id: "screens", label: "shell.viewsScreens" },
 ];
 
 export const SCREEN_IDS: ScreenId[] = [...NAV_SCREENS, "browser", "settings", "conflicts"];

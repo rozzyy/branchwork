@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./Sidebar";
 import { useStage, stageSnapshot } from "../state/stage";
@@ -9,7 +9,6 @@ import { listPins, pinWorktree, unpinWorktree } from "../ipc/catalog";
 import { listWorktrees, onGitChanged, type GitChanged, type Worktree } from "../ipc/worktrees";
 import { createWorktree, removeWorktree } from "../ipc/worktrees";
 import { useToasts } from "../ui/toast";
-import { useSessions } from "../agents/sessions";
 import { DialogHost } from "../ui/dialog";
 
 vi.mock("../ipc/catalog", async (importOriginal) => {
@@ -43,7 +42,7 @@ beforeEach(() => {
   ]);
   vi.mocked(pinWorktree).mockResolvedValue(undefined);
   vi.mocked(unpinWorktree).mockResolvedValue(true);
-  useRepos.setState({ projects: [project], activeProjectId: project.id, status: "ready" });
+  useRepos.setState({ projects: [project], activeProjectId: project.id, openProjectIds: [project.id], status: "ready" });
   useWorktrees.setState({
     projectId: null,
     worktrees: [],
@@ -57,35 +56,7 @@ beforeEach(() => {
   Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
 });
 
-it("⌘-click opens a right split, ⌥-click a bottom split", async () => {
-  render(<Sidebar />);
-  fireEvent.click(screen.getByRole("button", { name: /Changes/ }), { metaKey: true });
-  expect(useStage.getState().panes).toEqual(["home", "changes"]);
-  useStage.setState(stageSnapshot(initialStage));
-  fireEvent.click(screen.getByRole("button", { name: /History/ }), { altKey: true });
-  expect(useStage.getState()).toMatchObject({ panes: ["home", "history"], dir: "v" });
-});
-
-it("context menu offers split directions", async () => {
-  render(<Sidebar />);
-  fireEvent.contextMenu(screen.getByRole("button", { name: /Agents/ }));
-  await userEvent.click(screen.getByRole("menuitem", { name: /Split left/ }));
-  expect(useStage.getState().panes).toEqual(["agents", "home"]);
-});
-
-it("opens a sidebar screen in a separate stage tab from its context menu", async () => {
-  render(<Sidebar />);
-  useStage.getState().go("agents");
-  useStage.getState().openSplit("changes", "right");
-  const active = useStage.getState().activeTabId;
-  fireEvent.contextMenu(screen.getByRole("button", { name: /History/ }));
-  await userEvent.click(screen.getByRole("menuitem", { name: "Open in new tab" }));
-  expect(useStage.getState().panes).toEqual(["history"]);
-  useStage.getState().activateTab(active);
-  expect(useStage.getState().panes).toEqual(["agents", "changes"]);
-});
-
-it("shows the app logo above the worktree navigation and inline groups below For this worktree", () => {
+it("nests the active project's worktrees beneath its grouped project row", () => {
   const { container } = render(<Sidebar />);
   const brand = container.querySelector(".side-brand");
   expect(brand).toHaveTextContent("Branchwork");
@@ -95,13 +66,12 @@ it("shows the app logo above the worktree navigation and inline groups below For
   const groups = container.querySelector(".group-inline");
   expect(worktrees).toBeInTheDocument();
   expect(groups).toBeInTheDocument();
-  // Groups sit below the "For this worktree" navigation (below Browser).
-  const navHeading = [...container.querySelectorAll(".side-h")].find((h) => h.textContent === "For this worktree");
-  expect(navHeading).toBeTruthy();
-  expect(navHeading?.compareDocumentPosition(groups as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  const browser = container.querySelector(".nav[aria-label='Browser']");
-  expect(browser).toBeTruthy();
-  expect(browser?.compareDocumentPosition(groups as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  const projectEntry = container.querySelector(".group-project-entry");
+  expect(projectEntry?.querySelector(".worktree-section")).toBe(worktrees);
+  expect(container.querySelector(".side-scroll > .worktree-section")).not.toBeInTheDocument();
+  expect(container.querySelector(".nav")).not.toBeInTheDocument();
+  expect(screen.queryByText("For this worktree")).not.toBeInTheDocument();
+  expect(screen.queryByText("Worktrees", { exact: true })).not.toBeInTheDocument();
   // Groups heading keeps its icon buttons; group actions sit behind a
   // hamburger in each group title row (tested below).
   expect(screen.getByRole("button", { name: "New group" })).toHaveClass("group-inline-action");
@@ -109,6 +79,11 @@ it("shows the app logo above the worktree navigation and inline groups below For
   expect(screen.getByRole("button", { name: "Clone repository…" })).toHaveClass("group-inline-action");
   expect(container.querySelector(".group-inline-foot")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Open repository…" })).not.toBeInTheDocument();
+});
+
+it("keeps Settings at the bottom of the sidebar", () => {
+  render(<Sidebar />);
+  expect(screen.getByRole("button", { name: "Settings" })).toBeVisible();
 });
 
 it("shows a hamburger dropdown on each group title with its group actions", async () => {
@@ -139,7 +114,7 @@ it("shows a hamburger dropdown on each group title with its group actions", asyn
   expect(screen.getByRole("textbox", { name: "Folder for new clones" })).toBeInTheDocument();
 });
 
-it("shows every group and project inline below worktrees without a modal", async () => {
+it("shows grouped projects inline and nests worktrees under the active project", async () => {
   const user = userEvent.setup();
   useRepos.setState({
     groups: [{ id: "g1", name: "Acme", color: "oklch(.68 .19 250)", clonePathTemplate: "~/clients/{repo}" }],
@@ -162,9 +137,64 @@ it("shows every group and project inline below worktrees without a modal", async
   expect(screen.getByText("scratch")).toBeInTheDocument();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-  // Selecting another project switches it directly from the inline list.
-  await user.click(screen.getByText("scratch"));
+  // Expanding another project opens it without replacing the active project.
+  await user.click(screen.getByRole("button", { name: "Expand worktrees for scratch" }));
+  await waitFor(() => expect(useRepos.getState().openProjectIds).toContain("p2"));
+  expect(useRepos.getState().activeProjectId).toBe("p1");
+  const activeProjectEntry = screen.getByText("scratch").closest(".group-project-entry");
+  expect(activeProjectEntry?.querySelector(".worktree-section")).toBeInTheDocument();
+});
+
+it("collapses the active project's worktrees without unmounting their controls", async () => {
+  const user = userEvent.setup();
+  const { container } = render(<Sidebar />);
+  await screen.findByRole("button", { name: "main, Clean" });
+
+  await user.click(screen.getByRole("button", { name: "Collapse worktrees for repo" }));
+  const projectEntry = container.querySelector(".group-project-entry");
+  const worktrees = projectEntry?.querySelector(".worktree-section");
+  expect(worktrees).toBeInTheDocument();
+  expect(worktrees?.parentElement).toHaveAttribute("hidden");
+  expect(screen.getByRole("button", { name: "Expand worktrees for repo" })).toHaveAttribute("aria-expanded", "false");
+
+  await user.click(screen.getByRole("button", { name: "Expand worktrees for repo" }));
+  expect(worktrees?.parentElement).not.toHaveAttribute("hidden");
+});
+
+it("switches the active project only after a worktree is clicked", async () => {
+  const user = userEvent.setup();
+  useRepos.setState({
+    groups: [],
+    projects: [project, secondProject],
+    activeGroupId: null,
+    activeProjectId: "p1",
+    openProjectIds: ["p1", "p2"],
+    collapsedGroupIds: [],
+    recentProjectIds: ["p1"],
+    status: "ready",
+    error: null,
+  });
+  render(<Sidebar />);
+
+  const scratchEntry = await screen.findByText("other");
+  expect(useRepos.getState().activeProjectId).toBe("p1");
+  const entry = scratchEntry.closest(".group-project-entry");
+  await waitFor(() => expect(entry?.querySelector(".worktree-section")).toBeInTheDocument());
+  await user.click(within(entry as HTMLElement).getByRole("button", { name: "main, Clean" }));
   await waitFor(() => expect(useRepos.getState().activeProjectId).toBe("p2"));
+});
+
+it("shows the hamburger below worktrees only when no overflow row exists", async () => {
+  vi.mocked(listWorktrees).mockResolvedValue([worktrees[0]]);
+  vi.mocked(listPins).mockResolvedValue([
+    { projectId: "p1", worktreePath: "/repos/main" },
+  ]);
+  render(<Sidebar />);
+
+  await screen.findByRole("button", { name: "main, Clean" });
+  expect(screen.queryByText("1/1")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /more worktrees/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Browse worktrees" })).toBeVisible();
 });
 
 it("creates a worktree from the worktree picker and selects it", async () => {
@@ -183,7 +213,7 @@ it("creates a worktree from the worktree picker and selects it", async () => {
     </>,
   );
   await screen.findByRole("button", { name: "main, Clean" });
-  await user.click(screen.getByRole("button", { name: "Browse worktrees" }));
+  await user.click(screen.getByRole("button", { name: "… 2 more worktrees" }));
   await user.click(screen.getByRole("button", { name: /New worktree/ }));
 
   const prompt = await screen.findByRole("dialog", { name: "Create a worktree" });
@@ -206,7 +236,7 @@ it("removes a worktree from the picker after confirmation", async () => {
     </>,
   );
   await screen.findByRole("button", { name: "main, Clean" });
-  await user.click(screen.getByRole("button", { name: "Browse worktrees" }));
+  await user.click(screen.getByRole("button", { name: "… 2 more worktrees" }));
 
   await user.click(screen.getByRole("button", { name: "Remove feature/beta" }));
   const confirm = await screen.findByRole("dialog", { name: /Remove/ });
@@ -261,40 +291,9 @@ it("marks only the global project active in split view (pane pin removed)", () =
   expect(screen.getByText("scratch").closest("button")).not.toHaveClass("is-active");
 });
 
-it("keeps Conflicts out of the screen navigation", async () => {
+it("keeps screen navigation out of the sidebar", () => {
   render(<Sidebar />);
-  expect(screen.queryByRole("button", { name: "Conflicts" })).not.toBeInTheDocument();
-});
-
-it("badges the Agents nav while a session waits", () => {
-  useSessions.setState({
-    sessions: [
-      {
-        id: "a1",
-        cliId: "codex",
-        profile: { cliId: "codex", slug: "work" },
-        worktreePath: "/wt/a",
-        sessionId: "pty-1",
-        slot: "auto",
-        error: null,
-        sharedWithDock: false,
-        status: "waiting",
-        limitHit: false,
-        conversationId: null,
-        savers: { rtk: "unsupported", caveman: "unsupported" },
-      },
-    ],
-  });
-  render(<Sidebar />);
-  expect(screen.getByRole("status", { name: "1 agents waiting for input" })).toHaveTextContent("1");
-  useSessions.setState({ sessions: [] });
-});
-
-it("shows position glyphs for both split screens", () => {
-  useStage.setState(stageSnapshot(layoutOf(["agents", "changes"])));
-  render(<Sidebar />);
-  expect(screen.getByRole("button", { name: /Agents/ })).toHaveTextContent("◧");
-  expect(screen.getByRole("button", { name: /Changes/ })).toHaveTextContent("◨");
+  expect(screen.queryByRole("button", { name: "Resolve conflicts" })).not.toBeInTheDocument();
 });
 
 it("shows the active worktree and pins once, with an overflow count for the rest", async () => {
@@ -303,7 +302,8 @@ it("shows the active worktree and pins once, with an overflow count for the rest
   expect(await screen.findByRole("button", { name: "main, Clean" })).toHaveAttribute("aria-current", "true");
   expect(screen.getByRole("button", { name: "feature/alpha, Clean" })).toBeVisible();
   expect(screen.getAllByRole("button", { name: "main, Clean" })).toHaveLength(1);
-  expect(screen.getByLabelText("Worktrees: 2 of 4")).toBeInTheDocument();
+  expect(screen.queryByText("2/4")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Browse worktrees" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "… 2 more worktrees" })).toBeVisible();
   expect(onGitChanged).not.toHaveBeenCalled();
 });
@@ -312,7 +312,7 @@ it("filters the checkbox picker and pins or unpins through typed operations", as
   const user = userEvent.setup();
   render(<Sidebar />);
   await screen.findByRole("button", { name: "main, Clean" });
-  await user.click(screen.getByRole("button", { name: "Browse worktrees" }));
+  await user.click(screen.getByRole("button", { name: "… 2 more worktrees" }));
 
   const search = screen.getByRole("textbox", { name: "Search worktrees" });
   await user.type(search, "beta");
@@ -347,7 +347,7 @@ it("preserves row names and tooltips in collapsed mode", async () => {
   );
   const main = await screen.findByRole("button", { name: "main, Clean" });
   expect(main).toHaveAttribute("title", expect.stringContaining("/repos/main"));
-  expect(screen.getByRole("button", { name: "Browse worktrees" })).toHaveAttribute("title", "Browse worktrees");
+  expect(screen.getByRole("button", { name: "… 2 more worktrees" })).toHaveAttribute("title", "… 2 more worktrees");
 });
 
 it("selects a pinned worktree without replacing the active project", async () => {
@@ -361,7 +361,7 @@ it("selects a pinned worktree without replacing the active project", async () =>
 });
 
 it("refreshes only for a matching git change and ignores events from another project", async () => {
-  Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+  Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: { invoke: vi.fn().mockResolvedValue(null) } });
   const handlers: Array<(event: GitChanged) => void> = [];
   vi.mocked(onGitChanged).mockImplementation(async (callback) => {
     handlers.push(callback);
@@ -387,7 +387,7 @@ it("refreshes only for a matching git change and ignores events from another pro
       ? [{ ...worktrees[0], path: secondProject.localPath }]
       : worktrees,
   );
-  useRepos.setState({ projects: [project, secondProject], activeProjectId: secondProject.id });
+  useRepos.setState({ projects: [project, secondProject], activeProjectId: secondProject.id, openProjectIds: [secondProject.id] });
   await waitFor(() => expect(listWorktrees).toHaveBeenLastCalledWith(secondProject.id));
   const afterSwitchCalls = vi.mocked(listWorktrees).mock.calls.length;
   await act(async () => handlers[0]({ worktree: "/repos/main" }));
@@ -395,7 +395,7 @@ it("refreshes only for a matching git change and ignores events from another pro
 });
 
 it("unsubscribes on project change and unmount, including delayed listener registration", async () => {
-  Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+  Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: { invoke: vi.fn().mockResolvedValue(null) } });
   const unlisten = vi.fn(() => {});
   const resolvers: Array<(fn: () => void) => void> = [];
   vi.mocked(onGitChanged).mockImplementation(
@@ -405,7 +405,7 @@ it("unsubscribes on project change and unmount, including delayed listener regis
   await screen.findByRole("button", { name: "main, Clean" });
   await waitFor(() => expect(resolvers).toHaveLength(1));
 
-  useRepos.setState({ projects: [project, secondProject], activeProjectId: secondProject.id });
+  useRepos.setState({ projects: [project, secondProject], activeProjectId: secondProject.id, openProjectIds: [secondProject.id] });
   await waitFor(() => expect(resolvers).toHaveLength(2));
   resolvers[0](unlisten);
   await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
@@ -417,7 +417,7 @@ it("unsubscribes on project change and unmount, including delayed listener regis
 });
 
 it("surfaces worktree change listener failures", async () => {
-  Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+  Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: { invoke: vi.fn().mockResolvedValue(null) } });
   vi.mocked(onGitChanged).mockRejectedValue(new Error("listener failed"));
   render(<Sidebar />);
 

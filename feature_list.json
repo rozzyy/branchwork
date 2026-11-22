@@ -1757,6 +1757,93 @@
       ],
       "status": "review",
       "evidence": "Implemented fixed built-in provider login adapters, Settings-owned OpenCode choices, bounded detached PTY login sessions, profile-scoped isolation where supported, and status integration. Removed the arbitrary cap of 8 terminal sessions while retaining the separate cap of 2 background provider logins. Regression test opens 9 concurrent PTYs and opens a replacement after closing one. ./init.sh before this follow-up: TypeScript passed; Vitest 88 files/753 tests passed; Clippy passed; Rust tests 332 passed/11 failed/3 ignored, with the known 10 macOS FSEvent startup failures and one PTY buffered replay failure. Follow-up CAS compatibility fix, targeted session test, cargo check, Clippy, rustfmt, and diff checks passed. OpenCode current SQLite auth state remains unknown; native provider browser walkthrough is pending."
+    },
+    {
+      "id": "m13-task-02-settings-tabs-account-usage",
+      "stage": 51,
+      "name": "Settings tabs and per-account usage meters",
+      "description": "docs/superpowers/specs/2026-11-21-settings-tabs-account-usage-design.md",
+      "dependencies": [],
+      "status": "review",
+      "evidence": "Plan docs/superpowers/plans/2026-11-21-settings-tabs-account-usage.md Tasks 1-3 done. Settings split into General/Agents/AI accounts/GitHub tabs; Demo removed. AI account rows show headline usage meters, expandable windows with reset/updated/stale, per-row Check usage, \u22ef menu, Check all usage, Not connected line. useAgentMeters.refreshProfile reads quota without a live session. Vitest 91 files / 805 tests passed; typecheck clean; ./init.sh Rust 342 passed / 1 failed (known pty buffered replay baseline). Opus whole-branch review: With fixes, 1 important fixed (collapsed stale marker). Manual E2E: docs/testing/m13-settings-usage-manual-e2e.md pending."
+    },
+    {
+      "id": "m13-task-03-pane-header-agents",
+      "stage": 52,
+      "name": "Shared screen-owned pane header + merged Agents header + RTK chip",
+      "description": "docs/superpowers/specs/2026-11-21-merged-pane-headers-and-saver-honesty-design.md | task: .agent/tasks/m13-task-03-pane-header-agents.md",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "Calm-row PaneHeader (identity / status / absolute action cluster, visible on only/focused pane, hover/focus-within otherwise) + PaneChromeContext.active; Agents solo row + merged SessionStatusChip (ring, %, RTK text, account; popover Usage/Token savers/Account); tile rows; .agent-phm removed. Gate: typecheck clean; Vitest 92 files / 823 tests; Rust 344 pass / 1 baseline fail. Spec review .agent/reviews/m13-task-03-spec.md: 2 findings (Review beside a11y name, RTK zero dashed style) fixed \u2192 RE-REVIEW PASS."
+    },
+    {
+      "id": "m13-task-04-terminal-merged-header",
+      "stage": 52,
+      "name": "Terminal tabs in pane header, corner labels, no status bar",
+      "description": "docs/superpowers/specs/2026-11-21-merged-pane-headers-and-saver-honesty-design.md | task: .agent/tasks/m13-task-04-terminal-merged-header.md",
+      "dependencies": [
+        "m13-task-03-pane-header-agents"
+      ],
+      "status": "done",
+      "evidence": "Terminal ownsHeader: tabs + New tab in PaneHeader identity, Broadcast toggle in cluster, Broadcasting chip while on; per-part corner labels (expand hover 150ms / focus-within, worktree select, split right/down, maximize, close, more, pane i/n, cols x rows); .term-screen-pane-head and .term-screen-status removed; pane order map O(panes). Gate: Vitest 92 files / 827 tests; Rust 344 pass / 1 baseline fail. Spec review .agent/reviews/m13-task-04-spec.md: O(panes^2) constraint finding fixed -> RE-REVIEW PASS."
+    },
+    {
+      "id": "m13-task-05-saver-cd-prefix-and-unavailable",
+      "stage": 52,
+      "name": "Saver cd-prefix rewrite + RTK unavailable root cause",
+      "description": "docs/superpowers/specs/2026-11-21-merged-pane-headers-and-saver-honesty-design.md | task: .agent/tasks/m13-task-05-saver-cd-prefix-and-unavailable.md",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "cd-prefix rewrite in saver.rs (rewrite_cd_prefixed + tests rewrite_accepts_cd_prefix / rewrite_rejects_bad_cd_prefix_shapes); dev sidecars built via package.json sidecars:dev chained in beforeDevCommand. cargo test saver 12/12; clippy clean; init.sh Vitest 805/805, Rust 344 pass / 1 baseline fail. Spec review .agent/reviews/m13-task-05-spec.md: AC1-3 PASS, AC4 gap (gate output not quoted) fixed in log, re-checked by coordinator. Release bundle lacks externalBin for sidecars: documented, follow-up."
+    },
+    {
+      "id": "m13-task-06-calm-header-simple-screens",
+      "stage": 52,
+      "name": "Calm pane header for Home, Changes, Files, Conflicts, Settings, GitHub, Browser, placeholders",
+      "description": "docs/superpowers/specs/2026-11-21-merged-pane-headers-and-saver-honesty-design.md G5 | task: .agent/tasks/m13-task-06-calm-header-simple-screens.md",
+      "dependencies": [
+        "m13-task-03-pane-header-agents",
+        "m13-task-04-terminal-merged-header"
+      ],
+      "status": "todo",
+      "evidence": ""
+    },
+    {
+      "id": "m13-task-07-calm-header-history",
+      "stage": 52,
+      "name": "Calm pane header for History + remove legacy pane-tool path",
+      "description": "docs/superpowers/specs/2026-11-21-merged-pane-headers-and-saver-honesty-design.md G5 | task: .agent/tasks/m13-task-07-calm-header-history.md",
+      "dependencies": [
+        "m13-task-06-calm-header-simple-screens"
+      ],
+      "status": "todo",
+      "evidence": ""
+    },
+    {
+      "id": "m13-task-06-stage3-review-fixes",
+      "stage": 52,
+      "name": "Stage 3 batch-review fixes (layout collapse, clipped close, status chip, a11y, saver whitespace)",
+      "description": "docs/superpowers/specs/2026-11-21-merged-pane-headers-and-saver-honesty-design.md | task: .agent/tasks/m13-task-06-stage3-review-fixes.md",
+      "dependencies": [
+        "m13-task-03-pane-header-agents",
+        "m13-task-04-terminal-merged-header",
+        "m13-task-05-saver-cd-prefix-and-unavailable"
+      ],
+      "status": "todo",
+      "evidence": ""
+    },
+    {
+      "id": "m13-task-08-views-navigation-layout",
+      "stage": 52,
+      "name": "User-approved Views navigation layout",
+      "description": "Apply the approved layout in docs/design/orca-informed-navigation.html without changing screen behavior or removing features.",
+      "dependencies": [
+        "m13-task-03-pane-header-agents",
+        "m13-task-04-terminal-merged-header",
+        "m13-task-05-saver-cd-prefix-and-unavailable"
+      ],
+      "status": "review",
+      "evidence": "Views remains visible in the title bar and the ＋ new-tab slot opens the screen picker modal. Selecting a screen creates or renames a tab to that screen name. Worktree clicks switch project/worktree and return the centered empty workspace page. Add project and Create worktree open separate dialogs. The final stage tab is closable and Settings stays at the bottom of the 248px sidebar. Sidebar SVG icons use chevrons for project expansion, a branch/worktree mark for worktrees, and purpose-built Settings/move/picker/action glyphs. Nested worktrees use 3px row gaps and 34px rows. Preserved all 10 destinations, shortcuts, modifier/context-menu splits, drag/drop, active-pane indicators, and badges. Latest: typecheck passed; 43 targeted Sidebar/GroupSwitcher tests plus 55 prior targeted tests passed; git diff --check passed. Desktop review/checkpoint pending."
     }
   ]
 }

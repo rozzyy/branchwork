@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentsToolbar, AgentsView } from "./AgentsScreen";
+import type { ReactNode } from "react";
+import { AgentsView } from "./AgentsScreen";
 import { useSessions } from "../../agents/sessions";
 import { useProfiles } from "../../agents/profiles";
 import { useRepos } from "../../state/repos";
@@ -10,10 +11,38 @@ import { createUnpinnedWorktree, createWorktree, listWorktrees, removeWorktree }
 import { listPins, type Project } from "../../ipc/catalog";
 import { ensureProfileDir, probeCli, profileHasCredentials, resolveCliBinary } from "../../ipc/cli";
 import { spawnTerminal, writeTerminal } from "../../ipc/pty";
-import { readProfileQuota } from "../../ipc/quota";
+import { readProfileQuota, readSaverStats } from "../../ipc/quota";
 import { ask } from "../../ui/dialog";
 import { markTerminalAttached } from "../../terminal/attachReady";
+import { PaneChromeProvider } from "../../stage/PaneHeader";
 import type { Worktree } from "../../ipc/worktrees";
+import agentsCss from "./agents.css?raw";
+
+/** `AgentsView` owns its pane header (`ownsHeader`) and reads its split
+ * controls from `PaneChromeContext`, which only `Pane` provides outside
+ * tests. Every render in this file goes through this helper instead of a
+ * bare `render`. */
+function renderAgents(node: ReactNode) {
+  return render(
+    <PaneChromeProvider value={{ index: 0, active: true, controls: <div data-testid="pane-controls" /> }}>
+      {node}
+    </PaneChromeProvider>,
+  );
+}
+
+/** Opens a session's merged status chip popover (spec G2/AC5) by its
+ * composed accessible name (contains the RTK state text, which is always
+ * present and unique enough per test fixture). */
+function openStatusChip(nameRe: RegExp) {
+  fireEvent.click(screen.getByRole("button", { name: nameRe }));
+}
+
+/** "Hand over to another agent" now lives in the tile's ⋯ menu (spec G2,
+ * AC3) instead of a standalone button; open it and click the menu item. */
+function handOverFromTile(index = 0) {
+  fireEvent.click(screen.getAllByRole("button", { name: "Session actions" })[index]);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Hand over to another agent" }));
+}
 
 export const cliPaneProps: Array<{ sessionId: string; interceptInput?: (data: string) => boolean }> = [];
 vi.mock("../../terminal/CliPane", () => ({
@@ -162,7 +191,7 @@ beforeEach(() => {
 });
 
 describe("AgentsView", () => {
-  it("pane shows the tightest quota window and labelled saver badges", async () => {
+  it("merged status chip shows the tightest quota window's percent, RTK saving and account; its popover carries the rest (AC5)", async () => {
     useSessions.setState({
       sessions: useSessions.getState().sessions.map((session) =>
         session.id === "a1"
@@ -170,48 +199,53 @@ describe("AgentsView", () => {
           : session,
       ),
     });
-    render(<AgentsView />);
-    const meter = await screen.findByRole("button", { name: /Usage 5h 42%, resets in 2h 5m/ });
-    expect(meter).toHaveTextContent("5h");
-    expect(meter).toHaveTextContent("42%");
-    expect(meter).toHaveTextContent("2h 5m");
-    expect(meter).not.toHaveTextContent("tok");
-    fireEvent.click(meter);
-    const panel = screen.getByRole("dialog", { name: "Usage windows" });
+    renderAgents(<AgentsView />);
+    const chip = await screen.findByRole("button", {
+      name: /Usage 5h 42%, resets in 2h 5m.*RTK −12\.3k.*Work/,
+    });
+    expect(chip).toHaveTextContent("42%");
+    expect(chip).toHaveTextContent("RTK −12.3k");
+    expect(chip).toHaveTextContent("Work");
+    fireEvent.click(chip);
+    const panel = screen.getByRole("dialog", { name: "Session details" });
+    // Usage section: today's quota popover content, unchanged.
     expect(panel).toHaveTextContent("Weekly");
     expect(panel).toHaveTextContent("35%");
     expect(panel).toHaveTextContent("resets in 2d 2h");
     expect(panel).toHaveTextContent("Updated 12m ago");
-    // Visible on/off text, not only a tooltip.
-    const rtk = await screen.findByRole("button", { name: /RTK-style compression.*Active.*Saved 12\.3k chars in 4 runs/ });
-    expect(rtk).toHaveAttribute("data-state", "active");
-    expect(rtk).toHaveTextContent("RTK on");
-    expect(screen.getByRole("button", { name: /Caveman-style answers.*Off/ })).toHaveTextContent("Caveman off");
-    // The failed Claude pane (no PTY, unsupported fixture) still says so.
+    // Token savers section: a real number, not only "on" (spec G4).
+    expect(panel).toHaveTextContent("RTK −12.3k");
+    expect(panel).toHaveTextContent("RTK-style compression");
+    expect(panel).toHaveTextContent("Saved 12.3k chars in 4 runs");
+    expect(panel).toHaveTextContent("Supported commands");
+    expect(panel).toHaveTextContent("Active in this session");
+    expect(panel).toHaveTextContent("Caveman off");
+    // Account section: today's profile switch list, same store call.
+    expect(within(panel).getByRole("button", { name: /Work/ })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Add account/ })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Manage accounts/ })).toBeInTheDocument();
+    // The failed Claude pane (no PTY, unsupported fixture) still reads so on
+    // its own chip face — "unavailable" and "unsupported" both read as
+    // "RTK n/a" now (spec G4) — without needing to open its popover.
     expect(screen.getByText("RTK n/a")).toBeInTheDocument();
-    expect(screen.getByText("Caveman n/a")).toBeInTheDocument();
   });
 
-  it("meters live in a strip below the header so pane actions are never pushed out of view", async () => {
+  it("merges identity and the status chip into one header row per tile; no .agent-phm strip remains", async () => {
     useSessions.setState({
       sessions: useSessions.getState().sessions.map((session) =>
         session.id === "a1" ? { ...session, savers: { rtk: "active", caveman: "off" } } : session,
       ),
     });
-    render(<AgentsView />);
-    const meter = await screen.findByRole("button", { name: /Usage 5h 42%/ });
-    const rtk = screen.getByRole("button", { name: /RTK-style compression.*Active/ });
+    renderAgents(<AgentsView />);
+    const chip = await screen.findByRole("button", { name: /Usage 5h 42%.*RTK −12\.3k.*Work/ });
     const close = screen.getAllByRole("button", { name: "Stop session" })[0];
-    // Header: identity + actions only. Strip: quota meter + saver badges.
-    expect(close.closest(".agent-phd")).not.toBeNull();
-    expect(meter.closest(".agent-phd")).toBeNull();
-    expect(rtk.closest(".agent-phd")).toBeNull();
-    const strip = meter.closest(".agent-phm");
-    expect(strip).not.toBeNull();
-    expect(rtk.closest(".agent-phm")).toBe(strip);
+    expect(document.querySelector(".agent-phm")).toBeNull();
+    const row = close.closest(".agent-phd");
+    expect(row).not.toBeNull();
+    expect(chip.closest(".agent-phd")).toBe(row);
   });
 
-  it("a 5-hour window past its reset still shows a 0% meter next to weekly", async () => {
+  it("a 5-hour window past its reset still shows the weekly window as the tightest percent", async () => {
     vi.mocked(readProfileQuota).mockResolvedValueOnce({
       state: "ok",
       windows: [
@@ -220,34 +254,30 @@ describe("AgentsView", () => {
       ],
       fetchedAtMs: Date.now() - 26 * 3_600_000,
     });
-    render(<AgentsView />);
-    const meter = await screen.findByRole("button", {
+    renderAgents(<AgentsView />);
+    const chip = await screen.findByRole("button", {
       name: /Usage 5h 0%, reset, no new report yet; Weekly 35%, resets in 2d 2h/,
     });
-    expect(meter).toHaveTextContent("5h");
-    expect(meter).toHaveTextContent("0%");
-    expect(meter).toHaveTextContent("reset");
-    expect(meter).toHaveTextContent("Weekly");
-    expect(meter).toHaveTextContent("35%");
-    fireEvent.click(meter);
-    const panel = screen.getByRole("dialog", { name: "Usage windows" });
+    expect(chip).toHaveTextContent("35%");
+    fireEvent.click(chip);
+    const panel = screen.getByRole("dialog", { name: "Session details" });
     expect(panel).toHaveTextContent("Reset 3h ago · last report 100%");
     expect(panel).toHaveTextContent("Updated 1d ago");
   });
 
   it("shows loading feedback while agent sessions are being restored", () => {
     useSessions.setState({ loaded: false });
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     expect(screen.getByRole("status")).toHaveTextContent("Loading agents…");
   });
   it("renders the session grid with headers and panes", () => {
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     expect(screen.getByLabelText("Codex session in a")).toBeInTheDocument();
     const switchers = screen.getAllByRole("combobox", { name: "Switch agent" });
     expect(switchers).toHaveLength(2);
     expect(switchers[0]).toHaveValue("codex");
     expect(switchers[1]).toHaveValue("claude");
-    expect(screen.getByTitle("Profile Work")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Work$/ })).toHaveTextContent("Work");
     expect(screen.getByTitle("/wt/a")).toBeInTheDocument();
     expect(screen.getByTestId("agent-pty-1")).toBeInTheDocument();
     // Failed session shows its error with a close action, no terminal.
@@ -255,31 +285,31 @@ describe("AgentsView", () => {
     expect(screen.queryByTestId("agent-null")).not.toBeInTheDocument();
   });
 
-  it("toggles pane slots and layout mode", () => {
-    render(
-      <>
-        <AgentsToolbar />
-        <AgentsView />
-      </>,
-    );
-    const rightButtons = screen.getAllByRole("button", { name: "Pin pane right" });
-    fireEvent.click(rightButtons[0]);
-    expect(useSessions.getState().sessions.find((s) => s.id === "a1")?.slot).toBe("right");
-
+  it("toggles the page's layout mode directly from the page header", () => {
+    renderAgents(<AgentsView />);
     fireEvent.click(screen.getByRole("button", { name: "Full width layout" }));
     expect(useSessions.getState().layoutMode).toBe("full");
     expect(document.querySelector(".agent-screen")).toHaveClass("agent-full");
   });
 
-  it("fills the view when a lone session uses the default slot", () => {
+  it("pins a session's pane slot through its tile's ⋯ menu (AC3's Session section, reused)", () => {
+    renderAgents(<AgentsView />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Session actions" })[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Pin pane right" }));
+    expect(useSessions.getState().sessions.find((s) => s.id === "a1")?.slot).toBe("right");
+  });
+
+  it("fills the view when a lone session uses the default slot, with no .agent-phd tile header", () => {
     useSessions.setState({ sessions: useSessions.getState().sessions.slice(0, 1) });
     useSessions.getState().toggleSlot("a1", "left");
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     expect(document.querySelector(".agent-screen")).toHaveClass("agent-solo");
+    expect(document.querySelectorAll(".pane-header")).toHaveLength(1);
+    expect(document.querySelector(".agent-phd")).toBeNull();
   });
 
   it("shows status dots and chips from live session state", () => {
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     // a1 has a live session, a2 failed to spawn: running vs idle.
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("Idle")).toBeInTheDocument();
@@ -299,28 +329,31 @@ describe("AgentsView", () => {
         },
       ],
     });
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     expect(document.querySelector(".agent-pane")).toHaveClass("st-waiting");
     expect(screen.getByText("Waiting for you")).toBeInTheDocument();
   });
 
-  it("opens the profile menu with the current profile checked", async () => {
-    render(<AgentsView />);
-    fireEvent.click(screen.getByRole("button", { name: /Profile Work/ }));
-    expect(await screen.findByRole("menuitem", { name: /Work/ })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /Add account/ })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /Manage accounts/ })).toBeInTheDocument();
+  it("opens the status chip's Account section with the current profile checked (spec G2/AC5)", async () => {
+    renderAgents(<AgentsView />);
+    fireEvent.click(screen.getByRole("button", { name: /Work$/ }));
+    const panel = await screen.findByRole("dialog", { name: "Session details" });
+    expect(within(panel).getByRole("button", { name: /Work/ })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Add account/ })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Manage accounts/ })).toBeInTheDocument();
   });
 
-  it("shows the live usage bar on the profile chip only when reported", async () => {
-    const { unmount } = render(<AgentsView />);
-    expect(document.querySelector(".agent-profile .ubar")).toBeNull();
+  it("shows the live usage bar on the account row only when reported", async () => {
+    const { unmount } = renderAgents(<AgentsView />);
+    fireEvent.click(screen.getByRole("button", { name: /Work$/ }));
+    expect(document.querySelector(".status-chip-accounts .ubar")).toBeNull();
     unmount();
     useProfiles.getState().setProfileUsage({ cliId: "codex", slug: "work" }, { window: "5h", percent: 72 });
-    render(<AgentsView />);
-    expect(document.querySelector(".agent-profile .ubar")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Profile Work/ }));
-    expect(await screen.findByRole("menuitem", { name: /Work.*72%/ })).toBeInTheDocument();
+    renderAgents(<AgentsView />);
+    fireEvent.click(screen.getByRole("button", { name: /Work$/ }));
+    expect(document.querySelector(".status-chip-accounts .ubar")).not.toBeNull();
+    const panel = screen.getByRole("dialog", { name: "Session details" });
+    expect(within(panel).getByRole("button", { name: /Work.*72%/ })).toBeInTheDocument();
   });
 
   it("shows the usage-limit banner with Switch and Dismiss", () => {
@@ -332,7 +365,7 @@ describe("AgentsView", () => {
         limitHit: true,
       }],
     });
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     expect(screen.getByText("Usage limit reached")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Switch" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
@@ -367,7 +400,7 @@ describe("AgentsView", () => {
         },
       ],
     });
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     expect(screen.queryByText(/already logged in/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Open login terminal" })).toBeNull();
   });
@@ -401,14 +434,14 @@ describe("AgentsView", () => {
         },
       ],
     });
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     expect(screen.queryByText(/already logged in/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Open login terminal" })).toBeNull();
   });
 
   it("intercepts a lone /account line instead of sending it", () => {
     cliPaneProps.length = 0;
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     const pane = cliPaneProps.find((props) => props.sessionId === "pty-1");
     expect(pane?.interceptInput).toBeDefined();
     // Ordinary typing passes through untouched.
@@ -420,7 +453,7 @@ describe("AgentsView", () => {
   });
 
   it("opens the handover dialog with the switcher CLI preset", async () => {
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     fireEvent.change(screen.getAllByRole("combobox", { name: "Switch agent" })[0], {
       target: { value: "opencode" },
     });
@@ -434,7 +467,7 @@ describe("AgentsView", () => {
   });
 
   it("ignores re-selecting the session's own CLI in the switcher", () => {
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     fireEvent.change(screen.getAllByRole("combobox", { name: "Switch agent" })[0], {
       target: { value: "codex" },
     });
@@ -442,8 +475,8 @@ describe("AgentsView", () => {
   });
 
   it("disables the switcher while its handover dialog is open", async () => {
-    render(<AgentsView />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    renderAgents(<AgentsView />);
+    handOverFromTile();
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getAllByRole("combobox", { name: "Switch agent" })[0]).toBeDisabled();
     // The other session's switcher stays usable.
@@ -457,8 +490,8 @@ describe("AgentsView", () => {
       ],
       unstaged: [],
     });
-    render(<AgentsView />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    renderAgents(<AgentsView />);
+    handOverFromTile();
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText(/Handover from Codex/)).toBeInTheDocument();
     // The source CLI cannot be the target.
@@ -475,8 +508,8 @@ describe("AgentsView", () => {
 
   it("prefills a handover branch for a new worktree", async () => {
     vi.mocked(readStatus).mockResolvedValue({ staged: [], unstaged: [] });
-    render(<AgentsView />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    renderAgents(<AgentsView />);
+    handOverFromTile();
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("New worktree"));
     const branch = screen.getByLabelText("Branch") as HTMLInputElement;
@@ -492,7 +525,7 @@ describe("AgentsView", () => {
       activePath: "/wt/a",
       worktrees: [{ path: "/wt/a" } as Worktree, { path: "/wt/b" } as Worktree],
     });
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     // Both terminals stay mounted so switching projects never replays output
     // or storms the PTY with resizes; only visibility changes.
     expect(screen.getByTestId("agent-pty-1")).toBeInTheDocument();
@@ -502,7 +535,10 @@ describe("AgentsView", () => {
     expect(
       screen.getByLabelText("Claude Code session in b").closest(".agent-pane"),
     ).toHaveClass("agent-off");
-    expect(screen.queryByText("＋ New agent")).not.toBeInTheDocument();
+    // A visible session means no "no sessions yet" empty state (the page
+    // header's own New agent button is unconditional now that it owns the
+    // header — spec G1/G2 — so the absence is checked on the empty state).
+    expect(document.querySelector(".agent-empty")).toBeNull();
 
     act(() => {
       useWorktrees.setState({ activePath: "/wt/b" });
@@ -521,9 +557,10 @@ describe("AgentsView", () => {
       activePath: "/wt/new",
       worktrees: [{ path: "/wt/a" } as Worktree, { path: "/wt/new" } as Worktree],
     });
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     // Other worktrees keep their mounted panes hidden; this one is empty.
-    expect(screen.getByText("＋ New agent")).toBeInTheDocument();
+    // Both the page header and the empty state offer "＋ New agent" now.
+    expect(within(document.querySelector(".agent-empty")!).getByText("＋ New agent")).toBeInTheDocument();
     expect(
       screen.getByLabelText("Codex session in a").closest(".agent-pane"),
     ).toHaveClass("agent-off");
@@ -546,8 +583,8 @@ describe("AgentsView", () => {
     ]);
     vi.mocked(createUnpinnedWorktree).mockResolvedValue({ path: "/wt/new" } as Worktree);
     vi.mocked(spawnTerminal).mockResolvedValue({ sessionId: "pty-9" });
-    render(<AgentsView />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Hand over to another agent" })[0]);
+    renderAgents(<AgentsView />);
+    handOverFromTile();
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("New worktree"));
     fireEvent.change(screen.getByLabelText("Profile name"), { target: { value: "Target" } });
@@ -562,8 +599,8 @@ describe("AgentsView", () => {
 
   it("shows the empty state and opens the New Agent dialog", async () => {
     useSessions.setState({ sessions: [] });
-    render(<AgentsView />);
-    fireEvent.click(screen.getByRole("button", { name: "＋ New agent" }));
+    renderAgents(<AgentsView />);
+    fireEvent.click(within(document.querySelector(".agent-empty")!).getByRole("button", { name: "＋ New agent" }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
     const radios = screen.getAllByRole("radio");
     expect(radios).toHaveLength(6);
@@ -598,8 +635,8 @@ describe("AgentsView", () => {
     vi.mocked(resolveCliBinary).mockResolvedValue("/usr/local/bin/claude");
     vi.mocked(probeCli).mockResolvedValue(JSON.stringify({ loggedIn: true }));
     useSessions.setState({ sessions: [] });
-    render(<AgentsView />);
-    fireEvent.click(screen.getByRole("button", { name: "＋ New agent" }));
+    renderAgents(<AgentsView />);
+    fireEvent.click(within(document.querySelector(".agent-empty")!).getByRole("button", { name: "＋ New agent" }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveValue("personal"));
     expect(await screen.findByText("Logged in")).toBeInTheDocument();
@@ -628,8 +665,8 @@ describe("AgentsView", () => {
     vi.mocked(resolveCliBinary).mockResolvedValue("/usr/local/bin/claude");
     vi.mocked(probeCli).mockResolvedValue(JSON.stringify({ loggedIn: false }));
     useSessions.setState({ sessions: [] });
-    render(<AgentsView />);
-    fireEvent.click(screen.getByRole("button", { name: "＋ New agent" }));
+    renderAgents(<AgentsView />);
+    fireEvent.click(within(document.querySelector(".agent-empty")!).getByRole("button", { name: "＋ New agent" }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
     const profileSelect = screen.getByLabelText("Profile");
     await waitFor(() => expect(profileSelect).toHaveValue("personal"));
@@ -639,12 +676,7 @@ describe("AgentsView", () => {
   });
 
   it("gates the race start on prompt, agents, binaries, and profiles", async () => {
-    render(
-      <>
-        <AgentsToolbar />
-        <AgentsView />
-      </>,
-    );
+    renderAgents(<AgentsView />);
     fireEvent.click(screen.getByRole("button", { name: "⚑ Race" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     const start = screen.getByRole("button", { name: "Start race" });
@@ -689,12 +721,7 @@ describe("AgentsView", () => {
     });
     let ptyCounter = 0;
     vi.mocked(spawnTerminal).mockImplementation(async () => ({ sessionId: `pty-race-${(ptyCounter += 1)}` }));
-    render(
-      <>
-        <AgentsToolbar />
-        <AgentsView />
-      </>,
-    );
+    renderAgents(<AgentsView />);
     fireEvent.click(screen.getByRole("button", { name: "⚑ Race" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Fix it" } });
@@ -750,7 +777,7 @@ describe("AgentsView", () => {
     });
     vi.mocked(ask).mockResolvedValue(true);
     vi.mocked(listWorktrees).mockResolvedValue([{ path: "/wt/a" } as Worktree]);
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     act(() => {
       useSessions.getState().setRaceOpen(true);
     });
@@ -770,7 +797,7 @@ describe("AgentsView", () => {
       raceEntries: [{ id: "race-1", cliId: "codex", worktreePath: "/wt/fix-it-codex" }],
     });
     vi.mocked(ask).mockResolvedValue(true);
-    render(<AgentsView />);
+    renderAgents(<AgentsView />);
     act(() => {
       useSessions.getState().setRaceOpen(true);
     });
@@ -780,6 +807,133 @@ describe("AgentsView", () => {
     await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
     expect(vi.mocked(removeWorktree)).not.toHaveBeenCalled();
     expect(useSessions.getState().raceEntries).toHaveLength(1);
+  });
+
+  it("the page row's ⋯ bundles Race and the layout toggle, for a narrow header where the wide buttons don't fit (C2)", () => {
+    renderAgents(<AgentsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Agents page actions" }));
+    for (const name of ["Race", "Grid layout", "Full width layout"]) {
+      expect(screen.getByRole("menuitem", { name })).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("menuitem", { name: "Race" }));
+    expect(useSessions.getState().raceOpen).toBe(true);
+  });
+});
+
+describe("solo session pane header (AC2/AC3)", () => {
+  function renderSolo() {
+    useSessions.setState({
+      sessions: [
+        { ...useSessions.getState().sessions[0], id: "a1", slot: "auto", savers: { rtk: "active", caveman: "active" } },
+      ],
+    });
+    renderAgents(<AgentsView />);
+  }
+
+  it("is the only header row above the terminal, carrying identity, the status chip, New agent, ⋯ and the pane controls", async () => {
+    renderSolo();
+    expect(document.querySelectorAll(".pane-header")).toHaveLength(1);
+    expect(document.querySelector(".agent-phd")).toBeNull();
+    const header = document.querySelector(".pane-header") as HTMLElement;
+    expect(within(header).getByRole("combobox", { name: "Switch agent" })).toBeInTheDocument();
+    expect(within(header).getByText("Running")).toBeInTheDocument();
+    const chip = await within(header).findByRole("button", { name: /Usage.*RTK.*Work/ });
+    expect(chip).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "New agent" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Session actions" })).toBeInTheDocument();
+    expect(within(header).getByTestId("pane-controls")).toBeInTheDocument();
+    // The chip's popover carries the RTK and Caveman detail, not the header
+    // row. It portals to `document.body` (C4: `position: fixed`, so it is
+    // never clipped by `.pane-header`'s `overflow: hidden`), so it is no
+    // longer a DOM descendant of `header`.
+    fireEvent.click(chip);
+    const panel = screen.getByRole("dialog", { name: "Session details" });
+    expect(panel).toHaveTextContent("RTK-style compression");
+    expect(panel).toHaveTextContent("Caveman-style answers");
+  });
+
+  it("⋯ menu bundles the session's and the page's actions with unchanged accessible names and handlers", () => {
+    renderSolo();
+    fireEvent.click(screen.getByRole("button", { name: "Session actions" }));
+    for (const name of [
+      "Pin pane left",
+      "Pin pane right",
+      "Pane full width",
+      "Move session to dock",
+      "Hand over to another agent",
+      "Review beside in Changes",
+      "Stop session",
+      "Race",
+      "Grid layout",
+      "Full width layout",
+    ]) {
+      expect(screen.getByRole("menuitem", { name })).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("menuitem", { name: "Pin pane right" }));
+    expect(useSessions.getState().sessions.find((s) => s.id === "a1")?.slot).toBe("right");
+  });
+});
+
+describe("RTK chip states (AC6)", () => {
+  it("shows the measured saving when active with runs", async () => {
+    useSessions.setState({
+      sessions: useSessions.getState().sessions.map((s) =>
+        s.id === "a1" ? { ...s, savers: { ...s.savers, rtk: "active" } } : s,
+      ),
+    });
+    renderAgents(<AgentsView />);
+    expect(await screen.findByText("RTK −12.3k")).toBeInTheDocument();
+  });
+
+  it("shows RTK 0 while active but nothing has been compressed yet, with a data-state distinct from off/n-a (spec G4)", async () => {
+    vi.mocked(readSaverStats).mockResolvedValueOnce({ runs: 0, bytesBefore: 0, bytesAfter: 0 });
+    useSessions.setState({
+      sessions: useSessions.getState().sessions.map((s) =>
+        s.id === "a1" ? { ...s, savers: { ...s.savers, rtk: "active" } } : s,
+      ),
+    });
+    renderAgents(<AgentsView />);
+    const zero = await screen.findByText("RTK 0");
+    // "Armed but 0 runs" must read dashed/muted, not the same as off/n-a
+    // (G4: a real number only when there is one, otherwise distinguishable).
+    expect(zero).toHaveAttribute("data-state", "zero");
+  });
+
+  it("shows RTK off when the saver is off, with a data-state distinct from the zero-runs state", () => {
+    useSessions.setState({
+      sessions: useSessions.getState().sessions.map((s) =>
+        s.id === "a1" ? { ...s, savers: { ...s.savers, rtk: "off" } } : s,
+      ),
+    });
+    renderAgents(<AgentsView />);
+    const off = screen.getByText("RTK off");
+    expect(off).toHaveAttribute("data-state", "off");
+    expect(off.getAttribute("data-state")).not.toBe("zero");
+  });
+
+  it("shows RTK n/a for both unavailable and unsupported (the prior wording read as broken)", () => {
+    useSessions.setState({
+      sessions: useSessions.getState().sessions.map((s) =>
+        s.id === "a1" ? { ...s, savers: { ...s.savers, rtk: "unavailable" } } : { ...s, savers: { ...s.savers, rtk: "unsupported" } },
+      ),
+    });
+    renderAgents(<AgentsView />);
+    expect(screen.getAllByText("RTK n/a")).toHaveLength(2);
+  });
+
+  it("styles the 'active, 0 runs' state as dashed and muted (spec G4), not the default off/n-a look", () => {
+    // CSS-level proof that `[data-state="zero"]` actually renders
+    // differently (jsdom doesn't apply stylesheets, so this checks the rule
+    // exists, same technique PaneHeader.test.tsx uses for its CSS assertion).
+    expect(agentsCss).toMatch(/\.status-chip-rtk\[data-state="zero"\]\s*\{[^}]*text-decoration:\s*underline dashed;/);
+    expect(agentsCss).toMatch(/\.agent-saver-text\[data-state="zero"\]\s*\{[^}]*text-decoration:\s*underline dashed;/);
+  });
+
+  it("Token savers section notes Caveman is a system-prompt instruction with unmeasured savings", () => {
+    renderAgents(<AgentsView />);
+    openStatusChip(/Work$/);
+    const panel = screen.getByRole("dialog", { name: "Session details" });
+    expect(panel).toHaveTextContent(/system-prompt instruction; savings aren't measured/);
   });
 });
 
@@ -810,7 +964,7 @@ it("ignores a pane pin and shows the global project's sessions", async () => {
       status: "running" as const,
     })),
   });
-  render(
+  renderAgents(
     <PaneProjectProvider projectId="p2">
       <AgentsView />
     </PaneProjectProvider>,

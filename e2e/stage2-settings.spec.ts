@@ -1,8 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 async function openSettings(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openView(page, "Settings");
 }
 
 function html(page: Page) {
@@ -78,63 +79,9 @@ test.describe("M0 Stage 2 settings", () => {
     await expect.poll(() => accentVar(page)).toBe("155");
 
     // The settings panel itself reflects the restored state too.
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openView(page, "Settings");
     await expect(page.getByRole("radio", { name: "Light", exact: true })).toHaveAttribute("aria-checked", "true");
     await expect(page.getByRole("radio", { name: "Compact", exact: true })).toHaveAttribute("aria-checked", "true");
     await expect(page.getByRole("radiogroup", { name: "Text size" }).getByRole("radio", { name: "Large", exact: true })).toHaveAttribute("aria-checked", "true");
-  });
-
-  test("Show toast displays a toast, and its Undo shows Undone", async ({ page }) => {
-    await openSettings(page);
-    await page.getByRole("button", { name: "Show toast", exact: true }).click();
-    const savedToast = page.getByRole("status").filter({ hasText: "Settings saved" });
-    await expect(savedToast).toBeVisible();
-    await savedToast.getByRole("button", { name: "Undo", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Undone" })).toBeVisible();
-  });
-
-  test("Confirm dialog: Push shows Confirmed, Escape shows Cancelled", async ({ page }) => {
-    await openSettings(page);
-
-    await page.getByRole("button", { name: "Confirm dialog", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Push 2 commits?" })).toBeVisible();
-    await page.getByRole("button", { name: "Push", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Confirmed" })).toBeVisible();
-    await expect(page.getByRole("dialog")).toBeHidden();
-
-    await page.getByRole("button", { name: "Confirm dialog", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("status").filter({ hasText: "Cancelled" })).toBeVisible();
-    await expect(page.getByRole("dialog")).toBeHidden();
-  });
-
-  test("Danger dialog shows a red action button and the file list", async ({ page }) => {
-    await openSettings(page);
-    await page.getByRole("button", { name: "Danger dialog", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Discard all changes?" })).toBeVisible();
-    const dangerButton = page.getByRole("button", { name: "Discard all", exact: true });
-    await expect(dangerButton).toHaveClass(/danger/);
-    const fileList = dialog.locator("pre");
-    await expect(fileList).toContainText("src/auth/callback.ts");
-    await expect(fileList).toContainText("src/ui/LoginButton.tsx");
-    await expect(fileList).toContainText("src/auth/legacy.ts");
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
-  });
-
-  test("Input dialog: Enter creates the prefilled file and shows a toast", async ({ page }) => {
-    await openSettings(page);
-    await page.getByRole("button", { name: "Input dialog", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    const input = dialog.getByRole("textbox");
-    await expect(input).toHaveValue("src/new-file.ts");
-    await input.press("Enter");
-    await expect(page.getByRole("status").filter({ hasText: "Created src/new-file.ts" })).toBeVisible();
-    await expect(page.getByRole("dialog")).toBeHidden();
   });
 });

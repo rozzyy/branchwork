@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { dismissOnboarding, openView, openViews } from "./helpers/navigation";
 
 function stage(page: Page): Locator {
   return page.locator(".stage");
@@ -18,8 +19,9 @@ function paneHeading(page: Page, index: 0 | 1, name: string): Locator {
  * MIME type, so we share one DataTransfer handle across synthetic dragstart/dragover/drop
  * events (the documented Playwright recipe for custom-data drag-and-drop).
  */
-async function dragSidebarOnto(page: Page, screenLabel: string, target: Locator, point: { x: number; y: number }) {
-  const source = page.getByRole("button", { name: screenLabel, exact: true });
+async function dragViewItemOnto(page: Page, screenLabel: string, target: Locator, point: { x: number; y: number }) {
+  const views = await openViews(page);
+  const source = views.getByRole("menuitem", { name: screenLabel, exact: true });
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await source.dispatchEvent("dragstart", { dataTransfer });
   await target.dispatchEvent("dragover", { dataTransfer, clientX: point.x, clientY: point.y });
@@ -41,11 +43,11 @@ async function dragDividerTo(page: Page, stageBox: { x: number; width: number },
 }
 
 test.describe("M0 Stage 3 split view", () => {
-  test("drag Changes onto the right edge opens a right split with a separator", async ({ page }) => {
+  test("drag Changes from Views onto the right edge opens a right split with a separator", async ({ page }) => {
     await page.goto("/");
     const s = stage(page);
     const point = await pointAt(s, 0.95, 0.5);
-    await dragSidebarOnto(page, "Changes", s, point);
+    await dragViewItemOnto(page, "Changes", s, point);
 
     await expect(s).toHaveClass(/split-h/);
     await expect(page.getByRole("separator")).toBeVisible();
@@ -53,40 +55,40 @@ test.describe("M0 Stage 3 split view", () => {
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 
-  test("drag a sidebar item onto the bottom edge opens a vertical split", async ({ page }) => {
+  test("drag a Views item onto the bottom edge opens a vertical split", async ({ page }) => {
     await page.goto("/");
     const s = stage(page);
     const point = await pointAt(s, 0.5, 0.95);
-    await dragSidebarOnto(page, "History", s, point);
+    await dragViewItemOnto(page, "History", s, point);
 
     await expect(s).toHaveClass(/split-v/);
     await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Graph")).toBeVisible();
   });
 
-  test("Meta-click a sidebar item opens a right split", async ({ page }) => {
+  test("Meta-click a Views item opens a right split", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
+    await openView(page, "Changes", { modifiers: ["Meta"] });
 
     await expect(stage(page)).toHaveClass(/split-h/);
     await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 
-  test("Alt-click a sidebar item opens a bottom split", async ({ page }) => {
+  test("Alt-click a Views item opens a bottom split", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Alt"] });
+    await openView(page, "Changes", { modifiers: ["Alt"] });
 
     await expect(stage(page)).toHaveClass(/split-v/);
     await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
   });
 
-  test("right-click a sidebar item opens a context menu; Split left opens a left split", async ({ page }) => {
+  test("right-click a Views item opens a context menu; Split left opens a left split", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ button: "right" });
+    await openView(page, "Changes", { button: "right" });
 
-    const menu = page.getByRole("menu");
+    const menu = page.locator(".menu");
     await expect(menu).toBeVisible();
     await menu.getByRole("menuitem", { name: "Split left", exact: true }).click();
 
@@ -97,6 +99,7 @@ test.describe("M0 Stage 3 split view", () => {
 
   test("Open beside menu opens a right split when a screen is selected", async ({ page }) => {
     await page.goto("/");
+    await dismissOnboarding(page);
     await page.getByRole("button", { name: "Open beside", exact: true }).click();
 
     const menu = page.getByRole("menu");
@@ -110,7 +113,7 @@ test.describe("M0 Stage 3 split view", () => {
 
   test("pane controls: swap, toggle orientation, and close", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
+    await openView(page, "Changes", { modifiers: ["Meta"] });
     await expect(paneHeading(page, 0, "Home")).toBeVisible();
     await expect(paneHeading(page, 1, "Changes")).toBeVisible();
 
@@ -130,21 +133,21 @@ test.describe("M0 Stage 3 split view", () => {
   test("splits up to four panes and refuses a fifth", async ({ page }) => {
     await page.goto("/");
     for (const label of ["Changes", "History", "Files"]) {
-      await page.getByRole("button", { name: label, exact: true }).click({ modifiers: ["Meta"] });
+      await openView(page, label, { modifiers: ["Meta"] });
     }
     await expect(page.locator("[data-pane]")).toHaveCount(4);
     await expect(page.getByRole("separator")).toHaveCount(3);
-    await page.getByRole("button", { name: "Agents", exact: true }).click({ modifiers: ["Meta"] });
+    await openView(page, "Agents", { modifiers: ["Meta"] });
     await expect(page.locator("[data-pane]")).toHaveCount(4);
     await expect(page.getByText("Up to 4 panes; close one first")).toBeVisible();
   });
 
   test("clicking a screen already open in the other pane focuses it instead of duplicating", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
+    await openView(page, "Changes", { modifiers: ["Meta"] });
     await expect(pane(page, 1)).toHaveClass(/focus/);
 
-    await page.getByRole("button", { name: "Home", exact: true }).click();
+    await openView(page, "Home");
 
     await expect(page.locator("[data-pane]")).toHaveCount(2);
     await expect(pane(page, 0)).toHaveClass(/focus/);
@@ -155,7 +158,7 @@ test.describe("M0 Stage 3 split view", () => {
 
   test("dragging the divider resizes panes and clamps to ~20%/80%", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
+    await openView(page, "Changes", { modifiers: ["Meta"] });
     const stageBox = (await stage(page).boundingBox())!;
 
     await dragDividerTo(page, stageBox, 0.05);
@@ -173,7 +176,7 @@ test.describe("M0 Stage 3 split view", () => {
 
   test("double-clicking the divider resets the split to 50/50", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
+    await openView(page, "Changes", { modifiers: ["Meta"] });
     const stageBox = (await stage(page).boundingBox())!;
 
     await dragDividerTo(page, stageBox, 0.1);
@@ -189,7 +192,7 @@ test.describe("M0 Stage 3 split view", () => {
 
   test("reload restores the split layout", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Changes", exact: true }).click({ modifiers: ["Meta"] });
+    await openView(page, "Changes", { modifiers: ["Meta"] });
     await expect(stage(page)).toHaveClass(/split-h/);
 
     // Layout save is debounced 300ms; wait on the actual persisted value, not a timer.

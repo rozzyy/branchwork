@@ -68,6 +68,12 @@ it("keeps split trees separate while switching stage tabs", () => {
   expect(useStage.getState().focus).toBe(0);
 });
 
+it("updates the first tab title to the opened screen", () => {
+  useStage.getState().go("changes");
+  expect(useStage.getState().tabs[0].name).toBe("Changes");
+  expect(useStage.getState().tabs[0].blank).not.toBe(true);
+});
+
 it("renames tabs with trimmed bounded names and closes to the previous neighbor", () => {
   const first = useStage.getState().activeTabId;
   const second = useStage.getState().newTab("changes")!;
@@ -77,7 +83,8 @@ it("renames tabs with trimmed bounded names and closes to the previous neighbor"
   expect(useStage.getState().renameTab(second, "x".repeat(41))).toBe(false);
   expect(useStage.getState().closeTab(second)).toBe(true);
   expect(useStage.getState().activeTabId).toBe(first);
-  expect(useStage.getState().closeTab(first)).toBe(false);
+  expect(useStage.getState().closeTab(first)).toBe(true);
+  expect(useStage.getState().tabs[0].blank).toBe(true);
 });
 
 it("caps workspaces at eight tabs", () => {

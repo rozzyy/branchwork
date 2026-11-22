@@ -99,6 +99,24 @@ it("selectProject ignores unknown ids", () => {
   expect(useRepos.getState()).toMatchObject({ activeProjectId: "p1", activeGroupId: "g1" });
 });
 
+it("openProject opens a project without changing the active project", () => {
+  useRepos.setState({ groups, projects, status: "ready", activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1"] });
+  useRepos.getState().openProject("p3");
+  expect(useRepos.getState()).toMatchObject({
+    activeProjectId: "p1",
+    openProjectIds: ["p1", "p3"],
+  });
+});
+
+it("closeProject closes an opened project without changing the active project", () => {
+  useRepos.setState({ groups, projects, status: "ready", activeGroupId: "g1", activeProjectId: "p1", openProjectIds: ["p1", "p3"] });
+  useRepos.getState().closeProject("p3");
+  expect(useRepos.getState()).toMatchObject({
+    activeProjectId: "p1",
+    openProjectIds: ["p1"],
+  });
+});
+
 it("selectGroup selects the group's first project, and persists", () => {
   useRepos.setState({ groups, projects, status: "ready" });
   useRepos.getState().selectGroup("g1");

@@ -1,5 +1,4 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach } from "vitest";
 import { useRepos } from "./state/repos";
 import { useGithubAccounts } from "./github/store";
@@ -7,14 +6,20 @@ import { useSessions } from "./agents/sessions";
 import App from "./App";
 
 beforeEach(() => {
-  useRepos.setState({ status: "ready", projects: [], groups: [], activeProjectId: null, activeGroupId: null });
+  useRepos.setState({
+    status: "ready",
+    projects: [],
+    groups: [],
+    activeProjectId: null,
+    activeGroupId: null,
+  });
   useGithubAccounts.setState({ loaded: true, accounts: [], defaultAccount: null, ownerAccounts: {} });
   useSessions.setState({ loaded: true, sessions: [] });
 });
 
-it("navigates from Home to Changes using the sidebar", async () => {
+it("renders the Branchwork shell", async () => {
   render(<App />);
-  expect(screen.getByRole("heading", { level: 1, name: /^Home/ })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: /Changes/ }));
-  expect(screen.getByRole("heading", { level: 2, name: "Changes" })).toBeInTheDocument();
+  await waitFor(() => expect(document.querySelector(".splash")).toBeNull(), { timeout: 2_000 });
+  expect(screen.getByRole("navigation", { name: "Workspace location" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "New tab" })).toBeInTheDocument();
 });

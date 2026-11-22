@@ -25,10 +25,34 @@
   font-size: 12.5px;
 }
 
-.agent-toolbar { display: flex; flex: 1 1 auto; align-items: center; gap: 8px; min-width: 0; }
-.agent-toolbar-actions { display: flex; align-items: center; gap: 6px; min-width: 0; margin-left: auto; }
-.agent-toolbar-actions .seg { flex: 0 0 auto; }
-.agent-toolbar-actions .seg button { flex-shrink: 0; white-space: nowrap; }
+.pane-header-cluster .seg { flex: 0 0 auto; }
+.pane-header-cluster .seg button { flex-shrink: 0; white-space: nowrap; }
+
+/* C2: the "not solo" Agents page row's cluster (Grid/Full, Race, New agent,
+ * PaneControls) is ~395px at natural size — wider than a 4-pane split's
+ * ~262px pane. The cluster itself must never wrap or clip (stage.css), so
+ * at a narrow header width its secondary actions collapse into a ⋯ menu
+ * (added alongside, since this row had none) and New agent shrinks to its
+ * icon — both forms stay mounted (same pattern as `.status-text-full`
+ * /`-short` above); CSS picks one. Scoped under `.pane-header-cluster` so
+ * these beat `.seg { display: inline-flex }` / `.icon-btn { display: grid }`
+ * (single-class, ui.css) at equal specificity — plain `.agent-page-wide`
+ * lost that tie by source order, so the "wide" row never actually hid. */
+.pane-header-cluster .agent-page-narrow { display: none; }
+@container (max-width: 480px) {
+  .pane-header-cluster .agent-page-wide { display: none; }
+  .pane-header-cluster .agent-page-narrow { display: inline-flex; }
+  .pane-header-cluster .agent-page-new-label { display: none; }
+}
+
+/* Agents page header identity ("✦ Agents · N sessions…"): one truncating
+ * run of text, so the session summary gives way first on a narrow pane. */
+.pane-header-id {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Segmented layout group in the toolbar, mirroring the prototype. */
 .agent-grp {
@@ -180,18 +204,7 @@
   min-width: 0;
 }
 
-@container (max-width: 760px) {
-  .agent-toolbar-actions > .faint { display: none; }
-  .agent-toolbar-actions .agent-action-label { display: none; }
-}
-
 @container (max-width: 480px) {
-  /* The Agents toolbar lives in `.pane-tool`, outside `.agent-pane`; keep its
-   * controls on their own rows when that stage pane is split narrow. */
-  .agent-toolbar { flex: 1 1 100%; flex-wrap: wrap; gap: 6px; }
-  .agent-toolbar-actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; gap: 4px; margin-left: 0; }
-  .agent-toolbar-actions .btn { padding-inline: 6px; white-space: nowrap; }
-
   .agent-phd {
     flex-wrap: wrap;
     gap: 4px 6px;
@@ -212,24 +225,6 @@
   .agent-phd-id .agent-cli-switch { max-width: 30cqi; }
 }
 
-/* Secondary strip under the header for live meters (account quota, token
- * savers). Wraps instead of overflowing; popovers open downward into the pane. */
-.agent-phm {
-  flex: none;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--raised);
-  min-width: 0;
-}
-
-.agent-phm:empty {
-  display: none;
-}
-
 .agent-dot {
   width: 8px;
   height: 8px;
@@ -244,6 +239,14 @@
 @keyframes agent-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
+}
+
+/* "Waiting for you" -> "Waiting" on a narrow pane header (spec G2); both
+ * copies stay in the DOM, the container query picks one. */
+.status-text-short { display: none; }
+@container (max-width: 480px) {
+  .status-text-full { display: none; }
+  .status-text-short { display: inline; }
 }
 
 .agent-wt {
@@ -288,16 +291,6 @@
   color: var(--yel);
 }
 
-button.agent-profile {
-  border: 0;
-  font: inherit;
-  cursor: pointer;
-}
-
-button.agent-profile:hover {
-  color: var(--fg);
-}
-
 /* Live usage bar (prototype `.ubar`, spec §6.6.4): rendered only when a
  * vendor-CLI hook reports usage; hidden otherwise — never fabricated. */
 .ubar {
@@ -315,10 +308,6 @@ button.agent-profile:hover {
   height: 100%;
   background: var(--ubar-c, var(--grn));
   border-radius: 2px;
-}
-
-button.agent-profile .ubar {
-  margin-left: 6px;
 }
 
 .agent-menu-usage {
@@ -380,32 +369,6 @@ textarea.input {
     var(--spec),
     0 0 0 1.5px color-mix(in oklch, var(--yel) 70%, transparent),
     0 0 30px -12px var(--yel);
-}
-
-.agent-lay {
-  display: flex;
-  gap: 1px;
-}
-
-.agent-lay button {
-  border: 0;
-  background: none;
-  color: var(--text-2);
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-control);
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.agent-lay button:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-
-.agent-lay button.on {
-  background: var(--selected);
-  color: var(--text);
 }
 
 .agent-phb {
@@ -583,72 +546,141 @@ textarea.input {
 }
 
 /* Account usage meter (Orca-style quota windows) and token-saver badges. */
-.agent-quota-wrap {
+/* Session status chip (spec G2): one merged chip — usage ring + percent +
+ * RTK state + account name — replacing the former separate usage meter,
+ * RTK badge, Caveman badge and profile chip. Shrinks by its own container
+ * width: full -> ring + percent -> ring only. */
+.status-chip-wrap {
   position: relative;
+  display: flex;
+  /* C3: `container-type: inline-size` (via the `statuschip` container below)
+   * makes this element's own intrinsic size containment-zeroed for any
+   * ancestor's auto-basis measurement; with `flex: 0 1 auto` that resolved
+   * to 0 width everywhere (measured in Chromium/WebKit), hiding the whole
+   * chip. An explicit, non-auto flex-basis sidesteps the intrinsic
+   * measurement entirely, so the box gets a real width that the
+   * `@container statuschip` queries below can then shrink from. */
+  flex: 0 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  container: statuschip / inline-size;
 }
 
-.agent-quota {
+.status-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  height: 22px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg2);
   font: inherit;
   font-size: var(--fs-meta);
-  color: var(--fg2);
   white-space: nowrap;
-  padding: 2px 6px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: transparent;
-}
-
-button.agent-quota {
+  overflow: hidden;
   cursor: pointer;
 }
 
-button.agent-quota:hover {
+.status-chip:hover {
   color: var(--fg);
+  border-color: var(--border-strong);
 }
 
-.agent-quota.muted,
-.agent-quota.stale {
+.status-chip.stale {
   color: var(--fg3);
 }
 
-.agent-quota.muted {
-  border-style: dashed;
+.status-chip-ring {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: oklch(0.6 0 0 / 0.3);
 }
 
-.agent-quota.warn {
-  color: var(--yel);
-  border-color: color-mix(in oklch, var(--yel) 50%, transparent);
-}
-
-.agent-quota-win {
+.status-chip-pct {
+  flex: none;
   font-weight: 600;
 }
 
-.agent-quota-reset {
+.status-chip-rtk {
+  flex: none;
   color: var(--fg3);
 }
 
-.agent-quota-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  min-width: 260px;
-  padding: 8px 10px;
-  border-radius: 6px;
+.status-chip-rtk[data-state="active"],
+.status-chip-rtk[data-state="saved"] {
+  color: var(--grn);
+}
+
+/* Armed but nothing compressed yet (spec G4 "active, 0 runs"): dashed and
+ * muted, visually distinct from "off"/"n/a" (unchanged style) and from a
+ * real saving (green, no underline). */
+.status-chip-rtk[data-state="zero"] {
+  color: var(--fg3);
+  text-decoration: underline dashed;
+  text-decoration-color: var(--fg3);
+  text-underline-offset: 2px;
+}
+
+.status-chip-account {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg3);
+}
+
+@container statuschip (max-width: 150px) {
+  .status-chip-rtk,
+  .status-chip-account {
+    display: none;
+  }
+}
+
+@container statuschip (max-width: 60px) {
+  .status-chip-pct {
+    display: none;
+  }
+}
+
+/* One popover with three sections: Usage, Token savers, Account (spec G2).
+ * C4: portaled to `document.body` and positioned `fixed` from the chip's
+ * own `getBoundingClientRect()` (set inline by `SessionStatusChip`, same
+ * pattern as `src/ui/Menu.tsx`) instead of `position: absolute` inside
+ * `.status-chip-wrap`. The wrap and `.pane-header` both clip overflow, so
+ * an absolutely positioned popover anchored inside the wrap rendered
+ * entirely outside both boxes and was never hit-testable. */
+.status-chip-pop {
+  position: fixed;
+  z-index: 100;
+  width: 300px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--s3);
   color: var(--fg);
   font-size: var(--fs-meta);
   box-shadow: 0 6px 20px oklch(0 0 0 / 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.agent-quota-head {
-  color: var(--fg3);
-  margin-bottom: 6px;
+.status-chip-pop section + section {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-quota-pop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .agent-quota-row {
@@ -667,85 +699,67 @@ button.agent-quota:hover {
   width: 100%;
 }
 
+.agent-quota-win {
+  font-weight: 600;
+}
+
 .agent-quota-pct {
   text-align: right;
 }
 
-.agent-quota-foot {
-  margin-top: 6px;
+.agent-quota-reset {
   color: var(--fg3);
 }
 
-.agent-savers {
-  display: inline-flex;
-  gap: 4px;
+.agent-quota-foot {
+  margin-top: 4px;
+  color: var(--fg3);
 }
 
-.agent-saver-wrap {
-  position: relative;
+.agent-saver-text {
+  margin: 0;
+  line-height: 1.4;
 }
 
-button.agent-saver {
-  display: inline-flex;
+.agent-saver-text[data-state="active"],
+.agent-saver-text[data-state="saved"] {
+  color: var(--grn);
+}
+
+/* Same "armed but 0 runs" treatment as `.status-chip-rtk` above, for the
+ * Token savers popover section's RTK line. */
+.agent-saver-text[data-state="zero"] {
+  color: var(--fg3);
+  text-decoration: underline dashed;
+  text-decoration-color: var(--fg3);
+  text-underline-offset: 2px;
+}
+
+.status-chip-accounts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-chip-account-row {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font: inherit;
   font-size: var(--fs-meta);
-  line-height: 1;
-  padding: 3px 6px;
+  text-align: left;
+  padding: 4px 2px;
   border-radius: 4px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--fg3);
   cursor: pointer;
 }
 
-button.agent-saver[data-state="active"] {
-  color: var(--grn);
-  border-color: color-mix(in oklch, var(--grn) 45%, transparent);
-}
-
-button.agent-saver > i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.35;
-}
-
-button.agent-saver[data-state="active"] > i {
-  opacity: 1;
-}
-
-button.agent-saver[data-state="unavailable"] {
-  border-style: dashed;
-}
-
-.agent-saver-tip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  width: 260px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--s3);
-  color: var(--fg);
-  font-size: var(--fs-meta);
-  line-height: 1.4;
-  white-space: normal;
-  box-shadow: 0 6px 20px oklch(0 0 0 / 0.25);
-}
-
-
-.agent-quota-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.agent-quota-sep {
-  color: var(--border-strong);
-  margin: 0 4px;
+.status-chip-account-row:hover {
+  background: var(--hover);
 }

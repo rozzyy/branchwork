@@ -9,7 +9,7 @@ import type { QuotaWindow, SaverStats } from "../ipc/bindings";
 import { ensureProfileDir } from "../ipc/cli";
 import { readProfileQuota, readSaverStats } from "../ipc/quota";
 import { t } from "../i18n/t";
-import { useProfiles, usageKey } from "./profiles";
+import { useProfiles, usageKey, type ProfileRef } from "./profiles";
 import { useSessions, type AgentSession } from "./sessions";
 import type { CliId } from "./registry";
 
@@ -18,7 +18,7 @@ export const METER_POLL_MS = 15_000;
 export const QUOTA_WARN_PERCENT = 80;
 
 /** CLIs whose local state records provider quota windows. */
-const QUOTA_CLIS: CliId[] = ["claude", "codex"];
+export const QUOTA_CLIS: CliId[] = ["claude", "codex"];
 
 export type QuotaView =
   | { kind: "loading" }
@@ -48,6 +48,16 @@ export function formatReset(atMs: number, now: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
   return hours >= 1 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+}
+
+/** "12m ago" / "3h ago" / "2d ago" for the provider's report time. */
+export function formatAgo(atMs: number, now: number): string {
+  const minutes = Math.floor(Math.max(0, now - atMs) / 60_000);
+  if (minutes < 1) return t("usage.justNow");
+  if (minutes < 60) return t("usage.minutesAgo", { n: String(minutes) });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t("usage.hoursAgo", { n: String(hours) });
+  return t("usage.daysAgo", { n: String(Math.floor(hours / 24)) });
 }
 
 /** A window whose reset time has passed no longer describes current usage. */
@@ -94,17 +104,19 @@ interface AgentMetersStore {
   savings: Record<string, SaverStats>;
   /** One refresh tick over the live sessions. */
   poll(sessions: AgentSession[]): Promise<void>;
+  /** Read one profile's quota on demand (no live session needed). */
+  refreshProfile(ref: ProfileRef): Promise<void>;
 }
 
 export const useAgentMeters = create<AgentMetersStore>((set, get) => {
   const setQuota = (key: string, view: QuotaView) => set({ quotas: { ...get().quotas, [key]: view } });
 
-  const refreshQuota = async (session: AgentSession) => {
-    const key = usageKey(session.profile);
+  const refreshQuota = async (ref: ProfileRef) => {
+    const key = usageKey(ref);
     const previous = get().quotas[key];
     try {
-      const profileDir = await ensureProfileDir(session.profile.cliId, session.profile.slug);
-      const quota = await readProfileQuota(session.cliId, profileDir);
+      const profileDir = await ensureProfileDir(ref.cliId, ref.slug);
+      const quota = await readProfileQuota(ref.cliId, profileDir);
       if (quota.state === "unsupported") return setQuota(key, { kind: "unsupported" });
       if (quota.state === "noData") return setQuota(key, { kind: "none" });
       setQuota(key, { kind: "ok", windows: quota.windows, fetchedAtMs: quota.fetchedAtMs ?? null, stale: false });
@@ -114,7 +126,7 @@ export const useAgentMeters = create<AgentMetersStore>((set, get) => {
       useProfiles
         .getState()
         .setProfileUsage(
-          session.profile,
+          ref,
           tight ? { percent: effectivePercent(tight, now), window: windowLabel(tight) } : null,
         );
     } catch {
@@ -132,26 +144,31 @@ export const useAgentMeters = create<AgentMetersStore>((set, get) => {
     }
   };
 
+  /** One guarded read per profile: concurrent callers share the in-flight read. */
+  const refreshOne = async (ref: ProfileRef) => {
+    const key = usageKey(ref);
+    if (!QUOTA_CLIS.includes(ref.cliId)) return setQuota(key, { kind: "unsupported" });
+    if (inFlight.has(key)) return;
+    inFlight.add(key);
+    if (!get().quotas[key]) setQuota(key, { kind: "loading" });
+    try {
+      await refreshQuota(ref);
+    } finally {
+      inFlight.delete(key);
+    }
+  };
+
   return {
     quotas: {},
     savings: {},
+    refreshProfile: refreshOne,
 
     async poll(sessions) {
       const live = new Set(sessions.map((session) => session.id));
       set({ savings: Object.fromEntries(Object.entries(get().savings).filter(([id]) => live.has(id))) });
       const byProfile = new Map(sessions.map((session) => [usageKey(session.profile), session]));
       await Promise.all([
-        ...[...byProfile].map(async ([key, session]) => {
-          if (!QUOTA_CLIS.includes(session.cliId)) return setQuota(key, { kind: "unsupported" });
-          if (inFlight.has(key)) return;
-          inFlight.add(key);
-          if (!get().quotas[key]) setQuota(key, { kind: "loading" });
-          try {
-            await refreshQuota(session);
-          } finally {
-            inFlight.delete(key);
-          }
-        }),
+        ...[...byProfile.values()].map((session) => refreshOne(session.profile)),
         ...sessions.filter((session) => session.savers.rtk === "active").map(refreshSavings),
       ]);
     },

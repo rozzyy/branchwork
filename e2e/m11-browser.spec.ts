@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 test.describe("M11 browser screen", () => {
   test("shows tabs and the address bar; pages need the desktop app", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Browser", exact: true }).click();
+    await openView(page, "Browser");
     await expect(page.getByRole("heading", { level: 1, name: "Browser" })).toBeVisible();
     await expect(page.getByRole("tab")).toHaveCount(1);
     const address = page.getByRole("textbox", { name: "Address" });

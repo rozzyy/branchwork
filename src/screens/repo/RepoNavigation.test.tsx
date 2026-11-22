@@ -9,6 +9,7 @@ import { useStage, stageSnapshot } from "../../state/stage";
 import { initialStage } from "../../stage/stageModel";
 import { useWorktrees } from "../../state/worktrees";
 import { Sidebar } from "../../shell/Sidebar";
+import { ViewsMenu } from "../../shell/ViewsMenu";
 import { Stage } from "../../stage/Stage";
 
 vi.mock("../../ipc/repo", async (importOriginal) => {
@@ -56,12 +57,14 @@ beforeEach(() => {
 it("paints the GitHub destination before starting its pending remote request", async () => {
   render(
     <>
+      <ViewsMenu />
       <Sidebar />
       <Stage />
     </>,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "GitHub" }));
+  fireEvent.click(screen.getByRole("button", { name: "Views" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "GitHub" }));
 
   expect(screen.getByRole("heading", { level: 1, name: "GitHub" })).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Loading repository…");

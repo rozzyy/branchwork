@@ -1,7 +1,15 @@
-import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent as ReactFocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { CliPane } from "./CliPane";
 import { useTerminalScreen, type ScreenPaneState, type ScreenTab } from "./screen";
 import { usePanePin, usePaneProject } from "../stage/paneProject";
+import { PaneHeader } from "../stage/PaneHeader";
 import type { LayoutNode } from "./layout";
 import { useWorktrees } from "../state/worktrees";
 import { useRepos } from "../state/repos";
@@ -11,8 +19,23 @@ import { ScreenLoader } from "../ui/ScreenLoader";
 import { t } from "../i18n/t";
 import "./terminal-screen.css";
 
+/** Hover delay before a corner label expands (spec G3); focus expands it
+ * immediately (see `PaneCornerLabel`). */
+const CORNER_HOVER_DELAY_MS = 150;
+
 function tail(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? path;
+}
+
+/** Pane id -> its 1-based position among the tab's panes ("pane i/n"), plus
+ * the total. Built once per tab render (O(panes)) and threaded down through
+ * `LayoutView`/`PaneView` so each leaf's `PaneCornerLabel` does an O(1)
+ * lookup instead of an `Object.keys(...).indexOf(...)` scan per leaf
+ * (O(panes) per leaf, O(panes²) for the whole tab). */
+type PaneOrder = ReadonlyMap<string, number>;
+
+function paneOrderOf(tab: ScreenTab): PaneOrder {
+  return new Map(Object.keys(tab.panes).map((id, i) => [id, i + 1]));
 }
 
 /** New-tab worktree for this pane: the pinned project's worktree, or undefined for default behavior. */
@@ -23,26 +46,6 @@ function usePaneNewTabPath(): string | undefined {
   const cached = useWorktrees((s) => (paneProject ? s.byProject[paneProject.id] : undefined));
   if (!paneProject || pin === null || pin !== paneProject.id || paneProject.id === globalProjectId) return undefined;
   return cached?.activePath ?? paneProject.localPath;
-}
-
-export function TerminalToolbar() {
-  const newTabPath = usePaneNewTabPath();
-  return (
-    <>
-      <h1 className="pane-title">{t("screen.title")}</h1>
-      <div className="pane-ctl">
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label={t("screen.newTab")}
-          title={`${t("screen.newTab")} · ⌘T`}
-          onClick={() => void useTerminalScreen.getState().newTab(newTabPath)}
-        >
-          ＋
-        </button>
-      </div>
-    </>
-  );
 }
 
 function PaneBody({ tab, pane }: { tab: ScreenTab; pane: ScreenPaneState }) {
@@ -83,11 +86,183 @@ function PaneBody({ tab, pane }: { tab: ScreenTab; pane: ScreenPaneState }) {
   );
 }
 
-function PaneView({ tab, pane }: { tab: ScreenTab; pane: ScreenPaneState }) {
+/**
+ * Split-part corner label (spec G3, option B): idle shows the worktree dot
+ * and folder tail over the terminal content; it expands in place on hover
+ * (150ms delay) or focus-within (immediately) to the worktree select and
+ * the split controls that used to be a full header row per part. Collapses
+ * on mouse leave, Escape, or losing focus entirely. The whole label stays
+ * one element (not swapped for a separate trigger), so focusing it to
+ * expand never moves focus elsewhere in the DOM.
+ *
+ * Reuses the same store calls as the former `.term-screen-pane-head`
+ * (`focusPane` then `splitFocusedPane`/`toggleMaximize`/`closeFocusedPane`,
+ * and `setPaneWorktree`), so accessible names, shortcuts and handlers are
+ * unchanged — only their placement moved.
+ */
+function PaneCornerLabel({
+  tab,
+  pane,
+  index,
+  total,
+  worktreeOptions,
+}: {
+  tab: ScreenTab;
+  pane: ScreenPaneState;
+  index: number;
+  total: number;
+  worktreeOptions: string[];
+}) {
+  const store = useTerminalScreen.getState();
+  const [expanded, setExpanded] = useState(false);
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+
+  const scheduleExpand = () => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setExpanded(true), CORNER_HOVER_DELAY_MS);
+  };
+  const collapse = () => {
+    window.clearTimeout(hoverTimer.current);
+    // I1: moving the pointer from ⋯ into the portaled `Menu` (or a click
+    // moving focus there) fires this label's mouseleave/blur before the
+    // menu item's click lands. Collapsing here used to unmount `Menu` via
+    // `setMenuAt(null)` mid-click, so the item's `onSelect` never ran. Stay
+    // expanded while the menu is open; `Menu` closes itself (outside
+    // click/Escape/item select) via its own `onClose` below.
+    if (menuAt) return;
+    setExpanded(false);
+  };
+  const onBlur = (event: ReactFocusEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) collapse();
+  };
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      collapse();
+      if (event.target instanceof HTMLElement) event.target.blur();
+    }
+  };
+  const focus = () => store.focusPane(tab.id, pane.id);
+
+  return (
+    <div
+      className={"term-screen-corner" + (expanded ? " expanded" : "")}
+      tabIndex={0}
+      title={`${pane.cwd} · ${pane.worktreePath}`}
+      aria-label={t("screen.paneLabel", { name: tail(pane.worktreePath) })}
+      onMouseEnter={scheduleExpand}
+      onMouseLeave={collapse}
+      onFocus={() => setExpanded(true)}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
+    >
+      <span className="term-screen-dot" style={{ background: worktreeColor(pane.worktreePath) }} aria-hidden />
+      {expanded ? (
+        <>
+          <select
+            className="term-screen-worktree"
+            aria-label={t("screen.worktree")}
+            title={pane.worktreePath}
+            value={pane.worktreePath}
+            onChange={(event) => void store.setPaneWorktree(tab.id, pane.id, event.target.value)}
+          >
+            {worktreeOptions.map((path) => (
+              <option key={path} value={path}>
+                {tail(path)}
+              </option>
+            ))}
+          </select>
+          <span className="term-screen-corner-meta">
+            {t("screen.statusPosition", { index, total })} · {t("screen.statusSize", { cols: pane.cols, rows: pane.rows })}
+          </span>
+          <span className="term-screen-corner-actions">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={t("screen.splitRight")}
+              title={`${t("screen.splitRight")} · ⌘D`}
+              onClick={() => {
+                focus();
+                void store.splitFocusedPane(tab.id, "h");
+              }}
+            >
+              ⫴
+            </button>
+            <button
+              type="button"
+              className="icon-btn term-screen-split-down"
+              aria-label={t("screen.splitDown")}
+              title={`${t("screen.splitDown")} · ⇧⌘D`}
+              onClick={() => {
+                focus();
+                void store.splitFocusedPane(tab.id, "v");
+              }}
+            >
+              ⫴
+            </button>
+            <button
+              type="button"
+              className={"icon-btn" + (tab.maximizedPaneId === pane.id ? " on" : "")}
+              aria-label={t("screen.maximize")}
+              aria-pressed={tab.maximizedPaneId === pane.id ? "true" : "false"}
+              title={`${t("screen.maximize")} · ⇧⌘↵`}
+              onClick={() => {
+                focus();
+                store.toggleMaximize(tab.id);
+              }}
+            >
+              ⤢
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={t("screen.closePane")}
+              title={`${t("screen.closePane")} · ⌘W`}
+              onClick={() => {
+                focus();
+                void store.closeFocusedPane(tab.id);
+              }}
+            >
+              ×
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={t("screen.moreActions")}
+              title={t("screen.moreActions")}
+              onClick={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect();
+                setMenuAt({ x: bounds.right - 240, y: bounds.bottom + 6 });
+              }}
+            >
+              ⋯
+            </button>
+          </span>
+        </>
+      ) : (
+        <span className="term-screen-corner-text">{tail(pane.cwd)}</span>
+      )}
+      {menuAt && (
+        <Menu items={paneMenuItems(tab, pane)} onClose={() => setMenuAt(null)} x={menuAt.x} y={menuAt.y} />
+      )}
+    </div>
+  );
+}
+
+function PaneView({
+  tab,
+  pane,
+  paneOrder,
+}: {
+  tab: ScreenTab;
+  pane: ScreenPaneState;
+  paneOrder: PaneOrder;
+}) {
   const store = useTerminalScreen.getState();
   const worktrees = useWorktrees((s) => s.worktrees);
   const focused = tab.focusedPaneId === pane.id;
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const options = worktrees.map((w) => w.path);
   if (!options.includes(pane.worktreePath)) options.unshift(pane.worktreePath);
   return (
@@ -100,99 +275,16 @@ function PaneView({ tab, pane }: { tab: ScreenTab; pane: ScreenPaneState }) {
       onFocus={() => store.focusPane(tab.id, pane.id)}
       aria-label={t("screen.paneLabel", { name: tail(pane.worktreePath) })}
     >
-      <div className="term-screen-pane-head">
-        <span className="term-screen-dot" style={{ background: worktreeColor(pane.worktreePath) }} aria-hidden />
-        <select
-          className="term-screen-worktree"
-          aria-label={t("screen.worktree")}
-          title={pane.worktreePath}
-          value={pane.worktreePath}
-          onChange={(event) => void store.setPaneWorktree(tab.id, pane.id, event.target.value)}
-        >
-          {options.map((path) => (
-            <option key={path} value={path}>
-              {tail(path)}
-            </option>
-          ))}
-        </select>
-        <span className="term-screen-pane-title" title={pane.cwd}>
-          {tail(pane.cwd)}
-        </span>
-        <span className="term-screen-pane-actions">
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={t("screen.splitRight")}
-            title={`${t("screen.splitRight")} · ⌘D`}
-            onClick={() => {
-              store.focusPane(tab.id, pane.id);
-              void store.splitFocusedPane(tab.id, "h");
-            }}
-          >
-            ⫴
-          </button>
-          <button
-            type="button"
-            className="icon-btn term-screen-split-down"
-            aria-label={t("screen.splitDown")}
-            title={`${t("screen.splitDown")} · ⇧⌘D`}
-            onClick={() => {
-              store.focusPane(tab.id, pane.id);
-              void store.splitFocusedPane(tab.id, "v");
-            }}
-          >
-            ⫴
-          </button>
-          <button
-            type="button"
-            className={"icon-btn" + (tab.maximizedPaneId === pane.id ? " on" : "")}
-            aria-label={t("screen.maximize")}
-            aria-pressed={tab.maximizedPaneId === pane.id ? "true" : "false"}
-            title={`${t("screen.maximize")} · ⇧⌘↵`}
-            onClick={() => {
-              store.focusPane(tab.id, pane.id);
-              store.toggleMaximize(tab.id);
-            }}
-          >
-            ⤢
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={t("screen.closePane")}
-            title={`${t("screen.closePane")} · ⌘W`}
-            onClick={() => {
-              store.focusPane(tab.id, pane.id);
-              void store.closeFocusedPane(tab.id);
-            }}
-          >
-            ×
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={t("screen.moreActions")}
-            title={t("screen.moreActions")}
-            onClick={(event) => {
-              const bounds = event.currentTarget.getBoundingClientRect();
-              setMenuAt({ x: bounds.right - 240, y: bounds.bottom + 6 });
-            }}
-          >
-            ⋯
-          </button>
-        </span>
-      </div>
+      <PaneCornerLabel
+        tab={tab}
+        pane={pane}
+        index={paneOrder.get(pane.id) ?? 1}
+        total={paneOrder.size}
+        worktreeOptions={options}
+      />
       <div className="term-screen-pane-body">
         <PaneBody tab={tab} pane={pane} />
       </div>
-      {menuAt && (
-        <Menu
-          items={paneMenuItems(tab, pane)}
-          onClose={() => setMenuAt(null)}
-          x={menuAt.x}
-          y={menuAt.y}
-        />
-      )}
     </div>
   );
 }
@@ -286,62 +378,23 @@ function Gutter({
   );
 }
 
-function LayoutView({ tab, node }: { tab: ScreenTab; node: LayoutNode }) {
+function LayoutView({ tab, node, paneOrder }: { tab: ScreenTab; node: LayoutNode; paneOrder: PaneOrder }) {
   if (node.kind === "pane") {
     const pane = tab.panes[node.id];
     if (!pane) return null;
-    return <PaneView tab={tab} pane={pane} />;
+    return <PaneView tab={tab} pane={pane} paneOrder={paneOrder} />;
   }
   const horizontal = node.dir === "h";
   return (
     <div className={"term-screen-split" + (horizontal ? " horizontal" : "")} data-split-id={node.id}>
       {node.children.map((child, i) => (
         <div key={child.id} className="term-screen-cell" style={{ flexGrow: node.sizes[i], flexBasis: 0 }}>
-          <LayoutView tab={tab} node={child} />
+          <LayoutView tab={tab} node={child} paneOrder={paneOrder} />
           {i < node.children.length - 1 && (
             <Gutter tabId={tab.id} splitId={node.id} index={i} horizontal={horizontal} />
           )}
         </div>
       ))}
-    </div>
-  );
-}
-
-function StatusBar({ tab }: { tab: ScreenTab }) {
-  const store = useTerminalScreen.getState();
-  const pane = (tab.focusedPaneId && tab.panes[tab.focusedPaneId]) ?? null;
-  const ids = Object.keys(tab.panes);
-  const index = pane ? ids.indexOf(pane.id) + 1 : 0;
-  return (
-    <div className="term-screen-status" role="status">
-      {pane ? (
-        <>
-          <span className="term-screen-dot" style={{ background: worktreeColor(pane.worktreePath) }} aria-hidden />
-          <span className="term-screen-status-item" title={pane.worktreePath}>
-            {tail(pane.worktreePath)}
-          </span>
-          <span className="term-screen-status-item term-screen-status-dim" title={pane.cwd}>
-            {pane.cwd}
-          </span>
-          <span className="term-screen-status-item">
-            {t("screen.statusPosition", { index, total: ids.length })}
-          </span>
-          <span className="term-screen-status-item">
-            {t("screen.statusSize", { cols: pane.cols, rows: pane.rows })}
-          </span>
-        </>
-      ) : (
-        <span className="term-screen-status-dim">{t("screen.empty")}</span>
-      )}
-      <button
-        type="button"
-        className={"term-screen-broadcast" + (tab.broadcast ? " on" : "")}
-        aria-pressed={tab.broadcast ? "true" : "false"}
-        title={`${t("screen.broadcast")} · ⌥⌘I`}
-        onClick={() => store.toggleBroadcast(tab.id)}
-      >
-        {tab.broadcast ? t("screen.broadcasting", { count: ids.length }) : `◉ ${t("screen.broadcast")}`}
-      </button>
     </div>
   );
 }
@@ -388,6 +441,45 @@ function TabBar({ tabs, selected }: { tabs: ScreenTab[]; selected: ScreenTab | n
         ＋
       </button>
     </div>
+  );
+}
+
+/**
+ * Terminal's pane header (spec G1/G3): identity is the tab strip (content,
+ * always visible); the status element is the Broadcasting chip, shown only
+ * while the selected tab's broadcast is on; the action cluster is the
+ * Broadcast toggle, then `PaneControls` from context (no ⋯ — nothing to
+ * put in it yet, so it is omitted rather than rendered empty). With no
+ * tabs, `selected` is null: the tab strip still renders its ＋ button and
+ * the toggle is disabled (nothing to broadcast to).
+ */
+function TerminalPaneHeader({ tabs, selected }: { tabs: ScreenTab[]; selected: ScreenTab | null }) {
+  const store = useTerminalScreen.getState();
+  return (
+    <PaneHeader
+      heading={t("nav.terminal")}
+      identity={<TabBar tabs={tabs} selected={selected} />}
+      status={
+        selected?.broadcast ? (
+          <span className="term-screen-broadcast-chip">
+            {t("screen.broadcasting", { count: Object.keys(selected.panes).length })}
+          </span>
+        ) : undefined
+      }
+      actions={
+        <button
+          type="button"
+          className={"icon-btn term-screen-broadcast-toggle" + (selected?.broadcast ? " on" : "")}
+          aria-label={t("screen.broadcast")}
+          aria-pressed={selected?.broadcast ? "true" : "false"}
+          title={`${t("screen.broadcast")} · ⌥⌘I`}
+          disabled={!selected}
+          onClick={() => selected && store.toggleBroadcast(selected.id)}
+        >
+          ◉
+        </button>
+      }
+    />
   );
 }
 
@@ -475,35 +567,46 @@ export function TerminalScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, [newTabPath]);
 
-  if (!loaded) return <ScreenLoader>{t("screen.loading")}</ScreenLoader>;
-  if (!selected) {
+  if (!loaded) {
     return (
-      <div className="term-screen term-screen-empty" role="status">
-        <span>{t("screen.empty")}</span>
-        <button type="button" className="btn" onClick={() => void useTerminalScreen.getState().newTab(newTabPath)}>
-          ＋ {t("screen.newTab")}
-        </button>
+      <div className="term-screen">
+        <TerminalPaneHeader tabs={[]} selected={null} />
+        <ScreenLoader>{t("screen.loading")}</ScreenLoader>
       </div>
     );
   }
   return (
     <div className="term-screen">
-      <TabBar tabs={visibleTabs} selected={selected} />
-      <div className="term-screen-body">
-        {tabs.map((tab) => {
-          // Every tab stays mounted but hidden (the Agents pattern): switching
-          // tabs never detaches the PTY or discards the rendered buffer, so the
-          // view is intact when the tab is shown again.
-          const hidden = tab.id !== selected?.id;
-          const maximizedPane = tab.maximizedPaneId ? tab.panes[tab.maximizedPaneId] : null;
-          return (
-            <div key={tab.id} className="term-screen-tabpage" hidden={hidden}>
-              {maximizedPane ? <PaneView tab={tab} pane={maximizedPane} /> : <LayoutView tab={tab} node={tab.layout} />}
-            </div>
-          );
-        })}
-      </div>
-      <StatusBar tab={selected} />
+      <TerminalPaneHeader tabs={visibleTabs} selected={selected} />
+      {!selected ? (
+        <div className="term-screen-empty" role="status">
+          <span>{t("screen.empty")}</span>
+          <button type="button" className="btn" onClick={() => void useTerminalScreen.getState().newTab(newTabPath)}>
+            ＋ {t("screen.newTab")}
+          </button>
+        </div>
+      ) : (
+        <div className="term-screen-body">
+          {tabs.map((tab) => {
+            // Every tab stays mounted but hidden (the Agents pattern): switching
+            // tabs never detaches the PTY or discards the rendered buffer, so the
+            // view is intact when the tab is shown again.
+            const hidden = tab.id !== selected?.id;
+            const maximizedPane = tab.maximizedPaneId ? tab.panes[tab.maximizedPaneId] : null;
+            // Built once per tab per render (O(panes)), not once per leaf.
+            const paneOrder = paneOrderOf(tab);
+            return (
+              <div key={tab.id} className="term-screen-tabpage" hidden={hidden}>
+                {maximizedPane ? (
+                  <PaneView tab={tab} pane={maximizedPane} paneOrder={paneOrder} />
+                ) : (
+                  <LayoutView tab={tab} node={tab.layout} paneOrder={paneOrder} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -140,6 +140,10 @@ test.describe("M1 Stage 2 worktree sidebar", () => {
 
   test("shows a created, auto-pinned worktree and restores selection and pin after reload", async ({ page }) => {
     await gotoWorktreeApp(page);
+    const activeProject = page.locator(".group-project-entry").filter({
+      has: page.getByRole("button", { name: "repo", exact: true }),
+    });
+    await expect(activeProject.locator(".worktree-section")).toBeVisible();
     const created = page.getByRole("button", { name: "feature/sidebar, 2 changes" });
     await expect(created).toBeVisible();
     await page.getByRole("button", { name: "Browse worktrees" }).click();
@@ -153,7 +157,7 @@ test.describe("M1 Stage 2 worktree sidebar", () => {
     await page.reload();
     const selected = page.getByRole("button", { name: "feature/sidebar, 2 changes" });
     await expect(selected).toHaveAttribute("aria-current", "true");
-    await page.getByRole("button", { name: "Browse worktrees" }).click();
+    await page.locator(".worktree-overflow").click();
     await expect(
       page.getByRole("dialog", { name: "Browse worktrees" }).getByRole("checkbox", { name: "Unpin feature/sidebar" }),
     ).toBeChecked();

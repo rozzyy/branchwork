@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 const WORKTREE = "/repos/main";
 const COMMIT_PATH = "staged.ts";
@@ -122,7 +123,7 @@ test("commit then Undo Last Commit restores the staged changes", async ({ page }
   await seedUndoBackend(page);
   await page.goto("/");
   await expect(page.getByRole("button", { name: "main, 1 changes" })).toBeVisible();
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await openView(page, "Changes");
   await page.locator(".changes-commit-box textarea").fill("undoable commit");
   await page.getByRole("button", { name: "✓ Commit", exact: true }).click();
   await expect(page.locator(".changes-file-row", { hasText: COMMIT_PATH })).toHaveCount(0);
@@ -137,7 +138,7 @@ test("commit then Undo Last Commit restores the staged changes", async ({ page }
 test("delete then Undo restores the file", async ({ page }) => {
   await seedUndoBackend(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Files" }).click();
+  await openView(page, "Files");
   const fileRow = page.locator(".files-tree-node", { hasText: DELETE_PATH });
   await expect(fileRow).toBeVisible();
   await fileRow.click({ button: "right" });

@@ -12,6 +12,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 const WORKTREE = "/repos/main";
 const FILE_PATH = "notes.ts";
@@ -161,7 +162,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await expect(page.getByRole("button", { name: "main, Clean" })).toBeVisible();
 
     // Open the Files & editor screen and the fixture file.
-    await page.getByRole("button", { name: "Files" }).click();
+    await openView(page, "Files");
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await expect(fileRow).toBeVisible();
     await fileRow.click();
@@ -184,7 +185,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await seedEditorBackend(page);
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Files" }).click();
+    await openView(page, "Files");
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await fileRow.click();
 
@@ -207,7 +208,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await seedEditorBackend(page);
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Files" }).click();
+    await openView(page, "Files");
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await expect(fileRow).toBeVisible();
     await fileRow.click({ button: "right" });
@@ -233,7 +234,7 @@ test.describe("M2 Stage 3 — Files & editor", () => {
     await seedEditorBackend(page);
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Files" }).click();
+    await openView(page, "Files");
     const fileRow = page.locator(".files-tree-node", { hasText: FILE_PATH });
     await expect(fileRow).toBeVisible();
     await fileRow.click({ button: "right" });

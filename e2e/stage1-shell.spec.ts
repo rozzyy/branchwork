@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 const NAV_ITEMS = ["Home", "Changes", "History", "Files", "Agents", "Terminal", "GitHub", "Browser"];
 
@@ -11,31 +12,41 @@ test.describe("M7 shell", () => {
     await expect(page.getByRole("button", { name: "Show keyboard shortcuts" })).toBeVisible();
   });
 
-  test("sidebar lists the primary screens in order and keeps Settings in the footer", async ({ page }) => {
+  test("stage tab picker lists all screens while the sidebar contains grouped projects", async ({ page }) => {
     await page.goto("/");
     const sidebar = page.locator(".sidebar");
-    const screenButtons = sidebar.locator(".side-scroll .nav");
-    await expect(screenButtons).toHaveCount(NAV_ITEMS.length);
-    for (const [index, label] of NAV_ITEMS.entries()) {
-      await expect(screenButtons.nth(index)).toHaveAccessibleName(label);
+    await expect(sidebar.locator(".nav")).toHaveCount(0);
+    await expect(sidebar.locator(".group-inline")).toBeVisible();
+    await expect(sidebar.locator(".worktree-section")).toHaveCount(0);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    const views = page.getByRole("menu", { name: "Views" });
+    const viewItems = views.getByRole("menuitem");
+    await expect(viewItems).toHaveCount(10);
+    for (const [index, label] of [...NAV_ITEMS, "Resolve conflicts", "Settings"].entries()) {
+      await expect(viewItems.nth(index)).toHaveAccessibleName(label);
     }
-    await expect(sidebar.locator(".side-foot").getByRole("button", { name: "Settings", exact: true })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: "Conflicts", exact: true })).toHaveCount(0);
+  });
+
+  test("new-tab button opens the screen modal and creates the selected tab", async ({ page }) => {
+    await page.goto("/");
+    const plus = page.getByRole("button", { name: "New tab", exact: true });
+    await plus.click();
+    await expect(plus).toHaveAttribute("aria-expanded", "true");
+    const modal = page.getByRole("menu", { name: "Views" });
+    await expect(modal).toBeVisible();
+    await modal.getByRole("menuitem", { name: "Changes" }).click();
+    await expect(page.getByRole("tab", { name: "Changes" })).toHaveAttribute("aria-selected", "true");
   });
 
   test("each primary screen opens and becomes active", async ({ page }) => {
     await page.goto("/");
     for (const label of NAV_ITEMS) {
-      const navButton = page.getByRole("button", { name: label, exact: true });
-      await navButton.click();
-      await expect(navButton).toHaveClass(/\bon\b/);
+      await openView(page, label);
       const title = label === "History" ? "Graph" : label;
       await expect(page.getByRole("heading", { level: 1, name: title, exact: false })).toBeVisible();
     }
 
-    const settingsButton = page.getByRole("button", { name: "Settings", exact: true });
-    await settingsButton.click();
-    await expect(settingsButton).toHaveClass(/\bon\b/);
+    await openView(page, "Settings");
     await expect(page.getByRole("heading", { name: "Appearance" })).toBeVisible();
   });
 

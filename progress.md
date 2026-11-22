@@ -2,6 +2,70 @@
 
 Append newest entries at the top. Each entry: date, task, what changed, verification evidence, next step.
 
+## 2026-11-22: Refine nested worktree spacing
+
+- Set nested worktree rows to 34px height with 3px gaps, 6px section margins, and separate overflow/picker spacing.
+- Verification: `npm run typecheck` passed; 43 Sidebar/GroupSwitcher tests passed; `git diff --check` passed.
+- Next: visually compare nested worktree density and project border indent.
+
+## 2026-11-22: Refine sidebar SVG icons
+
+- Added a small shared SVG icon component and replaced sidebar glyphs with purpose-built icons. Project expand/collapse now uses chevron icons, worktree rows use a branch/worktree mark, Settings uses a gear, and move/picker/menu actions use consistent SVGs.
+- Preserved all accessible names and button behavior; icons are decorative and hidden from assistive technology.
+- Verification: `npm run typecheck` passed; 55 targeted Sidebar/GroupSwitcher/Views/Stage tests passed; `git diff --check` passed.
+- Next: visually compare the branch, folder, and Settings icons in the desktop sidebar.
+
+## 2026-11-22: Tab title, Settings, and sidebar width
+
+- Opening a screen now updates the active stage tab title to the screen name (for example Changes or Settings).
+- Restored the Settings action at the bottom of the sidebar, with icon-only behavior in collapsed mode.
+- Widened the expanded sidebar from 232px to 248px.
+- Verification: `npm run typecheck` passed; Stage/state/Views suites passed 29/29; `git diff --check` passed.
+- Next: visually verify Settings placement, sidebar width, and tab titles.
+
+## 2026-11-22: Empty workspace and closeable final tab
+
+- Clicking a worktree activates it but opens the centered empty workspace page instead of automatically opening Home.
+- The final stage tab is closable and returns to the empty workspace page.
+- Verification: `npm run typecheck` passed; Stage/sidebar/state suites passed 46/46 with one environment timer rejection after the Sidebar suite from a Tauri settings mock; `git diff --check` passed.
+- Next: visually verify the Branchwork brand mark and close-the-final-tab behavior.
+
+## 2026-11-22: New-tab screen modal
+
+- Changed the ＋ stage-tab control so it only opens the Views screen picker. No tab is created on the initial ＋ click. Selecting a screen calls `newTab(screen)`, creating and activating a tab for that screen.
+- Preserved normal Views behavior, modifier-click split actions, context-menu split/new-tab actions, and tab rename/close behavior.
+- Verification: `npm run typecheck` passed; Views/Stage tests 11/11 passed; shell Playwright 5/5 passed; nested worktree Playwright 1/1 passed; `git diff --check` passed.
+- Next: visually inspect the ＋ modal and confirm the selected screen opens in the new active tab.
+
+## 2026-11-22: Restore Views and fix project collapse/sidebar height
+
+- Restored the visible Views menu in the title bar while keeping the ＋ tab slot as a blank-tab/View chooser. New tabs begin empty; selecting a view replaces or adds the tab state through the existing screen navigation.
+- Fixed project chevrons: opening a project does not change the active project, collapsing it removes it from opened projects, and clicking a worktree activates that project/worktree pair.
+- Made project/group navigation fill the sidebar height and added 8px spacing above nested worktrees. The worktree picker footer remains a full-width action.
+- Verification: `npm run typecheck` passed; 92 focused navigation/project/store tests passed; nested worktree Playwright flow passed (1/1); `git diff --check` passed.
+- Next: visually inspect Views, project collapse, multiple-open projects, and full-height sidebar in the desktop app.
+
+## 2026-11-22: Move worktree picker below worktree rows
+
+- Increased project rows to 40px height while keeping 3px spacing and the full-width active background. Removed the visible worktree count and Worktrees heading. Moved the hamburger to a footer below the worktree list. When a worktree overflow row is present, the hamburger is omitted so users see only “... N more worktrees”.
+- Complexity and security: layout-only UI change; no added traversal, state, IPC, payload, or trust boundary. Project rendering remains O(P) and worktree list preparation remains O(W) for W worktrees.
+- Verification: `npm run typecheck` passed; Sidebar and GroupSwitcher suites passed 41/41; nested worktree Playwright flow passed (1/1); `git diff --check` passed.
+- Next: visually inspect project height and footer behavior in the desktop app.
+
+## 2026-11-22: Tighten project row spacing and active width
+
+- Standardized project rows at 32px height and reduced separation between project entries to 3px. The active project now uses one full-width row component, with chevron, project name, and move control sharing the same 100% active background instead of isolating the name alone.
+- Complexity and security: layout-only change; no added traversal, state, IPC, payload, or trust boundary. Rendering remains O(P) for P project rows.
+- Verification: `npm run typecheck` passed; Sidebar and GroupSwitcher suites passed 40/40; `git diff --check` passed. Desktop review remains pending.
+- Next: visually inspect project spacing and the full-width active row in the desktop app.
+
+## 2026-11-22: Refine nested project/worktree sidebar
+
+- Removed the visible “Worktrees” heading while retaining the compact visible/total count and the browse picker. Added per-project expand/collapse chevrons; expanding an inactive project selects it before revealing its worktrees. The active `WorktreeSection` stays mounted when only its project is collapsed, preserving its picker state and Git-change listener. Group-collapse behavior remains unchanged.
+- Complexity: the project list remains O(P) to render; the collapse set copies O(C) collapsed project IDs per toggle. The worktree list remains O(W) for the active project's visible/pinned entries. No IPC, filesystem traversal, or security boundary changed.
+- Verification: `npm run typecheck` passed; focused Vitest 3 files / 22 tests passed; nested worktree Playwright flow passed (1/1); `git diff --check` and feature JSON validation passed. `./init.sh`: Vitest 93 files / 831 tests passed and Clippy passed, but Rust tests failed 5/349 (341 passed, 3 ignored): four bare-repository tests blocked by `safe.bareRepository=explicit`, and the known PTY buffered-output replay failure. The other test in the focused worktree E2E file fails on an existing strict `getByRole("status")` ambiguity (splash, error, loading overlay); the targeted nested-flow test passes.
+- Next: user reviews the sidebar layout in the desktop app. Do not commit or push.
+
 ## 2026-11-15: GitHub #4 — project-switch loading overlay
 
 - Added a reusable overlay over the main content area. It activates while worktrees are loading or the active project ID has changed before the worktree store catches up, so the old view is covered during the transition. The translucent blurred overlay blocks pointer interaction, announces “Loading project…” to assistive technology, and fades away after loading finishes. Activation/teardown are O(1) state checks with one bounded 140 ms timer; no polling or project-sized work was added.
@@ -1617,3 +1681,18 @@ Append newest entries at the top. Each entry: date, task, what changed, verifica
 - Added `docs/design/app-navigation-direction.md` and interactive current-look mockup `docs/design/navigation-v2.html`.
 - Direction adopts Orca-style jump navigation without copying its visual identity: all projects visible flat, worktrees visible, attention-ranked recents, Cmd-J jump across projects/worktrees/sessions/tabs, tab attention badges.
 - Verified the new mockup's inline script with `node --check` and a temporary jsdom harness (flat project/worktree visibility, jump recents/keyboard/search/Escape). Harness removed afterward.
+
+## 2026-11-21 — Settings tabs + per-account usage meters (m13-stage-2, uncommitted)
+
+- Settings split into General / Agents / AI accounts / GitHub tabs; Demo section removed.
+- AI account rows: headline usage meters, expandable windows (reset, updated, stale), per-row Check usage, ⋯ action menu, Check all usage, Not connected line.
+- `useAgentMeters.refreshProfile` reads a profile's quota on demand; `formatAgo` moved into `src/agents/quota.ts`; `probeOnce` moved to `src/screens/settings/accountProbe.ts`.
+- Vitest 91 / 805 passed; typecheck clean; Rust baseline unchanged. Manual E2E checklist: `docs/testing/m13-settings-usage-manual-e2e.md`.
+
+## 2026-11-22 — User-approved navigation layout (uncommitted)
+
+- Implemented the approved navigation layout from `docs/design/orca-informed-navigation.html`: screen destinations moved to a Views menu in the title bar; each grouped project contains its active worktree list directly below the project row; the sidebar's "For this worktree" screen section and separate worktree list are gone.
+- Kept the existing ten destinations and navigation behavior: keyboard shortcuts, split modifiers, context-menu actions, drag/drop, pane indicators, and Changes/Agents/Conflicts badges. No backend, IPC, or screen behavior changed.
+- Complexity: the destination list is fixed-size; the waiting-agent badge retains its existing O(sessions) scan when session state changes. No new I/O or unbounded work was added.
+- Verification after nesting correction: `npm run typecheck`; focused Vitest 3 files / 21 tests; focused Playwright shell/split/settings/M13 plus nested-worktree check 25/25; `git diff --check` all passed. Full Playwright before this correction: 53 passed / 6 failed in out-of-scope M1 project-picker/worktree and M11 browser-tab expectations. `./init.sh` before the correction reached Rust tests: 341 passed / 5 failed / 3 ignored (four bare-repository tests rejected by `safe.bareRepository=explicit`; PTY buffered-output replay failure).
+- No commit or push. Desktop review remains pending; continue the M13 stage 3 task order after this review.

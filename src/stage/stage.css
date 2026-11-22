@@ -1,11 +1,47 @@
-/* Stage follows the prototype: a lone pane is a bordered 10px panel inset by
- * 12px; split panes and the Agents/Terminal screens are flush and square. */
-.stage { display: flex; min-width: 0; min-height: 0; position: relative; padding: 12px; }
+/* Screens fill the stage edge-to-edge. Agent/Terminal own their pane chrome,
+ * while regular screens keep the pane border/header and manage content spacing
+ * inside their own view. */
+.stage { display: flex; min-width: 0; min-height: 0; position: relative; padding: 0; }
 /* M9: panes are flat, absolutely placed siblings (boxes come from the split
    tree) so splits never remount a screen; dividers sit on the boundaries. */
 .stage-canvas { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; }
+.stage-empty { position: absolute; inset: 0; border: 0; background: transparent; }
+.workspace-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--fg2); }
+.workspace-empty-brand { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--fg); font-size: 22px; font-weight: 750; letter-spacing: .02em; }
+.workspace-empty-brand .app-mark { width: 38px; height: 38px; }
+.workspace-empty h2 { margin: 0; color: var(--fg); font-size: 22px; font-weight: 700; }
+.workspace-empty p { margin: 0 0 12px; color: var(--fg3); font-size: var(--fs-body); }
+.workspace-empty-actions { display: flex; align-items: center; gap: 8px; }
+.workspace-empty-actions .btn { height: 32px; min-width: 132px; justify-content: center; }
+.workspace-empty-shortcuts { display: grid; grid-template-columns: 1fr auto; width: 280px; margin-top: 28px; gap: 7px 16px; color: var(--fg3); font-size: var(--fs-meta); text-align: left; }
+.workspace-empty-shortcuts span { display: contents; }
+.workspace-empty-shortcuts kbd { justify-self: end; min-width: 34px; text-align: center; }
+.workspace-modal-backdrop { position: fixed; z-index: 600; inset: 0; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--surface) 45%, transparent); backdrop-filter: blur(8px); }
+.workspace-modal { width: min(440px, calc(100vw - 48px)); display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--overlay); box-shadow: var(--shadow-pop); }
+.workspace-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.workspace-modal-head h2 { margin: 0; font-size: 17px; }
+.workspace-modal-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.workspace-modal-tabs button { height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--fg3); cursor: pointer; }
+.workspace-modal-tabs button.active { background: var(--glass2); color: var(--fg); box-shadow: var(--spec); }
+.workspace-modal-field { display: flex; flex-direction: column; gap: 7px; }
+.workspace-modal-field label { color: var(--fg3); font-size: var(--fs-meta); font-weight: 600; }
+.workspace-modal-file-row { display: flex; gap: 7px; }
+.workspace-modal-file-row .input { flex: 1; min-width: 0; }
+.workspace-modal-error { min-height: 18px; color: var(--danger); font-size: var(--fs-meta); }
+.workspace-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 2px; }
 .stage-canvas > .pane { position: absolute; }
 .pane { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(44px, max-content) minmax(0, 1fr); min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); box-shadow: none; overflow: hidden; container-type: inline-size; transition: box-shadow .15s; }
+/* C1: a screen that owns its header (`ownsHeader`) renders its own
+ * `PaneHeader` inside `.pane-view` instead of a `header.pane-tool` sibling,
+ * so `.pane-view` is the grid's only child. The two-row template above
+ * assumes a header row first and sizes row 1 to `max-content`, which
+ * collapses `.pane-view` to its content height when there is no header
+ * sibling to occupy that row. With no `.pane-tool`, use a single
+ * full-height row instead. */
+.pane:not(:has(> .pane-tool)) { grid-template-rows: minmax(0, 1fr); }
+/* Visually hidden but reachable by assistive tech and `heading` queries
+ * (I3): a screen's own PaneHeader uses this for its per-pane <h1>. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .stage.split,
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen),
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) { padding: 0; }
@@ -13,6 +49,65 @@
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .agent-screen) .pane,
 .stage:has(> .stage-canvas > .pane:only-of-type > .pane-view > .term-screen) .pane { border: 0; border-radius: 0; }
 .pane-tool { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); }
+/* Shared calm one-row header for a screen that owns its pane header (spec
+ * G1, mockup tidy-agent-header-v3.html option H): identity (shrinks first)
+ * -> flexible space -> one status element -> an action cluster absolutely
+ * positioned at the right end, over the status element, on a solid
+ * background so it never shifts the row. Never wraps. */
+.pane-header { position: relative; display: flex; align-items: center; gap: 6px; height: 34px; min-width: 0; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; container-type: inline-size; }
+.pane-header-identity { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.pane-header-status { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; }
+/* The cluster is a fixed-size group anchored to the row's right end: it
+ * never clips (AC3) and never pushes other content, only overlaps it. */
+.pane-header-cluster {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 16px;
+  background: var(--raised);
+  box-shadow: -14px 0 14px -6px var(--raised);
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.pane-header-cluster > .pane-ctl { margin-left: 0; padding-left: 0; border-left: 0; }
+/* C2: a legacy rule (`.pane-ctl { flex-wrap: wrap }` under `@container
+ * (max-width: 560px)` below) targets the pane's own container and still
+ * matches here, since `.pane-header` is itself a nested inline-size
+ * container. Wrapping the cluster's `.pane-ctl` onto a second line pushes
+ * it past `.pane-header`'s 34px height, where `overflow: hidden` clips it
+ * (the Close pane bug). The cluster is a fixed-size group that must never
+ * wrap or clip; this is more specific than the legacy rule, so it wins
+ * regardless of container width. */
+.pane-header-cluster .pane-ctl { flex-wrap: nowrap; flex: none; }
+/* Inactive pane: hidden at rest, revealed as an absolute overlay over the
+ * status element on pointer hover or keyboard focus-within (G1). Every
+ * control stays in the DOM and in the tab order; only opacity changes. */
+.pane-header:not(.pane-header-active):hover .pane-header-cluster,
+.pane-header:not(.pane-header-active):focus-within .pane-header-cluster {
+  opacity: 1;
+}
+/* Coordinator ruling on the G1/G2 conflict (C4, 2026-11-22): G1 put the
+ * cluster *over* the status element and always visible on the only/focused
+ * pane, which made the status chip unclickable there. On the active pane
+ * the cluster instead sits in normal flow after the status element —
+ * identity (shrinks) | status chip (shrinks) | cluster (fixed) — so nothing
+ * overlaps and the chip stays clickable. Inactive panes keep the overlay
+ * above unchanged. */
+.pane-header-active .pane-header-cluster {
+  position: static;
+  flex: 0 0 auto;
+  height: auto;
+  max-width: none;
+  padding: 0 0 0 8px;
+  background: none;
+  box-shadow: none;
+  opacity: 1;
+}
 .pane-title { min-width: 0; margin: 0; font-size: var(--fs-title); font-weight: 650; letter-spacing: -.01em; white-space: nowrap; }
 .pane-view { min-width: 0; min-height: 0; overflow: auto; animation: pane-in .3s var(--spring); }
 @keyframes pane-in { from { opacity: 0; transform: translateY(6px); } }
@@ -148,7 +243,7 @@
 .stage-tab-close:disabled, .stage-tab-new:disabled { opacity: .35; cursor: default; }
 .stage-tab-input { width: min(210px, 26vw); min-width: 0; height: 28px; margin: 0; border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; outline: 2px solid color-mix(in oklch, var(--accent) 35%, transparent); background: var(--surface); color: var(--fg); }
 .stage-tab-input.invalid { border-color: var(--danger); }
-.stage-tab-new-slot { display: grid; flex: 0 0 34px; width: 34px; height: 100%; margin-left: 6px; place-items: center; }
-.stage-tab-new { flex: 0 0 28px; width: 28px; height: 28px; font-size: 17px; }
+.stage-tab-new-slot { display: grid; flex: 0 0 44px; width: 44px; height: 100%; margin-left: 6px; place-items: center; }
+.stage-tab-new { flex: 0 0 32px; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); color: var(--fg2); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .stage-tab-feedback { display: none; }
 .stage-tab-feedback.invalid { display: block; flex: 0 0 auto; margin: 0; padding: 0; border: 1px solid var(--danger); border-radius: 5px; background: var(--surface); color: var(--danger); font-size: var(--fs-meta); }

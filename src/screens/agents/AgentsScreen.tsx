@@ -1,22 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { gridPlacement, type GridPlace } from "../../agents/gridPlacement";
 import { CliPane } from "../../terminal/CliPane";
 import { CLI_IDS, CLI_REGISTRY, resolveCli, type CliId } from "../../agents/registry";
 import { usePanePin, usePaneProject } from "../../stage/paneProject";
+import { PaneHeader } from "../../stage/PaneHeader";
 import { useProfiles, usageKey } from "../../agents/profiles";
-import { UsageBar } from "../../agents/usage";
+import { UsageBar, usageTone } from "../../agents/usage";
 import type { QuotaWindow } from "../../ipc/bindings";
 import {
   effectivePercent,
+  formatAgo,
   formatReset,
   headlineWindows,
-  QUOTA_WARN_PERCENT,
+  tightestWindow,
   useAgentMeterPolling,
   useAgentMeters,
   windowExpired,
   windowLabel,
 } from "../../agents/quota";
-import { SAVER_IDS, type SaverId, type SaverState } from "../../agents/savers";
+import type { SaverState } from "../../agents/savers";
 import { useSessions, type AgentSession, type AgentStatus, type RaceEntry } from "../../agents/sessions";
 import { useStage } from "../../state/stage";
 import { useRepos } from "../../state/repos";
@@ -49,49 +52,116 @@ function paneStatus(session: AgentSession, isExited: (id: string | null) => bool
   return session.status === "idle" ? "running" : session.status;
 }
 
-export function AgentsToolbar() {
-  const sessions = useSessions((s) => s.sessions);
-  const count = sessions.length;
-  const waiting = sessions.filter((session) => session.status === "waiting").length;
+/** "Agents page" menu section (race / layout mode), shared by the solo
+ * session's ⋯ menu and the multi-session page header's own ⋯ fallback. */
+function pageActionItems(
+  layoutMode: "grid" | "full",
+  setLayoutMode: (mode: "grid" | "full") => void,
+  setRaceOpen: (open: boolean) => void,
+): MenuItem[] {
+  return [
+    { kind: "item", label: t("agents.race"), icon: "⚑", onSelect: () => setRaceOpen(true) },
+    {
+      kind: "item",
+      label: t("agents.layoutGrid"),
+      icon: layoutMode === "grid" ? "✓" : "▦",
+      onSelect: () => setLayoutMode("grid"),
+    },
+    {
+      kind: "item",
+      label: t("agents.layoutFull"),
+      icon: layoutMode === "full" ? "✓" : "▭",
+      onSelect: () => setLayoutMode("full"),
+    },
+  ];
+}
+
+/** Page header for the Agents screen when it is not showing a single solo
+ * session (0 sessions, ≥2 sessions, or a non-`auto` slot): identity is the
+ * page label and session summary; the cluster is Grid/Full, Race and New
+ * agent (spec G2 "not solo") — a calm, fixed-size group, no narrow-width
+ * collapsing needed since the cluster never clips (spec G1). */
+function AgentsPageHeader({ count, waiting }: { count: number; waiting: number }) {
   const layoutMode = useSessions((s) => s.layoutMode);
   const setLayoutMode = useSessions((s) => s.setLayoutMode);
   const setNewAgentOpen = useSessions((s) => s.setNewAgentOpen);
   const setRaceOpen = useSessions((s) => s.setRaceOpen);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const openMenu = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    setMenu({ x: box.right - 200, y: box.bottom + 6 });
+  };
   return (
-    <div className="agent-toolbar">
-      <h1 className="pane-title">{t("agents.title")}</h1>
-      <div className="agent-toolbar-actions">
-        <span className="faint">{t("agents.sessionSummary", { count, waiting })}</span>
-        <div className="seg" title={t("agents.layoutAll")}>
+    <PaneHeader
+      heading={t("agents.title")}
+      identity={
+        <span className="pane-header-id">
+          <span aria-hidden="true">✦</span> {t("agents.title")} ·{" "}
+          <span className="faint">{t("agents.sessionSummary", { count, waiting })}</span>
+        </span>
+      }
+      actions={
+        <>
+          <div className="seg agent-page-wide" title={t("agents.layoutAll")}>
+            <button
+              type="button"
+              className={layoutMode === "grid" ? "on" : ""}
+              aria-label={t("agents.layoutGrid")}
+              aria-pressed={layoutMode === "grid" ? "true" : "false"}
+              title={t("agents.layoutGrid")}
+              onClick={() => setLayoutMode("grid")}
+            >
+              ▦
+            </button>
+            <button
+              type="button"
+              className={layoutMode === "full" ? "on" : ""}
+              aria-label={t("agents.layoutFull")}
+              aria-pressed={layoutMode === "full" ? "true" : "false"}
+              title={t("agents.layoutFull")}
+              onClick={() => setLayoutMode("full")}
+            >
+              ▭
+            </button>
+          </div>
+          <button type="button" className="btn sm agent-page-wide" onClick={() => setRaceOpen(true)}>
+            ⚑ {t("agents.race")}
+          </button>
+          {/* C2: at a narrow header width (e.g. a 4-pane split) the wide
+           * Grid/Full seg and Race button above hide in favor of this ⋯,
+           * which bundles the same two actions so the fixed-size cluster
+           * still fits and never clips. */}
           <button
             type="button"
-            className={layoutMode === "grid" ? "on" : ""}
-            aria-label={t("agents.layoutGrid")}
-            aria-pressed={layoutMode === "grid" ? "true" : "false"}
-            title={t("agents.layoutGrid")}
-            onClick={() => setLayoutMode("grid")}
+            className="icon-btn agent-page-narrow"
+            aria-label={t("agents.pageMenu")}
+            title={t("agents.pageMenu")}
+            aria-haspopup="menu"
+            onClick={openMenu}
           >
-            <span aria-hidden="true">▦</span><span className="agent-action-label">{t("agents.layoutGrid")}</span>
+            ⋯
           </button>
+          {menu && (
+            <Menu
+              x={menu.x}
+              y={menu.y}
+              width={200}
+              onClose={() => setMenu(null)}
+              items={pageActionItems(layoutMode, setLayoutMode, setRaceOpen)}
+            />
+          )}
           <button
             type="button"
-            className={layoutMode === "full" ? "on" : ""}
-            aria-label={t("agents.layoutFull")}
-            aria-pressed={layoutMode === "full" ? "true" : "false"}
-            title={t("agents.layoutFull")}
-            onClick={() => setLayoutMode("full")}
+            className="btn sm primary agent-page-new"
+            aria-label={t("agents.newAgent")}
+            title={t("agents.newAgent")}
+            onClick={() => setNewAgentOpen(true)}
           >
-            <span aria-hidden="true">▭</span><span className="agent-action-label">{t("agents.layoutFull")}</span>
+            ＋<span className="agent-page-new-label"> {t("agents.newAgent")}</span>
           </button>
-        </div>
-        <button type="button" className="btn sm" onClick={() => setRaceOpen(true)}>
-          ⚑ {t("agents.race")}
-        </button>
-        <button type="button" className="btn sm primary" onClick={() => setNewAgentOpen(true)}>
-          ＋ {t("agents.newAgent")}
-        </button>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
 
@@ -150,80 +220,6 @@ function AgentPaneBody({ session }: { session: AgentSession }) {
   );
 }
 
-function ProfileChip({ session }: { session: AgentSession }) {
-  const def = CLI_REGISTRY[session.cliId];
-  // Subscribe to the raw array (stable identity); filtering here keeps the
-  // selector snapshot cached and avoids a render loop.
-  const allProfiles = useProfiles((s) => s.profiles);
-  const usageBy = useProfiles((s) => s.usage);
-  const usage = usageBy[usageKey(session.profile)];
-  const profiles = allProfiles.filter((p) => p.cliId === session.cliId);
-  const profileName =
-    profiles.find((p) => p.slug === session.profile.slug)?.name ?? session.profile.slug;
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const open = (e: ReactMouseEvent<HTMLButtonElement>) => {
-    const box = e.currentTarget.getBoundingClientRect();
-    setMenu({ x: box.left, y: box.bottom + 6 });
-  };
-  const items: MenuItem[] = [
-    { kind: "header", label: t("agents.profilesMenu", { name: def.name }) },
-    ...profiles.map(
-      (p): MenuItem => {
-        const itemUsage = usageBy[usageKey({ cliId: p.cliId, slug: p.slug })];
-        return {
-          kind: "item",
-          label: p.name,
-          icon: p.slug === session.profile.slug ? "✓" : undefined,
-          extra: itemUsage ? (
-            <span className="agent-menu-usage">
-              {itemUsage.percent}% <UsageBar usage={itemUsage} />
-            </span>
-          ) : undefined,
-          onSelect: () => {
-            setMenu(null);
-            void useSessions.getState().switchProfile(session.id, { cliId: p.cliId, slug: p.slug });
-          },
-        };
-      },
-    ),
-    { kind: "separator" },
-    {
-      kind: "item",
-      label: t("agents.addAccount"),
-      icon: "＋",
-      onSelect: () => {
-        setMenu(null);
-        void useProfiles.getState().addProfile(session.cliId);
-      },
-    },
-    {
-      kind: "item",
-      label: t("agents.manageAccounts"),
-      icon: "⚙",
-      onSelect: () => {
-        setMenu(null);
-        useStage.getState().go("settings");
-      },
-    },
-  ];
-  return (
-    <>
-      <button
-        type="button"
-        className="chip agent-profile"
-        title={t("agents.profileChip", { name: profileName })}
-        aria-label={t("agents.profileChip", { name: profileName })}
-        aria-haspopup="menu"
-        onClick={open}
-      >
-        ◔ {profileName}
-        {usage && <UsageBar usage={usage} />}
-      </button>
-      {menu && <Menu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={items} />}
-    </>
-  );
-}
-
 /** "12.3k" style count for measured saver savings. */
 function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -231,150 +227,10 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-/** "12m ago" / "3h ago" / "2d ago" for the provider's report time. */
-function formatAgo(atMs: number, now: number): string {
-  const minutes = Math.floor(Math.max(0, now - atMs) / 60_000);
-  if (minutes < 1) return t("usage.justNow");
-  if (minutes < 60) return t("usage.minutesAgo", { n: String(minutes) });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t("usage.hoursAgo", { n: String(hours) });
-  return t("usage.daysAgo", { n: String(Math.floor(hours / 24)) });
-}
-
-/**
- * Orca-style account usage for the pane's profile: the tightest current
- * quota window (label, percent, bar, reset countdown). Clicking opens every
- * window. Session tokens are deliberately not shown here.
- */
-function QuotaMeter({ session }: { session: AgentSession }) {
-  const view = useSessionQuota(session);
-  const fallback = useProfiles((s) => s.usage[usageKey(session.profile)]);
-  const [open, setOpen] = useState(false);
-  if (!session.sessionId) return null;
-  const now = Date.now();
-  if (!view || view.kind !== "ok") {
-    // CLIs without a quota reader may still have a probe-reported figure (Muse).
-    if (fallback && (!view || view.kind === "unsupported")) {
-      const label = t("usage.summaryProbe", { window: fallback.window, percent: String(fallback.percent) });
-      return (
-        <span className="agent-quota static" title={label} aria-label={label}>
-          {fallback.percent}% <UsageBar usage={fallback} /> <span className="agent-quota-reset">{fallback.window}</span>
-        </span>
-      );
-    }
-    const [label, help] =
-      !view || view.kind === "loading"
-        ? [t("usage.loading"), t("usage.loading")]
-        : view.kind === "none"
-          ? [t("usage.none"), t("usage.noneHelp", { name: CLI_REGISTRY[session.cliId].name })]
-          : view.kind === "unsupported"
-            ? [t("usage.na"), t("usage.unsupportedHelp", { name: CLI_REGISTRY[session.cliId].name })]
-            : [t("usage.unavailable"), t("usage.unavailableHelp")];
-    return (
-      <span className="agent-quota muted" title={help} aria-label={help}>
-        {label}
-      </span>
-    );
-  }
-  const headline = headlineWindows(view.windows, now);
-  const part = (window: QuotaWindow) =>
-    windowExpired(window, now)
-      ? t("usage.summaryPartReset", { window: windowLabel(window) })
-      : t("usage.summaryPart", {
-          window: windowLabel(window),
-          percent: String(window.percent),
-          reset: window.resetsAtMs != null ? formatReset(window.resetsAtMs, now) : t("usage.resetUnknown"),
-        });
-  const summary = t("usage.summary", { parts: headline.map(part).join("; ") });
-  const warn = headline.some((window) => effectivePercent(window, now) >= QUOTA_WARN_PERCENT);
-  return (
-    <span className="agent-quota-wrap">
-      <button
-        type="button"
-        className={"agent-quota" + (warn ? " warn" : "") + (view.stale ? " stale" : "")}
-        title={summary}
-        aria-label={summary}
-        aria-expanded={open ? "true" : "false"}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(!open)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
-        }}
-      >
-        {headline.map((window, index) => {
-          const expired = windowExpired(window, now);
-          const percent = effectivePercent(window, now);
-          return (
-            <span key={`${window.minutes}-${window.scope ?? ""}`} className="agent-quota-item">
-              {index > 0 && <span className="agent-quota-sep" aria-hidden="true">│</span>}
-              <span className="agent-quota-win">{windowLabel(window)}</span> {percent}%{" "}
-              <UsageBar usage={{ percent, window: windowLabel(window) }} />
-              <span className="agent-quota-reset">
-                · {expired ? t("usage.resetShort") : window.resetsAtMs != null ? formatReset(window.resetsAtMs, now) : "?"}
-              </span>
-            </span>
-          );
-        })}
-      </button>
-      {open && (
-        <div className="agent-quota-pop" role="dialog" aria-label={t("usage.windows")}>
-          <div className="agent-quota-head">
-            {t("usage.windowsFor", { name: CLI_REGISTRY[session.cliId].name })}
-          </div>
-          {view.windows.map((window) => {
-            const expired = windowExpired(window, now);
-            return (
-              <div key={`${window.minutes}-${window.scope ?? ""}`} className={"agent-quota-row" + (expired ? " expired" : "")}>
-                <span className="agent-quota-win">{windowLabel(window)}</span>
-                {expired ? (
-                  <>
-                    <UsageBar usage={{ percent: 0, window: windowLabel(window) }} className="wide" />
-                    <span className="agent-quota-pct">0%</span>
-                    <span className="agent-quota-reset">
-                      {t("usage.windowResetAgo", {
-                        ago: window.resetsAtMs != null ? formatAgo(window.resetsAtMs, now) : t("usage.justNow"),
-                        percent: String(window.percent),
-                      })}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <UsageBar usage={{ percent: window.percent, window: windowLabel(window) }} className="wide" />
-                    <span className="agent-quota-pct">{window.percent}%</span>
-                    <span className="agent-quota-reset">
-                      {window.resetsAtMs != null
-                        ? t("usage.resetsIn", { reset: formatReset(window.resetsAtMs, now) })
-                        : t("usage.resetUnknown")}
-                    </span>
-                  </>
-                )}
-              </div>
-            );
-          })}
-          <div className="agent-quota-foot">
-            {view.fetchedAtMs != null
-              ? t("usage.updated", { ago: formatAgo(view.fetchedAtMs, now) })
-              : t("usage.updatedUnknown")}
-            {view.stale && ` · ${t("usage.stale")}`}
-          </div>
-        </div>
-      )}
-    </span>
-  );
-}
-
 function useSessionQuota(session: AgentSession) {
   return useAgentMeters((s) => s.quotas[usageKey(session.profile)]);
 }
 
-const SAVER_NAME: Record<SaverId, "agents.saverRtk" | "agents.saverCaveman"> = {
-  rtk: "agents.saverRtk",
-  caveman: "agents.saverCaveman",
-};
-const SAVER_HELP: Record<SaverId, "agents.saverRtkHelp" | "agents.saverCavemanHelp"> = {
-  rtk: "agents.saverRtkHelp",
-  caveman: "agents.saverCavemanHelp",
-};
 const SAVER_STATE: Record<
   SaverState,
   "agents.saverActive" | "agents.saverOff" | "agents.saverUnavailable" | "agents.saverUnsupported"
@@ -395,53 +251,320 @@ const SAVER_SHORT: Record<
   unsupported: "agents.saverShortUnsupported",
 };
 
+interface SaverView {
+  /** Drives `[data-state]` styling in the popover; shares the RTK chip's
+   * states ("saved"/"zero"/the `SaverState`s) and the Caveman chip's plain
+   * `SaverState`. */
+  dataState: string;
+  text: string;
+  detailParts: string[];
+}
+
 /**
- * Compact badges for the session's token savers with visible state text
- * ("RTK on", "Caveman off", "RTK n/a"). Each reflects the running
- * integration, not the global setting; hover, focus or click explains the
- * method and, for RTK, the measured saving.
+ * RTK state (spec G4): shows real impact instead of a bare "on" — the
+ * measured saving when there is one, `RTK 0` while armed but unused, and
+ * `RTK n/a` for both "unavailable" and "unsupported" (the prior wording
+ * ("RTK unavailable") read as broken rather than inactive).
  */
-function SaverBadges({ session }: { session: AgentSession }) {
+function useRtkView(session: AgentSession): SaverView {
+  const state = session.savers.rtk;
   const savings = useAgentMeters((s) => s.savings[session.id]);
-  const [open, setOpen] = useState<SaverId | null>(null);
-  const name = CLI_REGISTRY[session.cliId].name;
-  return (
-    <span className="agent-savers">
-      {SAVER_IDS.map((id) => {
-        const state = session.savers[id];
-        const parts = [t(SAVER_HELP[id]), t(SAVER_STATE[state], { name })];
-        if (id === "rtk" && savings && savings.bytesBefore > savings.bytesAfter) {
-          parts.push(
-            t("agents.saverSaved", {
-              chars: formatCount(savings.bytesBefore - savings.bytesAfter),
-              runs: String(savings.runs),
-            }),
+  const saved = savings ? Math.max(0, savings.bytesBefore - savings.bytesAfter) : 0;
+  const runs = savings?.runs ?? 0;
+  const hasSavings = state === "active" && runs > 0 && saved > 0;
+  const dataState = state === "active" ? (hasSavings ? "saved" : "zero") : state;
+  const text =
+    state === "off"
+      ? t("agents.rtkOff")
+      : state === "unavailable" || state === "unsupported"
+        ? t("agents.rtkNA")
+        : hasSavings
+          ? t("agents.rtkSaved", { saved: formatCount(saved) })
+          : t("agents.rtkZero");
+  const detailParts = [t("agents.saverRtkHelp")];
+  if (hasSavings) detailParts.push(t("agents.saverSaved", { chars: formatCount(saved), runs: String(runs) }));
+  detailParts.push(t("agents.saverRtkSupported"));
+  detailParts.push(t(SAVER_STATE[state], { name: CLI_REGISTRY[session.cliId].name }));
+  return { dataState, text, detailParts };
+}
+
+/** Caveman state (spec G4): on/off style, unchanged text; the detail adds
+ * that it is a system-prompt instruction whose savings aren't measured. */
+function useCavemanView(session: AgentSession): SaverView {
+  const state = session.savers.caveman;
+  const text = `${t("agents.saverCaveman")} ${t(SAVER_SHORT[state])}`;
+  const detailParts = [t("agents.saverCavemanHelp"), t(SAVER_STATE[state], { name: CLI_REGISTRY[session.cliId].name })];
+  return { dataState: state, text, detailParts };
+}
+
+/** The usage ring/percent, summary text and the "Usage" popover section's
+ * content for a session's profile — same quota data the old standalone
+ * usage chip read, reshaped for `SessionStatusChip` (spec G2). */
+function useUsageView(session: AgentSession) {
+  const view = useSessionQuota(session);
+  const fallback = useProfiles((s) => s.usage[usageKey(session.profile)]);
+  const now = Date.now();
+  if (!view || view.kind !== "ok") {
+    // CLIs without a quota reader may still have a probe-reported figure (Muse).
+    if (fallback && (!view || view.kind === "unsupported")) {
+      const summary = t("usage.summaryProbe", { window: fallback.window, percent: String(fallback.percent) });
+      return {
+        percent: fallback.percent,
+        tone: usageTone(fallback.percent),
+        stale: false,
+        summary,
+        section: (
+          <div className="agent-quota-pop-body">
+            {fallback.percent}% <UsageBar usage={fallback} /> <span className="agent-quota-reset">{fallback.window}</span>
+          </div>
+        ),
+      };
+    }
+    const [label, help] =
+      !view
+        ? // A session with no live PTY is never polled for quota (spec
+          // `useAgentMeterPolling` only polls live sessions): read as "no
+          // data" rather than an eternal "loading".
+          session.sessionId
+          ? [t("usage.loading"), t("usage.loading")]
+          : [t("usage.none"), t("usage.noneHelp", { name: CLI_REGISTRY[session.cliId].name })]
+        : view.kind === "loading"
+          ? [t("usage.loading"), t("usage.loading")]
+          : view.kind === "none"
+          ? [t("usage.none"), t("usage.noneHelp", { name: CLI_REGISTRY[session.cliId].name })]
+          : view.kind === "unsupported"
+            ? [t("usage.na"), t("usage.unsupportedHelp", { name: CLI_REGISTRY[session.cliId].name })]
+            : [t("usage.unavailable"), t("usage.unavailableHelp")];
+    return {
+      percent: null,
+      tone: undefined,
+      stale: false,
+      summary: help,
+      section: <div className="agent-quota-pop-body faint">{label}</div>,
+    };
+  }
+  const headline = headlineWindows(view.windows, now);
+  const part = (window: QuotaWindow) =>
+    windowExpired(window, now)
+      ? t("usage.summaryPartReset", { window: windowLabel(window) })
+      : t("usage.summaryPart", {
+          window: windowLabel(window),
+          percent: String(window.percent),
+          reset: window.resetsAtMs != null ? formatReset(window.resetsAtMs, now) : t("usage.resetUnknown"),
+        });
+  const summary = t("usage.summary", { parts: headline.map(part).join("; ") });
+  const tight = tightestWindow(headline, now) ?? headline[0] ?? null;
+  const percent = tight ? effectivePercent(tight, now) : null;
+  const tone = percent != null ? usageTone(percent) : undefined;
+  return {
+    percent,
+    tone,
+    stale: view.stale,
+    summary,
+    section: (
+      <div className="agent-quota-pop-body">
+        {view.windows.map((window) => {
+          const expired = windowExpired(window, now);
+          return (
+            <div key={`${window.minutes}-${window.scope ?? ""}`} className={"agent-quota-row" + (expired ? " expired" : "")}>
+              <span className="agent-quota-win">{windowLabel(window)}</span>
+              {expired ? (
+                <>
+                  <UsageBar usage={{ percent: 0, window: windowLabel(window) }} className="wide" />
+                  <span className="agent-quota-pct">0%</span>
+                  <span className="agent-quota-reset">
+                    {t("usage.windowResetAgo", {
+                      ago: window.resetsAtMs != null ? formatAgo(window.resetsAtMs, now) : t("usage.justNow"),
+                      percent: String(window.percent),
+                    })}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <UsageBar usage={{ percent: window.percent, window: windowLabel(window) }} className="wide" />
+                  <span className="agent-quota-pct">{window.percent}%</span>
+                  <span className="agent-quota-reset">
+                    {window.resetsAtMs != null
+                      ? t("usage.resetsIn", { reset: formatReset(window.resetsAtMs, now) })
+                      : t("usage.resetUnknown")}
+                  </span>
+                </>
+              )}
+            </div>
           );
-        }
-        const label = parts.join(" — ");
-        return (
-          <span key={id} className="agent-saver-wrap">
-            <button
-              type="button"
-              className="agent-saver"
-              data-state={state}
-              title={label}
-              aria-label={label}
-              aria-expanded={open === id ? "true" : "false"}
-              onClick={() => setOpen(open === id ? null : id)}
-              onBlur={() => setOpen((current) => (current === id ? null : current))}
-            >
-              <i aria-hidden="true" />
-              {t(SAVER_NAME[id])} {t(SAVER_SHORT[state])}
-            </button>
-            {open === id && (
-              <span className="agent-saver-tip" role="tooltip">
-                {label}
-              </span>
-            )}
-          </span>
-        );
-      })}
+        })}
+        <div className="agent-quota-foot">
+          {view.fetchedAtMs != null
+            ? t("usage.updated", { ago: formatAgo(view.fetchedAtMs, now) })
+            : t("usage.updatedUnknown")}
+          {view.stale && ` · ${t("usage.stale")}`}
+        </div>
+      </div>
+    ),
+  };
+}
+
+/**
+ * Session status chip (spec G2): replaces the former separate usage meter,
+ * RTK badge, Caveman badge and profile chip with one chip — a usage ring +
+ * percent + RTK state text + account name — that shrinks by container width
+ * (full -> ring+percent -> ring only, see `.status-chip` in agents.css).
+ * Clicking it opens one popover with three sections: Usage (the quota
+ * windows above, unchanged), Token savers (RTK + Caveman state and why) and
+ * Account (the profile switch list, same store calls as before).
+ */
+/** `.status-chip-pop`'s CSS width (agents.css), used to clamp its portaled
+ * fixed position to the viewport the way `Menu` clamps its own width. */
+const STATUS_POP_WIDTH = 300;
+
+function SessionStatusChip({ session }: { session: AgentSession }) {
+  const usage = useUsageView(session);
+  const rtk = useRtkView(session);
+  const caveman = useCavemanView(session);
+  // Subscribe to the raw array (stable identity); filtering here keeps the
+  // selector snapshot cached and avoids a render loop.
+  const allProfiles = useProfiles((s) => s.profiles);
+  const usageBy = useProfiles((s) => s.usage);
+  const profiles = allProfiles.filter((p) => p.cliId === session.cliId);
+  const accountName = profiles.find((p) => p.slug === session.profile.slug)?.name ?? session.profile.slug;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  // C4: the popover portals to `document.body` and is positioned `fixed`
+  // from the chip's own rect (computed on open only, like `Menu`), instead
+  // of `position: absolute` inside `.status-chip-wrap` — both that wrap and
+  // `.pane-header` clip overflow, which hid the popover entirely.
+  const [pop, setPop] = useState<{ left: number; top: number } | null>(null);
+  const close = useCallback(() => {
+    setPop(null);
+    buttonRef.current?.focus();
+  }, []);
+  const open = pop != null;
+  const label = t("agents.statusChipLabel", { usage: usage.summary, rtk: rtk.text, account: accountName });
+  const ringStyle =
+    usage.percent != null
+      ? ({ background: `conic-gradient(${usage.tone ?? "var(--grn)"} 0 ${usage.percent}%, oklch(.6 0 0 / .3) 0)` } as CSSProperties)
+      : undefined;
+  // I4: move focus into the popover on open, close on outside click and on
+  // Escape from anywhere inside it, and return focus to the chip on close.
+  useEffect(() => {
+    if (!open) return;
+    popRef.current?.focus();
+    const down = (e: MouseEvent) => {
+      if (!popRef.current?.contains(e.target as Node) && !buttonRef.current?.contains(e.target as Node)) close();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    const timer = setTimeout(() => window.addEventListener("mousedown", down)); // skip the opening click
+    window.addEventListener("keydown", key);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("mousedown", down);
+      window.removeEventListener("keydown", key);
+    };
+  }, [open, close]);
+  return (
+    <span className="status-chip-wrap">
+      <button
+        ref={buttonRef}
+        type="button"
+        className={"status-chip" + (usage.stale ? " stale" : "")}
+        title={label}
+        aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={open ? "true" : "false"}
+        onClick={() => {
+          if (open) {
+            close();
+            return;
+          }
+          const box = buttonRef.current?.getBoundingClientRect();
+          if (!box) return;
+          setPop({
+            left: Math.max(8, Math.min(box.right - STATUS_POP_WIDTH, window.innerWidth - STATUS_POP_WIDTH - 8)),
+            top: box.bottom + 6,
+          });
+        }}
+      >
+        <span className="status-chip-ring" aria-hidden="true" style={ringStyle} />
+        {usage.percent != null && <span className="status-chip-pct">{usage.percent}%</span>}
+        <span className="status-chip-rtk" data-state={rtk.dataState}>{rtk.text}</span>
+        <span className="status-chip-account">{accountName}</span>
+      </button>
+      {pop &&
+        createPortal(
+          <div
+            ref={popRef}
+            className="status-chip-pop"
+            role="dialog"
+            aria-label={t("agents.statusPopover")}
+            tabIndex={-1}
+            style={{ left: pop.left, top: pop.top }}
+          >
+            <section>
+              <h2 className="agent-h4">{t("agents.sectionUsage")}</h2>
+              {usage.section}
+            </section>
+            <section>
+              <h2 className="agent-h4">{t("agents.sectionTokenSavers")}</h2>
+              <p className="agent-saver-text" data-state={rtk.dataState}>{rtk.text} — {rtk.detailParts.join(" — ")}</p>
+              <p className="agent-saver-text" data-state={caveman.dataState}>{caveman.text} — {caveman.detailParts.join(" — ")}</p>
+            </section>
+            <section>
+              <h2 className="agent-h4">{t("agents.profilesMenu", { name: CLI_REGISTRY[session.cliId].name })}</h2>
+              <ul className="status-chip-accounts">
+                {profiles.map((p) => {
+                  const itemUsage = usageBy[usageKey({ cliId: p.cliId, slug: p.slug })];
+                  const current = p.slug === session.profile.slug;
+                  return (
+                    <li key={p.slug}>
+                      <button
+                        type="button"
+                        className="status-chip-account-row"
+                        onClick={() => {
+                          close();
+                          void useSessions.getState().switchProfile(session.id, { cliId: p.cliId, slug: p.slug });
+                        }}
+                      >
+                        <span aria-hidden="true">{current ? "✓" : "◔"}</span> {p.name}
+                        {itemUsage && (
+                          <span className="agent-menu-usage">
+                            {itemUsage.percent}% <UsageBar usage={itemUsage} />
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+                <li>
+                  <button
+                    type="button"
+                    className="status-chip-account-row"
+                    onClick={() => {
+                      close();
+                      void useProfiles.getState().addProfile(session.cliId);
+                    }}
+                  >
+                    ＋ {t("agents.addAccount")}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="status-chip-account-row"
+                    onClick={() => {
+                      close();
+                      useStage.getState().go("settings");
+                    }}
+                  >
+                    ⚙ {t("agents.manageAccounts")}
+                  </button>
+                </li>
+              </ul>
+            </section>
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }
@@ -470,20 +593,120 @@ function StatusDot({ status }: { status: PaneStatus }) {
 function StatusChip({ status }: { status: PaneStatus }) {
   if (status === "done") return <span className="status ok"><span aria-hidden>✓</span>{t("agents.statusDone")}</span>;
   if (status === "running") return <span className="status info"><span aria-hidden>⠋</span>{t("agents.statusRunning")}</span>;
-  if (status === "waiting") return <span className="status warn"><span aria-hidden>●</span>{t("agents.statusWaiting")}</span>;
+  if (status === "waiting")
+    return (
+      <span className="status warn">
+        <span aria-hidden>●</span>
+        {/* Shrinks to "Waiting" on a narrow pane header via container query
+         * (spec G2); both copies stay in the DOM, CSS picks one. */}
+        <span className="status-text-full">{t("agents.statusWaiting")}</span>
+        <span className="status-text-short">{t("agents.statusWaitingShort")}</span>
+      </span>
+    );
   return <span className="status faint"><span aria-hidden>○</span>{t("agents.statusIdle")}</span>;
 }
 
-function AgentPane({ session, off, place }: { session: AgentSession; off?: boolean; place?: GridPlace }) {
-  const store = useSessions.getState();
-  const isExited = useSessions((s) => s.isExited);
+/** Status dot, CLI switch (or fixed label for a custom CLI), worktree tail
+ * and status chip — the session's identity, shared by the solo pane header
+ * and each grid tile's header row (spec G2). */
+function SessionIdentity({ session, status }: { session: AgentSession; status: PaneStatus }) {
   const handoverFor = useSessions((s) => s.handoverFor);
-  const status = paneStatus(session, isExited);
   const def = CLI_REGISTRY[session.cliId];
   const switchAgent = (next: string) => {
     if (next === session.cliId) return;
+    const store = useSessions.getState();
     store.setHandoverTarget(next as CliId);
     store.setHandoverFor(session.id);
+  };
+  return (
+    <>
+      <StatusDot status={status} />
+      {session.cliId === "custom" ? (
+        <span className="agent-cli" title={def.name}>
+          <CliIcon id={session.cliId} /> {def.name}
+        </span>
+      ) : (
+        <select
+          className="agent-cli-switch"
+          aria-label={t("agents.switchAgent")}
+          title={t("agents.switchAgent")}
+          value={session.cliId}
+          disabled={handoverFor === session.id}
+          onChange={(e) => switchAgent(e.target.value)}
+        >
+          {RACEABLE_IDS.map((id) => (
+            <option key={id} value={id}>
+              {CLI_REGISTRY[id].name}
+            </option>
+          ))}
+        </select>
+      )}
+      <span className="faint agent-wt" title={session.worktreePath}>· {tail(session.worktreePath)}</span>
+      <StatusChip status={status} />
+    </>
+  );
+}
+
+/** "Session" menu section (spec G2): slot, move to dock, hand over, review
+ * beside — unchanged handlers and accessible names, now reached through a
+ * ⋯ menu instead of standalone buttons. Shared by the solo session's ⋯ menu
+ * and each grid tile's ⋯ menu. */
+function sessionActionItems(session: AgentSession): MenuItem[] {
+  const store = useSessions.getState();
+  const slots: Array<["left" | "right" | "full", string, string]> = [
+    ["left", "◧", t("agents.slotLeft")],
+    ["right", "◨", t("agents.slotRight")],
+    ["full", "▭", t("agents.slotFull")],
+  ];
+  return [
+    ...slots.map(
+      ([side, glyph, label]): MenuItem => ({
+        kind: "item",
+        label,
+        icon: session.slot === side ? "✓" : glyph,
+        onSelect: () => store.toggleSlot(session.id, side),
+      }),
+    ),
+    { kind: "item", label: t("agents.moveToDock"), icon: "⤴", onSelect: () => store.moveToDock(session.id) },
+    { kind: "item", label: t("agents.handover"), icon: "↗", onSelect: () => store.setHandoverFor(session.id) },
+    {
+      kind: "item",
+      // `Menu` has no separate aria-label slot (src/ui/Menu.tsx is out of
+      // Scope) — its accessible name is the visible `label` text, so the
+      // full string is used here to keep the control's name unchanged from
+      // its old standalone-button form ("Review beside in Changes").
+      label: t("agents.reviewBeside"),
+      icon: "±",
+      onSelect: () => {
+        useWorktrees.getState().select(session.worktreePath);
+        useStage.getState().go("agents");
+        useStage.getState().openSplit("changes", "right");
+      },
+    },
+  ];
+}
+
+function AgentPane({
+  session,
+  off,
+  place,
+  hideHeader,
+}: {
+  session: AgentSession;
+  off?: boolean;
+  place?: GridPlace;
+  /** The page header is the solo session's own `PaneHeader` instead: skip
+   * this pane's own header row so the terminal has exactly one above it. */
+  hideHeader?: boolean;
+}) {
+  const store = useSessions.getState();
+  const isExited = useSessions((s) => s.isExited);
+  const status = paneStatus(session, isExited);
+  const def = CLI_REGISTRY[session.cliId];
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const openMenu = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    setMenu({ x: box.right - 220, y: box.bottom + 6 });
   };
   return (
     <div
@@ -492,97 +715,38 @@ function AgentPane({ session, off, place }: { session: AgentSession; off?: boole
       style={place ? ({ "--agent-col": place.column, "--agent-row": place.row } as CSSProperties) : undefined}
       aria-label={t("agents.paneLabel", { cli: def.name, name: tail(session.worktreePath) })}
     >
-      <div className="agent-phd">
-        <div className="agent-phd-id">
-          <StatusDot status={status} />
-          {session.cliId === "custom" ? (
-            <span className="agent-cli" title={def.name}>
-              <CliIcon id={session.cliId} /> {def.name}
-            </span>
-          ) : (
-            <select
-              className="agent-cli-switch"
-              aria-label={t("agents.switchAgent")}
-              title={t("agents.switchAgent")}
-              value={session.cliId}
-              disabled={handoverFor === session.id}
-              onChange={(e) => switchAgent(e.target.value)}
+      {!hideHeader && (
+        <div className="agent-phd">
+          <div className="agent-phd-id">
+            <SessionIdentity session={session} status={status} />
+          </div>
+          <div className="agent-phd-actions">
+            <SessionStatusChip session={session} />
+            <button
+              type="button"
+              className="agent-phb"
+              title={t("agents.sessionMenu")}
+              aria-label={t("agents.sessionMenu")}
+              aria-haspopup="menu"
+              onClick={openMenu}
             >
-              {RACEABLE_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {CLI_REGISTRY[id].name}
-                </option>
-              ))}
-            </select>
+              ⋯
+            </button>
+            <button
+              type="button"
+              className="agent-phb x"
+              title={t("agents.closeSession")}
+              aria-label={t("agents.closeSession")}
+              onClick={() => void store.closeSession(session.id)}
+            >
+              ✕
+            </button>
+          </div>
+          {menu && (
+            <Menu x={menu.x} y={menu.y} width={220} onClose={() => setMenu(null)} items={sessionActionItems(session)} />
           )}
-          <span className="faint agent-wt" title={session.worktreePath}>· {tail(session.worktreePath)}</span>
-          <StatusChip status={status} />
         </div>
-        <div className="agent-phd-actions">
-          <ProfileChip session={session} />
-          <span className="agent-lay">
-            {(["left", "right", "full"] as const).map((side) => (
-              <button
-                key={side}
-                type="button"
-                className={session.slot === side ? "on" : ""}
-                aria-label={t(side === "left" ? "agents.slotLeft" : side === "right" ? "agents.slotRight" : "agents.slotFull")}
-                aria-pressed={session.slot === side ? "true" : "false"}
-                title={t(side === "left" ? "agents.slotLeft" : side === "right" ? "agents.slotRight" : "agents.slotFull")}
-                onClick={() => store.toggleSlot(session.id, side)}
-              >
-                {side === "left" ? "◧" : side === "right" ? "◨" : "▭"}
-              </button>
-            ))}
-          </span>
-          <button
-            type="button"
-            className="agent-phb"
-            title={t("agents.moveToDock")}
-            aria-label={t("agents.moveToDock")}
-            onClick={() => store.moveToDock(session.id)}
-          >
-            ⤴
-          </button>
-          <button
-            type="button"
-            className="agent-phb"
-            title={t("agents.handover")}
-            aria-label={t("agents.handover")}
-            onClick={() => store.setHandoverFor(session.id)}
-          >
-            ↗
-          </button>
-          <button
-            type="button"
-            className="agent-phb x"
-            title={t("agents.closeSession")}
-            aria-label={t("agents.closeSession")}
-            onClick={() => void store.closeSession(session.id)}
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-      {/* Meters sit in their own strip: the header holds only identity and
-       * actions, so a narrow split pane can never push the buttons out of view. */}
-      <div className="agent-phm">
-        <QuotaMeter session={session} />
-        <SaverBadges session={session} />
-        <button
-          type="button"
-          className="btn sm ghost"
-          title={t("agents.reviewBeside")}
-          aria-label={t("agents.reviewBeside")}
-          onClick={() => {
-            useWorktrees.getState().select(session.worktreePath);
-            useStage.getState().go("agents");
-            useStage.getState().openSplit("changes", "right");
-          }}
-        >
-          ± {t("agents.reviewBesideShort")}
-        </button>
-      </div>
+      )}
       <div className="agent-pane-body">
         <AgentPaneBody session={session} />
       </div>
@@ -1364,6 +1528,86 @@ function RaceDialog() {
   );
 }
 
+/** Solo session's "Session" + "Agents page" ⋯ menu (spec G2, AC3):
+ * everything the tile's own ⋯ offers, plus Close session, then a
+ * separator and the page actions normally on the page header. */
+function soloMenuItems(
+  session: AgentSession,
+  layoutMode: "grid" | "full",
+  setLayoutMode: (mode: "grid" | "full") => void,
+  setRaceOpen: (open: boolean) => void,
+): MenuItem[] {
+  return [
+    { kind: "header", label: t("agents.menuSessionHeader") },
+    ...sessionActionItems(session),
+    {
+      kind: "item",
+      label: t("agents.closeSession"),
+      icon: "✕",
+      danger: true,
+      onSelect: () => void useSessions.getState().closeSession(session.id),
+    },
+    { kind: "separator" },
+    { kind: "header", label: t("agents.menuPageHeader") },
+    ...pageActionItems(layoutMode, setLayoutMode, setRaceOpen),
+  ];
+}
+
+/** The lone visible session's own header becomes the pane header (spec G2
+ * "solo"): identity is the session's identity; the status element is its
+ * session status chip; the cluster is New agent and a ⋯ menu bundling both
+ * the session's and the page's actions, then the pane's split controls. */
+function SoloSessionHeader({ session, status }: { session: AgentSession; status: PaneStatus }) {
+  const layoutMode = useSessions((s) => s.layoutMode);
+  const setLayoutMode = useSessions((s) => s.setLayoutMode);
+  const setRaceOpen = useSessions((s) => s.setRaceOpen);
+  const setNewAgentOpen = useSessions((s) => s.setNewAgentOpen);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const openMenu = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    setMenu({ x: box.right - 260, y: box.bottom + 6 });
+  };
+  return (
+    <PaneHeader
+      heading={t("agents.title")}
+      identity={<SessionIdentity session={session} status={status} />}
+      status={<SessionStatusChip session={session} />}
+      actions={
+        <>
+          <button
+            type="button"
+            className="btn sm primary icon-btn"
+            aria-label={t("agents.newAgent")}
+            title={t("agents.newAgent")}
+            onClick={() => setNewAgentOpen(true)}
+          >
+            ＋
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={t("agents.sessionMenu")}
+            title={t("agents.sessionMenu")}
+            aria-haspopup="menu"
+            onClick={openMenu}
+          >
+            ⋯
+          </button>
+          {menu && (
+            <Menu
+              x={menu.x}
+              y={menu.y}
+              width={260}
+              onClose={() => setMenu(null)}
+              items={soloMenuItems(session, layoutMode, setLayoutMode, setRaceOpen)}
+            />
+          )}
+        </>
+      }
+    />
+  );
+}
+
 export function AgentsView() {
   const sessions = useSessions((s) => s.sessions);
   const layoutMode = useSessions((s) => s.layoutMode);
@@ -1412,6 +1656,10 @@ export function AgentsView() {
   const visible = ordered.filter((s) => allowedPaths === null || allowedPaths.has(s.worktreePath));
   // A lone default session fills the whole view; the grid kicks in on split.
   const solo = visible.length === 1 && visible[0].slot === "auto";
+  const soloSession = solo ? visible[0] : null;
+  const isExited = useSessions((s) => s.isExited);
+  const count = sessions.length;
+  const waiting = sessions.filter((session) => session.status === "waiting").length;
   // Two-column grid: place panes explicitly so a column with fewer panes
   // still fills the full height (full-width layout and solo need none).
   const placement = useMemo(
@@ -1419,13 +1667,25 @@ export function AgentsView() {
     [layoutMode, solo, visible.map((s) => `${s.id}:${s.slot}`).join(",")],
   );
 
-  if (!loaded) return <ScreenLoader>{t("agents.loading")}</ScreenLoader>;
+  if (!loaded) {
+    return (
+      <div className="agent-screen">
+        <AgentsPageHeader count={0} waiting={0} />
+        <ScreenLoader>{t("agents.loading")}</ScreenLoader>
+      </div>
+    );
+  }
   return (
     <div
       className={
         "agent-screen" + (layoutMode === "full" ? " agent-full" : "") + (solo ? " agent-solo" : "")
       }
     >
+      {soloSession ? (
+        <SoloSessionHeader session={soloSession} status={paneStatus(soloSession, isExited)} />
+      ) : (
+        <AgentsPageHeader count={count} waiting={waiting} />
+      )}
       <NewAgentDialog />
       <HandoverDialog />
       <RaceDialog />
@@ -1447,6 +1707,7 @@ export function AgentsView() {
             session={session}
             off={allowedPaths !== null && !allowedPaths.has(session.worktreePath)}
             place={placement?.places.get(session.id)}
+            hideHeader={session.id === soloSession?.id}
           />
         ))}
       </div>

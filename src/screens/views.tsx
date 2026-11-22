@@ -5,16 +5,19 @@ import { ScreenLoader } from "../ui/ScreenLoader";
 import { SettingsToolbar, SettingsView } from "./settings/SettingsScreen";
 import { ChangesToolbar, ChangesView } from "./changes/ChangesScreen";
 import { FilesToolbar, FilesView } from "./files/FilesScreen";
-import { TerminalScreen, TerminalToolbar } from "../terminal/TerminalScreen";
-import { AgentsToolbar, AgentsView } from "./agents/AgentsScreen";
+import { TerminalScreen } from "../terminal/TerminalScreen";
+import { AgentsView } from "./agents/AgentsScreen";
 import { ConflictsToolbar, ConflictsView } from "./conflicts/ConflictsScreen";
 import { HistoryToolbar, HistoryView } from "./history/HistoryScreen";
 import { HomeToolbar, HomeView } from "./home/HomeScreen";
 import { BrowserToolbar, BrowserView } from "../browser/BrowserScreen";
 
 export interface ScreenView {
-  Toolbar: FC;
+  /** Not rendered (and not required) when `ownsHeader` is set. */
+  Toolbar?: FC;
   View: FC;
+  /** The screen renders its own `PaneHeader`; `Pane` skips `header.pane-tool`. */
+  ownsHeader?: true;
 }
 
 const RepoView = lazy(() => import("./repo/RepoScreen").then((module) => ({ default: module.RepoView })));
@@ -59,8 +62,8 @@ VIEWS.settings = { Toolbar: SettingsToolbar, View: SettingsView };
 VIEWS.history = { Toolbar: HistoryToolbar, View: HistoryView };
 VIEWS.changes = { Toolbar: ChangesToolbar, View: ChangesView };
 VIEWS.files = { Toolbar: FilesToolbar, View: FilesView };
-VIEWS.terminal = { Toolbar: TerminalToolbar, View: TerminalScreen };
-VIEWS.agents = { Toolbar: AgentsToolbar, View: AgentsView };
+VIEWS.terminal = { View: TerminalScreen, ownsHeader: true };
+VIEWS.agents = { View: AgentsView, ownsHeader: true };
 VIEWS.github = { Toolbar: RepoToolbar, View: RepoViewBoundary };
 VIEWS.home = { Toolbar: HomeToolbar, View: HomeView };
 VIEWS.conflicts = { Toolbar: ConflictsToolbar, View: ConflictsView };

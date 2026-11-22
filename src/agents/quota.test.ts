@@ -128,3 +128,48 @@ describe("useAgentMeters.poll", () => {
     expect(readSaverStats).not.toHaveBeenCalled();
   });
 });
+
+describe("useAgentMeters.refreshProfile", () => {
+  it("reads one profile without a session", async () => {
+    await useAgentMeters.getState().refreshProfile({ cliId: "codex", slug: "main" });
+    expect(readProfileQuota).toHaveBeenCalledWith("codex", "/profiles/codex-main");
+    expect(useAgentMeters.getState().quotas["codex:main"]).toMatchObject({ kind: "ok", stale: false });
+  });
+
+  it("marks non-quota CLIs unsupported without IPC", async () => {
+    await useAgentMeters.getState().refreshProfile({ cliId: "gemini", slug: "x" });
+    expect(useAgentMeters.getState().quotas["gemini:x"]).toEqual({ kind: "unsupported" });
+    expect(readProfileQuota).not.toHaveBeenCalled();
+  });
+
+  it("shares the in-flight guard", async () => {
+    let release!: () => void;
+    vi.mocked(readProfileQuota).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ state: "ok", windows: [fiveHour], fetchedAtMs: NOW });
+        }),
+    );
+    const ref = { cliId: "claude" as const, slug: "work" };
+    const first = useAgentMeters.getState().refreshProfile(ref);
+    const second = useAgentMeters.getState().refreshProfile(ref);
+    await vi.waitFor(() => expect(readProfileQuota).toHaveBeenCalledTimes(1));
+    release();
+    await Promise.all([first, second]);
+    expect(readProfileQuota).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps last value stale on failure", async () => {
+    const ref = { cliId: "claude" as const, slug: "work" };
+    await useAgentMeters.getState().refreshProfile(ref);
+    vi.mocked(readProfileQuota).mockRejectedValueOnce(new Error("boom"));
+    await useAgentMeters.getState().refreshProfile(ref);
+    expect(useAgentMeters.getState().quotas["claude:work"]).toMatchObject({ kind: "ok", stale: true });
+  });
+
+  it("does not throw when ensureProfileDir rejects", async () => {
+    vi.mocked(ensureProfileDir).mockRejectedValueOnce(new Error("gone"));
+    await expect(useAgentMeters.getState().refreshProfile({ cliId: "claude", slug: "gone" })).resolves.toBeUndefined();
+    expect(useAgentMeters.getState().quotas["claude:gone"]).toEqual({ kind: "unavailable" });
+  });
+});

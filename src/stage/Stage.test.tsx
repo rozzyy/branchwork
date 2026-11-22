@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Stage } from "./Stage";
 import { useStage, stageSnapshot } from "../state/stage";
@@ -7,12 +7,58 @@ import { useRepos } from "../state/repos";
 import { useGithubAccounts } from "../github/store";
 import { useSessions } from "../agents/sessions";
 import { StageTabs } from "./StageTabs";
+import { useWorktrees } from "../state/worktrees";
 
 beforeEach(() => {
   useStage.setState(stageSnapshot(initialStage));
-  useRepos.setState({ status: "ready", projects: [], groups: [], activeProjectId: null, activeGroupId: null });
+  useRepos.setState({
+    status: "ready",
+    projects: [{ id: "p1", owner: null, name: "repo", localPath: "/repos/main", groupId: null }],
+    groups: [],
+    activeProjectId: "p1",
+    activeGroupId: null,
+  });
+  useWorktrees.setState({
+    projectId: "p1",
+    worktrees: [{ path: "/repos/main", branch: "main", head: "a1", ahead: 0, behind: 0, dirtyCount: 0, state: "clean" }],
+    pinnedPaths: [],
+    activePath: "/repos/main",
+    selections: {},
+    byProject: {},
+    loading: false,
+    error: null,
+  });
   useGithubAccounts.setState({ loaded: true, accounts: [], defaultAccount: null, ownerAccounts: {} });
   useSessions.setState({ loaded: true, sessions: [] });
+});
+
+it("opens separate add-project and create-worktree dialogs from the empty workspace", async () => {
+  useRepos.setState({ status: "ready", projects: [], groups: [], activeProjectId: null, activeGroupId: null });
+  useWorktrees.setState({
+    projectId: null,
+    worktrees: [],
+    pinnedPaths: [],
+    activePath: null,
+    selections: {},
+    byProject: {},
+    loading: false,
+    error: null,
+  });
+  useStage.getState().showEmptyWorkspace();
+  render(<Stage />);
+
+  await userEvent.click(screen.getByRole("button", { name: "＋ Add project" }));
+  const projectModal = screen.getByRole("dialog", { name: "Add project" });
+  expect(within(projectModal).getByRole("tab", { name: "Open existing" })).toHaveAttribute("aria-selected", "true");
+  await userEvent.click(within(projectModal).getByRole("button", { name: "Cancel" }));
+
+  useRepos.setState({
+    status: "ready",
+    projects: [{ id: "p1", owner: null, name: "repo", localPath: "/repos/main", groupId: null }],
+    activeProjectId: "p1",
+  });
+  await userEvent.click(screen.getByRole("button", { name: "⌁ Create worktree" }));
+  expect(screen.getByRole("dialog", { name: "Create worktree" })).toBeInTheDocument();
 });
 
 it("opens a split from Open beside and closes it from the pane", async () => {
@@ -66,10 +112,11 @@ it("does not offer a pane project pin", () => {
 it("adds, renames, cancels and closes stage tabs accessibly", async () => {
   render(<StageTabs />);
   await userEvent.click(screen.getByRole("button", { name: "New tab" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "Changes" }));
   expect(screen.getAllByRole("tab")).toHaveLength(2);
-  expect(screen.getByRole("button", { name: "Close tab New tab" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Close tab Changes" })).toBeEnabled();
 
-  const newTab = screen.getByRole("tab", { name: "New tab" });
+  const newTab = screen.getByRole("tab", { name: "Changes" });
   await userEvent.click(newTab);
   await userEvent.keyboard("{ArrowLeft}");
   expect(useStage.getState().activeTabId).toBe(useStage.getState().tabs[0].id);
@@ -77,7 +124,7 @@ it("adds, renames, cancels and closes stage tabs accessibly", async () => {
   await userEvent.keyboard("{ArrowRight}");
   await waitFor(() => expect(useStage.getState().activeTabId).toBe(useStage.getState().tabs[1].id));
 
-  await userEvent.click(screen.getByRole("tab", { name: "New tab" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Changes" }));
   await userEvent.keyboard("{F2}");
   const input = screen.getByRole("tab", { name: "Tab name" });
   await userEvent.clear(input);
@@ -92,15 +139,14 @@ it("adds, renames, cancels and closes stage tabs accessibly", async () => {
   await waitFor(() => expect(screen.getByRole("tab", { name: "Agent review" })).toHaveFocus());
   expect(useStage.getState().tabs.find((tab) => tab.id === useStage.getState().activeTabId)?.name).toBe("Agent review");
 
-  await userEvent.click(screen.getByRole("button", { name: "New tab" }));
-  await userEvent.dblClick(screen.getByRole("tab", { name: "New tab" }));
+  await userEvent.dblClick(screen.getByRole("tab", { name: "Agent review" }));
   const cancelInput = screen.getByRole("tab", { name: "Tab name" });
   await userEvent.clear(cancelInput);
   await userEvent.type(cancelInput, "Discard me{Escape}");
-  await waitFor(() => expect(screen.getByRole("tab", { name: "New tab" })).toHaveFocus());
-  expect(useStage.getState().tabs.find((tab) => tab.id === useStage.getState().activeTabId)?.name).toBe("New tab");
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Agent review" })).toHaveFocus());
+  expect(useStage.getState().tabs.find((tab) => tab.id === useStage.getState().activeTabId)?.name).toBe("Agent review");
 
-  await userEvent.click(screen.getByRole("button", { name: "Close tab New tab" }));
-  expect(useStage.getState().tabs).toHaveLength(2);
-  expect(useStage.getState().activeTabId).toBe(useStage.getState().tabs[1].id);
+  await userEvent.click(screen.getByRole("button", { name: "Close tab Agent review" }));
+  expect(useStage.getState().tabs).toHaveLength(1);
+  expect(useStage.getState().activeTabId).toBe(useStage.getState().tabs[0].id);
 });

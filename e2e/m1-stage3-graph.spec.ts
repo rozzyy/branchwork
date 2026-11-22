@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openView } from "./helpers/navigation";
 
 test("browses graph history and inspects the working copy and a commit", async ({ page }) => {
   await page.addInitScript(() => {
@@ -112,7 +113,7 @@ test("browses graph history and inspects the working copy and a commit", async (
 
   await page.goto("/");
   await expect(page.getByRole("button", { name: "main, Clean" })).toBeVisible();
-  await page.getByRole("button", { name: "History" }).click();
+  await openView(page, "History");
 
   await expect(page.getByRole("heading", { name: "Working copy" })).toBeVisible();
   await expect(page.getByText("staged.ts")).toBeVisible();
